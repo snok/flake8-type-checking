@@ -1,8 +1,3 @@
-TODO before release:
-- [ ] 100% coverage
-- [ ] remove logging
-- [ ] fix mypy error
-
 [![PyPI version](https://img.shields.io/pypi/v/flake8-typing-only-imports.svg)](https://pypi.org/project/flake8-typing-only-imports/)
 [![Supported Python versions](https://img.shields.io/pypi/pyversions/flake8-typing-only-imports.svg)](https://pypi.org/project/flake8-typing-only-imports/)
 ![Tests](https://github.com/sondrelg/flake8-typing-only-imports/workflows/Tests/badge.svg)

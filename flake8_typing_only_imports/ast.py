@@ -1,15 +1,13 @@
 import ast
-from typing import Dict, Generator, Iterable, List, Set
+from typing import Dict, Generator, Iterable, List, Set, Union
 
 from flake8_typing_only_imports.constants import TYO100
-from flake8_typing_only_imports.logging import logger
-from flake8_typing_only_imports.types import ImportType
 
 
 class AnnotationRemover(ast.NodeTransformer):
     """Remove all annotation objects from a Module."""
 
-    __slots__ = []
+    __slots__: List[str] = []
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotation assignments."""
@@ -32,11 +30,10 @@ class ImportVisitor(ast.NodeVisitor):
     __slots__ = ('imports', 'exempt_imports')
 
     def __init__(self) -> None:
-        logger.info('Initializing ImportVisitor')
-        self.imports: Dict[str, Set[ImportType]] = {}
+        self.imports: Dict[str, Set[Union[ast.Import, ast.ImportFrom]]] = {}
         self.exempt_imports: List[str] = ['*']
 
-    def _add_import(self, node: ImportType, names: Iterable[str]) -> None:
+    def _add_import(self, node: Union[ast.Import, ast.ImportFrom], names: Iterable[str]) -> None:
         """
         Add relevant ast objects to self.imports.
 
@@ -51,18 +48,15 @@ class ImportVisitor(ast.NodeVisitor):
             for name in names:
                 if name not in self.imports:
                     self.imports[name] = set()
-                logger.info('Adding import %s', name)
                 self.imports[name].add(node)
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
-        logger.info('Appening direct import')
         modules = [alias.name for alias in node.names]
         self._add_import(node, modules)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Append objects to our import map."""
-        logger.info('Appening from import')
         names = [alias.name for alias in node.names]
         self._add_import(node, names)
 
@@ -73,7 +67,6 @@ class NameVisitor(ast.NodeTransformer):
     __slots__ = ['_names']
 
     def __init__(self) -> None:
-        logger.info('Initializing NameVisitor')
         self._names: List[str] = []
 
     @property
@@ -83,7 +76,6 @@ class NameVisitor(ast.NodeTransformer):
 
     def visit_Name(self, node: ast.Name) -> None:
         """Map names."""
-        logger.info('Appending node name "%s"', node.id)
         self._names.append(node.id)
 
     def visit_Import(self, node: ast.Import) -> None:

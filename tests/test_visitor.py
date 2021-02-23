@@ -2,7 +2,7 @@ import ast
 import textwrap
 
 from flake8_typing_only_imports import Plugin
-from flake8_typing_only_imports.ast import ImportVisitor, NameVisitor, AnnotationRemover
+from flake8_typing_only_imports.ast import AnnotationRemover, ImportVisitor, NameVisitor
 from flake8_typing_only_imports.constants import TYO100
 
 
@@ -96,7 +96,8 @@ class TestUsage:
         scrubbed_tree = remover.visit(ast.parse(example))
         visitor = NameVisitor()
         visitor.visit(scrubbed_tree)
-        assert visitor.names  == set()
+        assert visitor.names == set()
+
 
 def _get_imports(example):
     visitor = ImportVisitor()

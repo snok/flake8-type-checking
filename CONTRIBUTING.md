@@ -1,6 +1,6 @@
 # Contributing
 
-This package is open to contributions 👏  
+This package is open to contributions 👏
 
 To contribute, please follow these steps:
 

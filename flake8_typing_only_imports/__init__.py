@@ -2,9 +2,9 @@ from typing import TYPE_CHECKING
 
 from flake8_typing_only_imports.ast import Checker
 
-if TYPE_CHECKING:  # pragma: no_cover
-    from ast import Module   # pragma: no_cover
-    from typing import Generator  # pragma: no_cover
+if TYPE_CHECKING:
+    from ast import Module
+    from typing import Generator
 
 
 class Plugin:
