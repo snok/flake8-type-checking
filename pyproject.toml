@@ -7,7 +7,7 @@ authors = ["Sondre Lillebø Gundersen <sondrelg@live.no>"]
 license = "BSD-2-Clause"
 readme = "README.md"
 keywords = ["flake8", "lint", "type hint", "typing", "type annotations", "imports"]
-classifiers=[
+classifiers = [
     "Intended Audience :: Developers",
     "Environment :: Console",
     "Operating System :: OS Independent",
@@ -44,13 +44,14 @@ build-backend = "poetry.core.masonry.api"
 [tool.coverage.run]
 source = ["flake8_typing_only_imports/*"]
 omit = []
-branch = true
+branch = false
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-exclude_lines = []
-
+exclude_lines = [
+    "if TYPE_CHECKING:"
+]
 [tool.black]
 line-length = 120
 include = '\.pyi?$'

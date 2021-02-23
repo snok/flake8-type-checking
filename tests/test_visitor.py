@@ -2,7 +2,7 @@ import ast
 import textwrap
 
 from flake8_typing_only_imports import Plugin
-from flake8_typing_only_imports.ast import ImportVisitor, NameVisitor
+from flake8_typing_only_imports.ast import ImportVisitor, NameVisitor, AnnotationRemover
 from flake8_typing_only_imports.constants import TYO100
 
 
@@ -83,6 +83,20 @@ class TestUsage:
         )
         assert _get_usages(example) == set()
 
+    def test_annotations_are_removed(self):
+        example = textwrap.dedent(
+            """
+            from typing import Optional
+            x: int
+            def example(y: str, *, z: Optional[str] = None) -> bool:
+                return True
+            """
+        )
+        remover = AnnotationRemover()
+        scrubbed_tree = remover.visit(ast.parse(example))
+        visitor = NameVisitor()
+        visitor.visit(scrubbed_tree)
+        assert visitor.names  == set()
 
 def _get_imports(example):
     visitor = ImportVisitor()

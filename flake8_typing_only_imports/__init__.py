@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING
 
-from flake8_typing_only_imports.ast import Scanner
+from flake8_typing_only_imports.ast import Checker
 
-if TYPE_CHECKING:
-    from ast import Module
-    from typing import Generator
+if TYPE_CHECKING:  # pragma: no_cover
+    from ast import Module   # pragma: no_cover
+    from typing import Generator  # pragma: no_cover
 
 
 class Plugin:
@@ -18,5 +18,5 @@ class Plugin:
 
     def run(self) -> 'Generator':
         """Run flake8 plugin and return any relevant errors."""
-        visitor = Scanner(self.tree)
+        visitor = Checker(self.tree)
         yield from visitor.errors

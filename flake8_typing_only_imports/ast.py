@@ -15,18 +15,14 @@ class AnnotationRemover(ast.NodeTransformer):
         """Remove all annotation assignments."""
         pass
 
-    def visit_Return(self, node: ast.Return) -> None:
-        """Remove all return annotations."""
-        pass
-
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         """Remove all function arguments."""
-        for argument in node.args.args:
-            if hasattr(argument, 'annotation'):
-                delattr(argument, 'annotation')
-        for argument in node.args.kwonlyargs:
-            if hasattr(argument, 'annotation'):
-                delattr(argument, 'annotation')
+        for path in [node.args.args, node.args.kwonlyargs]:
+            for argument in path:
+                if hasattr(argument, 'annotation'):
+                    delattr(argument, 'annotation')
+        if hasattr(node, 'returns'):
+            delattr(node, 'returns')
         return node
 
 
@@ -99,7 +95,7 @@ class NameVisitor(ast.NodeTransformer):
         pass
 
 
-class Scanner:
+class Checker:
     """Scans for unused imports after stripping the ast Module of annotation elements."""
 
     __slots__ = [
