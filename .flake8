@@ -1,0 +1,21 @@
+[flake8]
+ignore=
+    # D104 Missing docstring in public package
+    D104,
+    # D100 Missing docstring in public module
+    D100,
+    # D107 Missing docstring in __init__
+    D107,
+    # ANN101 Missing type annotation for self in method
+    ANN101,
+
+exclude =
+    .git,
+    .venv
+    .idea,
+    __pycache__,
+    tests/*
+
+
+max-complexity = 15
+max-line-length = 120

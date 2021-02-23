@@ -1,0 +1,38 @@
+name: coverage
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  codecov:
+    # ---------------------------------------------------
+    #    Documentation and examples can be found at
+    #      https://github.com/snok/install-poetry
+    # ---------------------------------------------------
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+    - name: Install poetry
+      uses: snok/install-poetry@v1.1.1
+      with:
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    - uses: actions/cache@v2
+      id: cache-venv
+      with:
+        path: .venv
+        key: ${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-3
+    - run: poetry install --no-interaction --no-root
+      if: steps.cache-venv.outputs.cache-hit != 'true'
+    - run: poetry install --no-interaction
+    - run: poetry run pytest --cov=flake8_typing_only_imports --cov-report=xml
+    - uses: codecov/codecov-action@v1
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: true
