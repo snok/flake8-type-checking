@@ -1,7 +1,18 @@
-[![PyPI version](https://img.shields.io/pypi/v/flake8-typing-only-imports.svg)](https://pypi.org/project/flake8-typing-only-imports/)
-[![Supported Python versions](https://img.shields.io/pypi/pyversions/flake8-typing-only-imports.svg)](https://pypi.org/project/flake8-typing-only-imports/)
-![Tests](https://github.com/sondrelg/flake8-typing-only-imports/workflows/Tests/badge.svg)
-[![Coverage](https://codecov.io/gh/sondrelg/flake8-typing-only-imports/branch/master/graph/badge.svg)](https://codecov.io/gh/sondrelg/flake8-typing-only-imports)
+<a href="https://pypi.org/project/flake8-typing-only-imports/">
+    <img src="https://img.shields.io/pypi/v/flake8-typing-only-imports.svg" alt="Package version">
+</a>
+<a href="https://codecov.io/gh/sondrelg/flake8-typing-only-imports">
+    <img src="https://codecov.io/gh/sondrelg/flake8-typing-only-imports/branch/master/graph/badge.svg" alt="Code coverage">
+</a>
+<a href="https://pypi.org/project/flake8-typing-only-imports/">
+    <img src="https://github.com/sondrelg/flake8-typing-only-imports/actions/workflows/testing.yml/badge.svg" alt="Test status">
+</a>
+<a href="https://pypi.org/project/flake8-typing-only-imports/">
+    <img src="https://img.shields.io/badge/python-3.7%2B-blue" alt="Supported Python versions">
+</a>
+<a href="http://mypy-lang.org/">
+    <img src="http://www.mypy-lang.org/static/mypy_badge.svg" alt="Checked with mypy">
+</a>
 
 # flake8-typing-only-imports
 
