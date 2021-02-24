@@ -16,7 +16,7 @@
 
 # flake8-typing-only-imports
 
-flake8 plugin which flags imports which are exclusively used for type hinting.
+flake8 plugin that flags imports which are exclusively used for type hinting.
 
 ## Installation
 
@@ -55,7 +55,7 @@ def bar() -> 'foo':
 At the same time, this is often easier said than done, because in larger code bases you can be dealing
 with hundreds of lines of imports for thousands of lines of code.
 
-This plugin eliminates that problem by flagging imports which can be put inside a type-checking block.
+This plugin solves the issue of figuring out which imports to put inside your type-checking blocks 🚀
 
 ## As a pre-commit hook
 
