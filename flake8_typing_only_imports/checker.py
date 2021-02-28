@@ -54,10 +54,13 @@ class ImportVisitor(ast.NodeVisitor):
         The second and third assumptions are not iron clad, and could
         generate false positives, but should work for a first iteration.
         """
-        if '.' in import_name:
-            spec = find_spec('.'.join(import_name.split('.')[:-1]), import_name.split('.')[-1])
-        else:
-            spec = find_spec(import_name)
+        try:
+            if '.' in import_name:
+                spec = find_spec('.'.join(import_name.split('.')[:-1]), import_name.split('.')[-1])
+            else:
+                spec = find_spec(import_name)
+        except ModuleNotFoundError:
+            return False
 
         # assumption 1
         if not spec:

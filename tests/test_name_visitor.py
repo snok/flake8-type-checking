@@ -103,4 +103,4 @@ def test_model_declarations_are_included_in_names():
         )
     """
     )
-    assert _get_names(example) == {'models', 'SomeModel'}
+    assert _get_names(example) == {'models', 'fk', 'SomeModel'}

@@ -38,26 +38,3 @@ examples = [
 @pytest.mark.parametrize('example, expected', examples)
 def test_errors(example, expected):
     assert _get_error(example) == expected
-
-
-def test_no_error_raised_when_unused_imports_declared_in_type_checking_block():
-    example = textwrap.dedent(
-        """
-    import x
-    from y import z
-
-    if TYPE_CHECKING:
-        import a
-
-        # arbitrary whitespace
-
-        from b import c
-
-    def test():
-        pass
-    """
-    )
-    assert _get_error(example) == {
-        '2:0 ' + TYO101.format(module='x'),
-        '3:0 ' + TYO101.format(module='y.z'),
-    }

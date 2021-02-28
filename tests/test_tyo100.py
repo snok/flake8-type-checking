@@ -32,26 +32,3 @@ def test_errors(example, expected):
     assert (
         _get_error(example) == expected
     ), f"No match for example: '{example}'. Found '{_get_error(example)}' instead of '{expected}'"
-
-
-def test_no_error_raised_when_unused_imports_declared_in_type_checking_block():
-    example = textwrap.dedent(
-        f"""
-    import {mod}
-    from {mod} import Plugin
-
-    if TYPE_CHECKING:
-        import a
-
-        # arbitrary whitespace
-
-        from b import c
-
-    def test():
-        pass
-    """
-    )
-    assert _get_error(example) == {
-        '2:0 ' + TYO100.format(module=f'{mod}'),
-        '3:0 ' + TYO100.format(module=f'{mod}.Plugin'),
-    }
