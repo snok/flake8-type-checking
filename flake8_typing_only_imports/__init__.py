@@ -14,7 +14,7 @@ class Plugin:
     """Flake8 plugin."""
 
     name = 'flake8-typing-only-imports'
-    version = '0.1.2'
+    version = '0.1.3'
 
     def __init__(self, tree: 'Module') -> None:
         self.tree = tree
