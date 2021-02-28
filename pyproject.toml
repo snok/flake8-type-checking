@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flake8-typing-only-imports"
-version = "0.1.2"  # remember to also change __init__.py
+version = "0.1.3"  # remember to also change __init__.py
 description = "A flake8 plugin that flags imports exclusively used for type annotations"
 homepage = "https://github.com/sondrelg/flake8-typing-only-imports"
 repository = "https://github.com/sondrelg/flake8-typing-only-imports"
