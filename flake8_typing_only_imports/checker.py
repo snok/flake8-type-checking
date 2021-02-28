@@ -12,9 +12,10 @@ class AnnotationRemover(ast.NodeTransformer):
 
     __slots__: List[str] = []
 
-    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
         """Remove all annotation assignments."""
-        pass
+        delattr(node, 'annotation')
+        return node
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         """Remove all function arguments."""

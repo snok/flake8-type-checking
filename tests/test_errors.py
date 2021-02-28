@@ -56,7 +56,7 @@ def test_model_declarations_dont_trigger_error():
     from app.models import SomeModel
 
     class LoanProvider(models.Model):
-        fk = models.ForeignKey(
+        fk: SomeModel = models.ForeignKey(
             SomeModel,
             on_delete=models.CASCADE,
         )
