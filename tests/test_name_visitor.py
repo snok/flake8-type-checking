@@ -1,0 +1,87 @@
+import ast
+import textwrap
+from typing import Set
+
+import pytest
+
+from flake8_typing_only_imports.checker import NameVisitor
+
+
+def _get_names(example: str) -> Set[str]:
+    visitor = NameVisitor()
+    visitor.visit(ast.parse(example))
+    return visitor.names
+
+
+examples = [
+    # ast.Import
+    ('import x', set()),
+    ('import pytest', set()),
+    ('import flake8_typing_only_imports', set()),
+    # ast.ImportFrom
+    ('from x import y', set()),
+    ('from _pytest import fixtures', set()),
+    ('from flake8_typing_only_imports import constants', set()),
+    # Assignments
+    ('x = y', {'x', 'y'}),
+    ('x, y = z', {'x', 'y', 'z'}),
+    ('x, y, z = a, b, c()', {'x', 'y', 'z', 'a', 'b', 'c'}),
+    # Calls
+    ('x()', {'x'}),
+    ('x = y()', {'x', 'y'}),
+    ('def example(): x = y(); z()', {'x', 'y', 'z'}),
+    # Attribute
+    ('x.y', {'x'}),
+    (
+        textwrap.dedent(
+            """
+    def example(c):
+        a = 2
+        b = c * 2
+    """
+        ),
+        {'a', 'b', 'c'},
+    ),
+    (
+        textwrap.dedent(
+            """
+    class Test:
+        x = 13
+
+        def __init__(self, z):
+            self.y = z
+
+    a = Test()
+    b = a.y
+    """
+        ),
+        {'self', 'x', 'z', 'a', 'b', 'Test'},
+    ),
+    (
+        textwrap.dedent(
+            """
+    import ast
+
+    ImportType = Union[Import, ImportFrom]
+    """
+        ),  # ast should not be a part of this
+        {'Union', 'Import', 'ImportFrom', 'ImportType'},
+    ),
+    (
+        textwrap.dedent(
+            """
+    import ast
+    def _get_usages(example):
+        visitor = UnusedImportVisitor()
+        visitor.visit(parse(example))
+        return visitor.usage_names
+    """
+        ),
+        {'visitor', 'UnusedImportVisitor', 'parse', 'example'},
+    ),
+]
+
+
+@pytest.mark.parametrize('example, result', examples)
+def test_basic_annotations_are_removed(example, result):
+    assert _get_names(example) == result

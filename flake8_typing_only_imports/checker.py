@@ -2,9 +2,10 @@ import ast
 import os
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Dict, Generator, Iterable, List, Set, TypedDict, Union
+from typing import Dict, Generator, Iterable, List, Set, Tuple, Union
 
 from flake8_typing_only_imports.constants import TYO100, TYO101
+from flake8_typing_only_imports.types import ImportsContent
 
 
 class AnnotationRemover(ast.NodeTransformer):
@@ -27,13 +28,6 @@ class AnnotationRemover(ast.NodeTransformer):
         return node
 
 
-class ImportsContent(TypedDict):
-    """Describes the content of self.import."""
-
-    node: Union[ast.Import, ast.ImportFrom]
-    error: str
-
-
 class ImportVisitor(ast.NodeVisitor):
     """Map all imports outside of type-checking blocks."""
 
@@ -42,8 +36,9 @@ class ImportVisitor(ast.NodeVisitor):
     def __init__(self, cwd: Path) -> None:
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
         self.exempt_imports: List[str] = ['*']
-        self.imports: Dict[str, ImportsContent] = {}
-        self.names: Dict[str, str] = {}
+        self.local_imports: Dict[str, ImportsContent] = {}
+        self.remote_imports: Dict[str, ImportsContent] = {}
+        self.names: Dict[str, Tuple[str, bool]] = {}
 
     def _import_is_local(self, import_name: str) -> bool:
         """
@@ -70,15 +65,12 @@ class ImportVisitor(ast.NodeVisitor):
             return False
 
         # assumption 2
-        if spec.origin and 'venv' in spec.origin:
+        if not spec.origin or 'venv' in spec.origin:
             return False
 
         # assumption 3
-        if spec.origin:
-            origin = Path(spec.origin)
-            return self.cwd in origin.parents
-
-        return False
+        origin = Path(spec.origin)
+        return self.cwd in origin.parents
 
     def _add_import(self, node: Union[ast.Import, ast.ImportFrom], names: Iterable[str]) -> None:
         """
@@ -88,20 +80,19 @@ class ImportVisitor(ast.NodeVisitor):
         :param names:  the string value of the code being imported
         """
         if node.col_offset != 0:
-            # Type checking imports have an offset
-            # This might be too naïve and might need to be upgraded in the future
+            # Avoid recording imports that live inside a `if TYPE_CHECKING` block
+            # The current handling is probably too naïve and could be upgraded
             return
         for name in names:
-            # print(f'{name=}')
             if name not in self.exempt_imports:
-                # ImportFrom will have node.modules, while Imports won't
                 import_name = f'{node.module}.{name}' if isinstance(node, ast.ImportFrom) else name
 
-                self.imports[import_name] = {
-                    'error': TYO100 if self._import_is_local(import_name) else TYO101,
-                    'node': node,
-                }
-                self.names[name] = import_name
+                if self._import_is_local(import_name):
+                    self.local_imports[import_name] = {'error': TYO100, 'node': node}
+                    self.names[name] = import_name, True
+                else:
+                    self.remote_imports[import_name] = {'error': TYO101, 'node': node}
+                    self.names[name] = import_name, False
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
@@ -114,7 +105,7 @@ class ImportVisitor(ast.NodeVisitor):
         self._add_import(node, names)
 
 
-class NameVisitor(ast.NodeTransformer):
+class NameVisitor(ast.NodeVisitor):
     """Map all names of all non-import objects."""
 
     __slots__ = ['_names']
@@ -158,17 +149,17 @@ class TypingOnlyImportsChecker:
         # - tooling for unused imports already exists, so we don't need to reinvent this
         self.stripped_node = AnnotationRemover().visit(node)
 
-        # Get all imports
-        # - The import visitor creates a map of all imports of different types
-        self.import_visitor = ImportVisitor(self.cwd)
-        # print(self.stripped_node)
-        self.import_visitor.visit(self.stripped_node)
-
         # Get all 'name' attributes, for all ast objects except imports. This creates
         # a map of "all usages" which we can use to figure out which imports were used
         name_visitor = NameVisitor()
         name_visitor.visit(self.stripped_node)
         self.names: Set[str] = name_visitor.names
+
+        # Get all imports
+        # - The import visitor creates a map of all imports of different types
+        self.import_visitor = ImportVisitor(self.cwd)
+        # print(self.stripped_node)
+        self.import_visitor.visit(self.stripped_node)
 
     @property
     def unused_imports(self) -> Iterable[str]:
@@ -190,7 +181,10 @@ class TypingOnlyImportsChecker:
         https://flake8.pycqa.org/en/latest/plugin-development/
         """
         for name in self.unused_imports:
-            unused_import = self.import_visitor.names[name]
-            obj = self.import_visitor.imports[unused_import]
+            unused_import, local_import = self.import_visitor.names[name]
+            if local_import:
+                obj = self.import_visitor.local_imports[unused_import]
+            else:
+                obj = self.import_visitor.remote_imports[unused_import]
             error_message, node = obj['error'], obj['node']
             yield node.lineno, node.col_offset, error_message.format(module=unused_import), type(self)

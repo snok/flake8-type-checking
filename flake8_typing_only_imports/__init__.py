@@ -1,13 +1,13 @@
-from typing import TYPE_CHECKING
+# from typing import TYPE_CHECKING
+
+# if TYPE_CHECKING:
+from ast import Module
+from typing import Generator
+
+from flake8.options.manager import OptionManager
 
 from flake8_typing_only_imports.checker import TypingOnlyImportsChecker
 from flake8_typing_only_imports.constants import disabled_by_default
-
-if TYPE_CHECKING:
-    from ast import Module
-    from typing import Generator
-
-    from flake8.options.manager import OptionManager
 
 
 class Plugin:
@@ -25,6 +25,6 @@ class Plugin:
         yield from visitor.errors
 
     @staticmethod
-    def add_options(optmanager: 'OptionManager') -> None:
+    def add_options(mgr: 'OptionManager') -> None:
         """Informs flake8 to ignore TYO101 by default."""
-        optmanager.extend_default_ignore(disabled_by_default)
+        mgr.extend_default_ignore(disabled_by_default)
