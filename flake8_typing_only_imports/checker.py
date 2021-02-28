@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Dict, Generator, Iterable, List, Set, Tuple, Union
 
 from flake8_typing_only_imports.constants import TYO100, TYO101
-from flake8_typing_only_imports.types import ImportsContent
 
 
 class AnnotationRemover(ast.NodeTransformer):
@@ -36,8 +35,8 @@ class ImportVisitor(ast.NodeVisitor):
     def __init__(self, cwd: Path) -> None:
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
         self.exempt_imports: List[str] = ['*']
-        self.local_imports: Dict[str, ImportsContent] = {}
-        self.remote_imports: Dict[str, ImportsContent] = {}
+        self.local_imports: Dict[str, dict] = {}
+        self.remote_imports: Dict[str, dict] = {}
         self.names: Dict[str, Tuple[str, bool]] = {}
 
     def _import_is_local(self, import_name: str) -> bool:
@@ -72,7 +71,7 @@ class ImportVisitor(ast.NodeVisitor):
         origin = Path(spec.origin)
         return self.cwd in origin.parents
 
-    def _add_import(self, node: Union[ast.Import, ast.ImportFrom], names: Iterable[str]) -> None:
+    def _add_import(self, node: Union[ast.Import, ast.ImportFrom]) -> None:
         """
         Add relevant ast objects to import lists.
 
@@ -83,11 +82,17 @@ class ImportVisitor(ast.NodeVisitor):
             # Avoid recording imports that live inside a `if TYPE_CHECKING` block
             # The current handling is probably too naïve and could be upgraded
             return
-        for name in names:
-            if name not in self.exempt_imports:
-                import_name = f'{node.module}.{name}' if isinstance(node, ast.ImportFrom) else name
-
-                if self._import_is_local(import_name):
+        for name_node in node.names:
+            if name_node.name not in self.exempt_imports:
+                module = f'{node.module}.' if isinstance(node, ast.ImportFrom) else ''
+                if hasattr(name_node, 'asname') and name_node.asname:
+                    name = name_node.asname
+                    import_name = name_node.asname
+                else:
+                    name = name_node.name
+                    import_name = module + name_node.name
+                is_local = self._import_is_local(f'{module}{name_node.name}')
+                if is_local:
                     self.local_imports[import_name] = {'error': TYO100, 'node': node}
                     self.names[name] = import_name, True
                 else:
@@ -96,13 +101,11 @@ class ImportVisitor(ast.NodeVisitor):
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
-        modules = [alias.name for alias in node.names]
-        self._add_import(node, modules)
+        self._add_import(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Append objects to our import map."""
-        names = [alias.name for alias in node.names]
-        self._add_import(node, names)
+        self._add_import(node)
 
 
 class NameVisitor(ast.NodeVisitor):

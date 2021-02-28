@@ -21,6 +21,9 @@ examples = [
     # Unused local ast.ImportFrom
     (f'from {mod} import Plugin', {'1:0 ' + TYO100.format(module=f'{mod}.Plugin')}),
     (f'\n\nfrom {mod} import constants', {'3:0 ' + TYO100.format(module=f'{mod}.constants')}),
+    # Aliased imports
+    (f'import {mod} as x', {'1:0 ' + TYO100.format(module=f'x')}),
+    (f'from {mod} import constants as x', {'1:0 ' + TYO100.format(module='x')}),
 ]
 
 
