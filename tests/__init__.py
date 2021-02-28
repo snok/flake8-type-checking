@@ -5,6 +5,7 @@ from pathlib import Path
 from flake8_typing_only_imports import Plugin
 
 REPO_ROOT = Path(os.getcwd()).parent
+mod = 'flake8_typing_only_imports'
 
 
 def _get_error(example):

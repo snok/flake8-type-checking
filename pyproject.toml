@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flake8-typing-only-imports"
-version = "0.1.1"  # remember to also change __init__.py
+version = "0.1.2"  # remember to also change __init__.py
 description = "A flake8 plugin that flags imports exclusively used for type annotations"
 homepage = "https://github.com/sondrelg/flake8-typing-only-imports"
 repository = "https://github.com/sondrelg/flake8-typing-only-imports"
@@ -56,8 +56,10 @@ branch = false
 show_missing = true
 skip_covered = true
 exclude_lines = [
-    "if TYPE_CHECKING:"
+    "if TYPE_CHECKING:",
+    "mgr.extend_default_ignore"
 ]
+
 [tool.black]
 line-length = 120
 include = '\.pyi?$'

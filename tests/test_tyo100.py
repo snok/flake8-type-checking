@@ -10,10 +10,7 @@ import textwrap
 import pytest
 
 from flake8_typing_only_imports.constants import TYO100
-from tests import REPO_ROOT, _get_error
-
-mod = 'flake8_typing_only_imports'
-
+from tests import REPO_ROOT, _get_error, mod
 
 examples = [
     # No error

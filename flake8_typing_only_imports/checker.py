@@ -158,7 +158,6 @@ class TypingOnlyImportsChecker:
         # Get all imports
         # - The import visitor creates a map of all imports of different types
         self.import_visitor = ImportVisitor(self.cwd)
-        # print(self.stripped_node)
         self.import_visitor.visit(self.stripped_node)
 
     @property
