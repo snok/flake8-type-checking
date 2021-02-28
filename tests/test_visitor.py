@@ -2,8 +2,8 @@ import ast
 import textwrap
 
 from flake8_typing_only_imports import Plugin
-from flake8_typing_only_imports.ast import AnnotationRemover, ImportVisitor, NameVisitor
-from flake8_typing_only_imports.constants import TYO100
+from flake8_typing_only_imports.checker import AnnotationRemover, ImportVisitor, NameVisitor
+from flake8_typing_only_imports.constants import TYO101
 
 
 def _get_usages(example):
@@ -116,15 +116,15 @@ class TestImports:
         ]
 
     def test_find_basic_from_imports(self):
-        assert _get_imports('from _ import x') == ['x']
+        assert _get_imports('from _ import x') == ['_.x']
         assert _get_imports("from _ import x; print('something'); from _ import y") == [
-            'x',
-            'y',
+            '_.x',
+            '_.y',
         ]
         assert _get_imports("from _ import x; print(''); from _ import y; print(''); from _ import z") == [
-            'x',
-            'y',
-            'z',
+            '_.x',
+            '_.y',
+            '_.z',
         ]
 
     def test_mixed_imports(self):
@@ -140,7 +140,20 @@ class TestImports:
         import a; import b
         """
         )
-        assert _get_imports(example) == ['x', 'z', 'a', 'b']
+        assert _get_imports(example) == ['x', 'y.z', 'a', 'b']
+
+    def test_multi_line_import(self):
+        example = textwrap.dedent(
+            """
+        from flake8_typing_only_imports import Checker, \
+            Plugin
+        """
+        )
+        assert _get_imports(example) == ['flake8_typing_only_imports.Checker', 'flake8_typing_only_imports.Plugin']
+
+    def test_local_import(self):
+        example = 'import flake8_typing_only_imports.Checker'
+        assert _get_imports(example) == ['flake8_typing_only_imports.Checker']
 
 
 def _get_error(example):
@@ -151,9 +164,9 @@ def _get_error(example):
 class TestError:
     def test_basic_error(self):
         assert _get_error('') == set()
-        assert _get_error('import x') == {'1:0 ' + TYO100.format(module='x')}
-        assert _get_error('\nimport x') == {'2:0 ' + TYO100.format(module='x')}
-        assert _get_error('\n\nfrom x import y') == {'3:0 ' + TYO100.format(module='y')}
+        assert _get_error('import x') == {'1:0 ' + TYO101.format(module='x')}
+        assert _get_error('\nimport x') == {'2:0 ' + TYO101.format(module='x')}
+        assert _get_error('\n\nfrom x import y') == {'3:0 ' + TYO101.format(module='x.y')}
 
     def test_no_error_raised_when_unused_imports_declared_in_type_checking_block(self):
         example = textwrap.dedent(
@@ -173,6 +186,9 @@ class TestError:
         """
         )
         assert _get_error(example) == {
-            '2:0 ' + TYO100.format(module='x'),
-            '3:0 ' + TYO100.format(module='z'),
+            '2:0 ' + TYO101.format(module='x'),
+            '3:0 ' + TYO101.format(module='y.z'),
         }
+
+    def test_remote_import(self):
+        assert _get_error('\n\nimport pytest') == {'3:0 ' + TYO101.format(module='pytest')}

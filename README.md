@@ -26,9 +26,10 @@ pip install flake8-typing-only-imports
 
 ## Codes
 
-| Code   | Description                                  |
-|--------|----------------------------------------------|
-| TYO100 | Import '{module}' only used for type hinting |
+| Code   | Description                                         |
+|--------|-----------------------------------------------------|
+| TYO100 | Local import '{module}' only used for type hinting  |
+| TYO101 | Remote import '{module}' only used for type hinting |
 
 ## Rationale
 
