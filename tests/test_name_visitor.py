@@ -85,3 +85,22 @@ examples = [
 @pytest.mark.parametrize('example, result', examples)
 def test_basic_annotations_are_removed(example, result):
     assert _get_names(example) == result
+
+
+def test_model_declarations_are_included_in_names():
+    """
+    Class definition arguments need to be included in our "names".
+    """
+    example = textwrap.dedent(
+        """
+    from django.db import models
+    from app.models import SomeModel
+
+    class LoanProvider(models.Model):
+        fk = models.ForeignKey(
+            SomeModel,
+            on_delete=models.CASCADE,
+        )
+    """
+    )
+    assert _get_names(example) == {'models', 'SomeModel'}
