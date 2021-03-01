@@ -141,6 +141,11 @@ class ImportVisitor(ast.NodeTransformer):
         self._names.append(node.id)
         return node
 
+    def visit_Constant(self, node: ast.Constant) -> ast.Constant:
+        """Map constants."""
+        self._names.append(node.value)
+        return node
+
     # Map annotations
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:

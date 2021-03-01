@@ -63,3 +63,18 @@ def test_model_declarations_dont_trigger_error():
     """
     )
     assert _get_error(example) == set()
+
+
+def test_all_declaration():
+    """
+    __all__ declarations originally generated false positives.
+    """
+    example = textwrap.dedent(
+        """
+    from app.models import SomeModel
+    from another_app.models import AnotherModel
+
+    __all__ = ['SomeModel', 'AnotherModel']
+    """
+    )
+    assert _get_error(example) == set()
