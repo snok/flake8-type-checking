@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flake8-typing-only-imports"
-version = "0.1.6"  # remember to also change __init__.py
+version = "0.1.7"  # remember to also change __init__.py
 description = "A flake8 plugin that flags imports exclusively used for type annotations"
 homepage = "https://github.com/sondrelg/flake8-typing-only-imports"
 repository = "https://github.com/sondrelg/flake8-typing-only-imports"
@@ -10,6 +10,7 @@ license = "BSD-2-Clause"
 readme = "README.md"
 keywords = ["flake8", "lint", "type hint", "typing", "type annotations", "imports"]
 classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
     "Environment :: Console",
     "Operating System :: OS Independent",
