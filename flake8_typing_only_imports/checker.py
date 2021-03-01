@@ -2,7 +2,7 @@ import ast
 import os
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Set, Tuple, Union
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Union
 
 from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200
 
@@ -30,6 +30,8 @@ class ImportVisitor(ast.NodeTransformer):
 
         self.type_checking_block_imports: Set[str] = set()
         self.unwrapped_annotations: List[Tuple[int, int, str]] = []
+
+        self.type_checking: Optional[Tuple[int, int]] = None
 
     # Map imports
 
@@ -68,16 +70,31 @@ class ImportVisitor(ast.NodeTransformer):
         origin = Path(spec.origin)
         return self.cwd in origin.parents
 
+    def _import_defined_inside_type_checking_block(self, node: Union[ast.Import, ast.ImportFrom]) -> bool:
+        """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
+        if node.col_offset == 0:
+            return False
+        if self.type_checking is None:
+            return False
+        return self.type_checking[0] <= node.lineno <= self.type_checking[1]
+
+    def visit_If(self, node: ast.If) -> Any:
+        """Look for a TYPE_CHECKING block."""
+        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore
+            self.type_checking = (node.lineno, node.end_lineno or node.lineno)
+        self.generic_visit(node)
+        return node
+
     def _add_import(self, node: Union[ast.Import, ast.ImportFrom]) -> None:
         """
         Add relevant ast objects to import lists.
 
         :param node: ast.Import or ast.ImportFrom object
-        :param names:  the string value of the code being imported
         """
-        if node.col_offset != 0:
-            # Avoid recording imports that live inside a `if TYPE_CHECKING` block
-            # The current handling is probably too naïve and could be upgraded
+        if self._import_defined_inside_type_checking_block(node):
+            # For type checking blocks we want to
+            # 1. Record annotations for TYO2XX errors
+            # 2. Avoid recording imports for TYO1XX errors, by returning early
             for name_node in node.names:
                 if hasattr(name_node, 'asname') and name_node.asname:
                     name = name_node.asname
@@ -128,11 +145,8 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
         """Remove all annotation assignments."""
-        if hasattr(node, 'annotation') and node.annotation:
-            if isinstance(node.annotation, ast.Name):
-                self.unwrapped_annotations.append((node.lineno, node.col_offset, node.annotation.id))
-            else:
-                print('UNHANDLED TYPE:', type(node.annotation))  # noqa  # todo: remove in a future iteration
+        if hasattr(node, 'annotation') and node.annotation and isinstance(node.annotation, ast.Name):
+            self.unwrapped_annotations.append((node.lineno, node.col_offset, node.annotation.id))
             delattr(node, 'annotation')
         self.generic_visit(node)
         return node

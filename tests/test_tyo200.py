@@ -29,6 +29,27 @@ examples = [
             '4:12 ' + TYO200.format(annotation='something'),
         },
     ),
+    (
+        textwrap.dedent(
+            """
+        def test():
+            import x
+            y = x
+        """
+        ),
+        set(),
+    ),
+    (
+        textwrap.dedent(
+            """
+        if TYPE_CHECKING:
+            import x
+
+        y: x
+        """
+        ),
+        {'5:0 ' + TYO200.format(annotation='x')},
+    ),
 ]
 
 
