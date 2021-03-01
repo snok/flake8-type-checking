@@ -2,43 +2,36 @@ import ast
 import os
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Dict, Generator, Iterable, List, Set, Tuple, Union
+from typing import Any, Dict, Generator, List, Set, Tuple, Union
 
-from flake8_typing_only_imports.constants import TYO100, TYO101
-
-
-class AnnotationRemover(ast.NodeTransformer):
-    """Remove all annotation objects from a Module."""
-
-    __slots__: List[str] = []
-
-    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
-        """Remove all annotation assignments."""
-        delattr(node, 'annotation')
-        return node
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
-        """Remove all function arguments."""
-        for path in [node.args.args, node.args.kwonlyargs]:
-            for argument in path:
-                if hasattr(argument, 'annotation'):
-                    delattr(argument, 'annotation')
-        if hasattr(node, 'returns'):
-            delattr(node, 'returns')
-        return node
+from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200
 
 
-class ImportVisitor(ast.NodeVisitor):
+class ImportVisitor(ast.NodeTransformer):
     """Map all imports outside of type-checking blocks."""
 
-    __slots__ = ('imports', 'exempt_imports', 'names')
+    __slots__ = (
+        'cwd',
+        'exempt_imports',
+        'local_imports',
+        'remote_imports',
+        'import_names',
+        '_names',
+        'unwrapped_annotations',
+    )
 
     def __init__(self, cwd: Path) -> None:
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
         self.exempt_imports: List[str] = ['*']
         self.local_imports: Dict[str, dict] = {}
         self.remote_imports: Dict[str, dict] = {}
-        self.names: Dict[str, Tuple[str, bool]] = {}
+        self.import_names: Dict[str, Tuple[str, bool]] = {}
+        self._names: List[str] = []
+
+        self.type_checking_block_imports: Set[str] = set()
+        self.unwrapped_annotations: List[Tuple[int, int, str]] = []
+
+    # Map imports
 
     def _import_is_local(self, import_name: str) -> bool:
         """
@@ -85,6 +78,12 @@ class ImportVisitor(ast.NodeVisitor):
         if node.col_offset != 0:
             # Avoid recording imports that live inside a `if TYPE_CHECKING` block
             # The current handling is probably too naïve and could be upgraded
+            for name_node in node.names:
+                if hasattr(name_node, 'asname') and name_node.asname:
+                    name = name_node.asname
+                else:
+                    name = name_node.name
+                self.type_checking_block_imports.add(name)
             return
         for name_node in node.names:
             if name_node.name not in self.exempt_imports:
@@ -98,77 +97,78 @@ class ImportVisitor(ast.NodeVisitor):
                 is_local = self._import_is_local(f'{module}{name_node.name}')
                 if is_local:
                     self.local_imports[import_name] = {'error': TYO100, 'node': node}
-                    self.names[name] = import_name, True
+                    self.import_names[name] = import_name, True
                 else:
                     self.remote_imports[import_name] = {'error': TYO101, 'node': node}
-                    self.names[name] = import_name, False
+                    self.import_names[name] = import_name, False
 
-    def visit_Import(self, node: ast.Import) -> None:
+    def visit_Import(self, node: ast.Import) -> ast.Import:
         """Append objects to our import map."""
         self._add_import(node)
+        return node
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.ImportFrom:
         """Append objects to our import map."""
         self._add_import(node)
+        return node
 
-
-class NameVisitor(ast.NodeVisitor):
-    """Map all names of all non-import objects."""
-
-    __slots__ = ['_names']
-
-    def __init__(self) -> None:
-        self._names: List[str] = []
+    # Map uses in a file
 
     @property
     def names(self) -> Set[str]:
         """Return unique names."""
         return set(self._names)
 
-    def visit_Name(self, node: ast.Name) -> None:
+    def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
         self._names.append(node.id)
+        return node
 
-    def visit_Import(self, node: ast.Import) -> None:
-        """Skip import objects."""
-        pass
+    # Map annotations
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        """Skip import-from objects."""
-        pass
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
+        """Remove all annotation assignments."""
+        if hasattr(node, 'annotation') and node.annotation:
+            if isinstance(node.annotation, ast.Name):
+                self.unwrapped_annotations.append((node.lineno, node.col_offset, node.annotation.id))
+            else:
+                print('UNHANDLED TYPE:', type(node.annotation))  # noqa  # todo: remove in a future iteration
+            delattr(node, 'annotation')
+        self.generic_visit(node)
+        return node
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        """Remove all function arguments."""
+        for path in [node.args.args, node.args.kwonlyargs]:
+            argument: ast.arg
+            for argument in path:
+                if hasattr(argument, 'annotation') and hasattr(argument.annotation, 'id'):
+                    self.unwrapped_annotations.append(
+                        (argument.lineno, argument.col_offset, argument.annotation.id)  # type:ignore
+                    )
+                    delattr(argument, 'annotation')
+        if hasattr(node, 'returns') and hasattr(node.returns, 'id'):
+            self.unwrapped_annotations.append((node.lineno, node.col_offset, node.returns.id))  # type: ignore
+            delattr(node, 'returns')
+        self.generic_visit(node)
+        return node
 
 
 class TypingOnlyImportsChecker:
     """Checks for imports exclusively used by type annotation elements."""
 
     __slots__ = [
-        'stripped_node',
-        'names',
-        'import_visitor',
         'cwd',
+        'visitor',
     ]
 
     def __init__(self, node: ast.Module) -> None:
         self.cwd = Path(os.getcwd())
-
-        # Remove all annotations from the ast tree
-        # - The reason this should make sense, is we assume there are no unused imports
-        # - tooling for unused imports already exists, so we don't need to reinvent this
-        self.stripped_node = AnnotationRemover().visit(node)
-
-        # Get all 'name' attributes, for all ast objects except imports. This creates
-        # a map of "all usages" which we can use to figure out which imports were used
-        name_visitor = NameVisitor()
-        name_visitor.visit(self.stripped_node)
-        self.names: Set[str] = name_visitor.names
-
-        # Get all imports
-        # - The import visitor creates a map of all imports of different types
-        self.import_visitor = ImportVisitor(self.cwd)
-        self.import_visitor.visit(self.stripped_node)
+        self.visitor = ImportVisitor(self.cwd)
+        self.visitor.visit(node)
 
     @property
-    def unused_imports(self) -> Iterable[str]:
+    def unused_imports(self) -> Generator[Tuple[int, int, str, Any], None, None]:
         """
         Return the intersection of import names and usage names.
 
@@ -176,21 +176,36 @@ class TypingOnlyImportsChecker:
         In the future, if we wanted to get more specific we could limit this further by actively looking
         at the type annotations as well, but for now we'll assume this is good enough.
         """
-        return set(self.import_visitor.names) - self.names
+        for name in set(self.visitor.import_names) - self.visitor.names:
+            unused_import, local_import = self.visitor.import_names[name]
+            if local_import:
+                obj = self.visitor.local_imports[unused_import]
+            else:
+                obj = self.visitor.remote_imports[unused_import]
+            error_message, node = obj['error'], obj['node']
+            yield node.lineno, node.col_offset, error_message.format(module=unused_import), type(self)
 
     @property
-    def errors(self) -> Generator:
+    def unwrapped_annotations(self) -> Generator[Tuple[int, int, str, Any], None, None]:
+        """
+        Return the intersection of type-checking imports and unwrapped annotation objects.
+
+        Any annotation object that coincides with a type-checking block import, should be
+        wrapped in quotes to be treated as a forward reference:
+
+        https://www.python.org/dev/peps/pep-0484/#forward-references
+        """
+        for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
+            if annotation in self.visitor.type_checking_block_imports:
+                yield lineno, col_offset, TYO200.format(annotation=annotation), type(self)
+
+    @property
+    def errors(self) -> Generator[Tuple[int, int, str, Any], None, None]:
         """
         Return relevant errors in a preset format.
 
         Flake8 plugins must return generators in this format.
         https://flake8.pycqa.org/en/latest/plugin-development/
         """
-        for name in self.unused_imports:
-            unused_import, local_import = self.import_visitor.names[name]
-            if local_import:
-                obj = self.import_visitor.local_imports[unused_import]
-            else:
-                obj = self.import_visitor.remote_imports[unused_import]
-            error_message, node = obj['error'], obj['node']
-            yield node.lineno, node.col_offset, error_message.format(module=unused_import), type(self)
+        yield from self.unused_imports
+        yield from self.unwrapped_annotations

@@ -36,5 +36,5 @@ examples = [
 
 
 @pytest.mark.parametrize('example, expected', examples)
-def test_errors(example, expected):
+def test_tyo101_errors(example, expected):
     assert _get_error(example) == expected

@@ -30,6 +30,9 @@ pip install flake8-typing-only-imports
 |--------|-----------------------------------------------------|
 | TYO100 | Local import '{module}' only used for type hinting  |
 | TYO101 | Remote import '{module}' only used for type hinting |
+| TYO200 | Annotation '{annotation}' needs to be wrapped in quotes to be treated as a forward reference |
+
+`TYO101` is disabled by default.
 
 ## Rationale
 
