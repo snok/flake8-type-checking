@@ -4,11 +4,11 @@ from typing import Set
 
 import pytest
 
-from flake8_typing_only_imports.checker import NameVisitor
+from flake8_typing_only_imports.checker import ImportVisitor
 
 
 def _get_names(example: str) -> Set[str]:
-    visitor = NameVisitor()
+    visitor = ImportVisitor('fake cwd')  # type: ignore
     visitor.visit(ast.parse(example))
     return visitor.names
 

@@ -28,7 +28,7 @@ examples = [
 
 
 @pytest.mark.parametrize('example, expected', examples)
-def test_errors(example, expected):
+def test_tyo100_errors(example, expected):
     assert (
         _get_error(example) == expected
     ), f"No match for example: '{example}'. Found '{_get_error(example)}' instead of '{expected}'"
