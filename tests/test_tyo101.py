@@ -1,5 +1,5 @@
 """
-This file tests the TYO101 error: unused remote imports.
+This file tests the TYO101 error: Unused remote imports
 
 Some things to note: local/remote is a pretty arbitrary divide, and remote here really just means
 not from the module our current working directory is in, or in the current working dir, but inside a venv.

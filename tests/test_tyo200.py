@@ -1,55 +1,25 @@
 """
-This file tests the TYO101 error: unused remote imports.
-
-Some things to note: local/remote is a pretty arbitrary divide, and remote here really just means
-not from the module our current working directory is in, or in the current working dir, but inside a venv.
+File tests TYO201:
+    Annotation should be wrapped in quotes
 """
-import os
-import textwrap
 
 import pytest
 
-from flake8_typing_only_imports.constants import TYO100, TYO200
-from tests import REPO_ROOT, _get_error, mod
+from flake8_typing_only_imports.constants import TYO200
+from tests import _get_error
 
 examples = [
-    # No error
+    # # No error
     ('', set()),
-    # ast.AnnAssign missing quotes
-    (
-        f'if TYPE_CHECKING:\n\timport something\n\nx: something\ny: int',
-        {
-            '4:0 ' + TYO200.format(annotation='something'),
-        },
-    ),
-    (
-        f'if TYPE_CHECKING:\n\timport something\n\ndef example(x: something, y:int) -> something:\n\tpass',
-        {
-            '4:0 ' + TYO200.format(annotation='something'),
-            '4:12 ' + TYO200.format(annotation='something'),
-        },
-    ),
-    (
-        textwrap.dedent(
-            """
-        def test():
-            import x
-            y = x
-        """
-        ),
-        set(),
-    ),
-    (
-        textwrap.dedent(
-            """
-        if TYPE_CHECKING:
-            import x
-
-        y: x
-        """
-        ),
-        {'5:0 ' + TYO200.format(annotation='x')},
-    ),
+    # # Basic ast.AnnAssign without need for futures import
+    ('x: int', set()),
+    # # Basic ast.AnnAssign where we should have a futures import
+    ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict', {'0:0 ' + TYO200.format(annotation='Dict')}),
+    ('if TYPE_CHECKING:\n\t\n\t\n\t\n\tfrom typing import Dict', {'0:0 ' + TYO200.format(annotation='Dict')}),
+    ('if TYPE_CHECKING:\n\t\n\t\n\t\n\tx = 2', set()),
+    ('if TYPE_CHECKING:\n\t\n\t\n\t\n\timport x', {'0:0 ' + TYO200.format(annotation='Dict')}),
+    # Not much more point in testing this, as the logic is not dependent on the type of annotation assignments
+    # it's purely concerned with whether an ast.Import or ast.ImportFrom exists within a type checking block
 ]
 
 

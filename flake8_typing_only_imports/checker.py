@@ -31,6 +31,7 @@ class ImportVisitor(ast.NodeTransformer):
         self.type_checking_block_imports: Set[str] = set()
         self.unwrapped_annotations: List[Tuple[int, int, str]] = []
 
+        self.futures_annotations = False
         self.type_checking: Optional[Tuple[int, int]] = None
 
     # Map imports
