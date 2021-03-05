@@ -16,7 +16,10 @@
 
 # flake8-typing-only-imports
 
-flake8 plugin that flags imports which are exclusively used for type hinting.
+>Plugin is still a work in progress
+
+flake8 plugin that helps identify which imports to put into type-checking blocks,
+and how to adjust your type annotations once imports are moved.
 
 ## Installation
 
@@ -28,38 +31,60 @@ pip install flake8-typing-only-imports
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
-| TYO100 | Local import '{module}' only used for type hinting  |
-| TYO101 | Remote import '{module}' only used for type hinting |
-| TYO200 | Annotation '{annotation}' needs to be wrapped in quotes to be treated as a forward reference |
+| TYO100 | Import should be moved to a type-checking block  |
+| TYO101 | Third-party import should be moved to a type-checking block |
+| TYO200 | Missing 'from \_\_future\_\_ import annotations' import |
+| TYO201 | Annotation is wrapped in unnecessary quotes |
+| TYO300 | Annotation should be wrapped in quotes |
+| TYO301 | Annotation is wrapped in unnecessary quotes |
 
-`TYO101` is disabled by default.
+`TYO101` is disabled by default because third-party imports usually
+aren't a real concern with respect to import circularity issues.
 
-## Rationale
+`TYO2XX` and `TYO3XX` are mutually exclusive as they represent
+two different ways of solving the same problem. Make sure to ignore or enable just one of the series.
 
-A common trade-off for annotating large code bases is you will end up with a
-large number of extra imports. In some cases, this can lead to
-import circularity problems.
+## Motivation
 
-One (good) solution, as proposed in [PEP484](https://www.python.org/dev/peps/pep-0484/)
-is to use [forward references](https://www.python.org/dev/peps/pep-0484/#forward-references)
-and [type checking](https://www.python.org/dev/peps/pep-0484/#runtime-or-type-checking) blocks, like this:
+Two common issues when annotating large code bases are:
 
-```python
-from typing import TYPE_CHECKING
+1. Import circularity issues
+2. Annotating not-yet-defined structures
 
+These problems are largely solved by two features:
 
-if TYPE_CHECKING:
-    from app.models import foo
+1. Type checking blocks
 
+    ```python
+    from typing import TYPE_CHECKING
 
-def bar() -> 'foo':
-    ...
-```
+    if TYPE_CHECKING:
+        # this code is not evaluated at runtime
+        from foo import bar
+    ```
+2. Forward references
+    <br><br>
+    Which can be used, like this
+    ```python
+    class Foo:
+        def bar(self) -> 'Foo':
+            return Foo()
+    ```
 
-At the same time, this is often easier said than done, because in larger code bases you can be dealing
-with hundreds of lines of imports for thousands of lines of code.
+    or since [PEP563](https://www.python.org/dev/peps/pep-0563/#abstract) was implemented, like this:
+    ```python
+    from __future__ import annotations
 
-This plugin solves the issue of figuring out which imports to put inside your type-checking blocks 🚀
+    class Foo:
+        def bar(self) -> Foo:
+            return Foo()
+    ```
+
+   See [this](https://stackoverflow.com/questions/55320236/does-python-evaluate-type-hinting-of-a-forward-reference) excellent stackoverflow response explaining forward references, for more context.
+
+The aim of this plugin is to automate the management of type annotation imports,
+and the forward references that then become necessary.
+
 
 ## As a pre-commit hook
 
@@ -74,3 +99,9 @@ Sample `.pre-commit-config.yaml`:
   - id: flake8
     additional_dependencies: [flake8-typing-only-imports]
 ```
+
+## Supporting the project
+
+Leave a&nbsp;⭐️&nbsp; if this project helped you!
+
+Contributions are always welcome 👏
