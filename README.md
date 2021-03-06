@@ -32,15 +32,16 @@ pip install flake8-typing-only-imports
 |--------|-----------------------------------------------------|
 | TYO100 | Import should be moved to a type-checking block  |
 | TYO101 | Third-party import should be moved to a type-checking block |
-| TYO200 | Missing 'from __future__ import annotations' import |
+| TYO200 | Missing 'from \_\_future\_\_ import annotations' import |
 | TYO201 | Annotation should be wrapped in quotes |
 | TYO202 | Annotation is wrapped in unnecessary quotes |
 
 `TYO101` is disabled by default because third-party imports usually
 aren't a concern wrt. import circularity issues.
 
-`TYO200` and `TYO201` should be considered mutually exclusive as they represent 
-two different ways of solving the same problem.
+`TYO200` and `TYO201` are mutually exclusive as they represent
+two different ways of solving the same problem. Make sure to not
+include both.
 
 ## Motivation
 
@@ -55,31 +56,32 @@ These problems are largely solved by two features:
 
     ```python
     from typing import TYPE_CHECKING
-   
-    if TYPE_CHECKING:  # <-- not evaluated at runtime
-       from app import something
+
+    if TYPE_CHECKING:
+        # this code is not evaluated at runtime
+        from app import something
     ```
 2. Forward references
     <br><br>
-    Which can be created like this
+    Which can be created, like this
     ```python
     class Foo:
         def bar(self) -> 'Foo':
             return Foo()
     ```
-    
+
     or since [PEP563](https://www.python.org/dev/peps/pep-0563/#abstract) was implemented, like this:
     ```python
     from __future__ import annotations
-   
+
     class Foo:
         def bar(self) -> Foo:
             return Foo()
     ```
 
-   (See [this](https://stackoverflow.com/questions/55320236/does-python-evaluate-type-hinting-of-a-forward-reference) excellent stackoverflow response explaining forward references)
+   See [this](https://stackoverflow.com/questions/55320236/does-python-evaluate-type-hinting-of-a-forward-reference) excellent stackoverflow response explaining forward references, for more context.
 
-The aim of this plugin is to make it easier to clean up your type annotation imports,
+The aim of this plugin is to automate the cleanup of type annotation imports,
 and the forward references that then become necessary.
 
 

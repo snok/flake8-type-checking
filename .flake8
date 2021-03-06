@@ -8,6 +8,8 @@ ignore=
     D107,
     # ANN101 Missing type annotation for self in method
     ANN101,
+    # W503 line break before binary operator
+    W503
 
 exclude =
     .git,

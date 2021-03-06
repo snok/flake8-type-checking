@@ -10,4 +10,5 @@ TYO200 = "TYO200: Missing 'from __future__ import annotations' import"
 TYO201 = "TYO201: Annotation '{annotation}' should be wrapped in quotes"
 TYO202 = "TYO202: Annotation '{annotation}' is wrapped in unnecessary quotes"
 
-disabled_by_default: 'List[str]' = ['TYO101']
+disabled_by_default: 'List[str]' = ['TYO101', 'TYO201']
+enabled_by_default: 'List[str]' = ['TYO100', 'TYO200', 'TYO202']
