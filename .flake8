@@ -11,6 +11,7 @@ ignore=
     # W503 line break before binary operator
     W503
 
+
 exclude =
     .git,
     .venv

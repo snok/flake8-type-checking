@@ -99,5 +99,5 @@ examples = [
 
 
 @pytest.mark.parametrize('example, expected', examples)
-def test_tyo201_errors(example, expected):
-    assert _get_error(example, error_code_filter='TYO201') == expected
+def test_tyo301_errors(example, expected):
+    assert _get_error(example, error_code_filter='TYO301') == expected

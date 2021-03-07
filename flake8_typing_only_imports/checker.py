@@ -1,11 +1,18 @@
+from __future__ import annotations
+
 import ast
 import os
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING
 
-from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200, TYO201
-from flake8_typing_only_imports.types import ImportType, flake8_generator
+if TYPE_CHECKING:
+    from typing import Any
+
+from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200, TYO201, TYO300, TYO301
+
+if TYPE_CHECKING:
+    from flake8_typing_only_imports.types import ImportType, flake8_generator
 
 
 class ImportVisitor(ast.NodeTransformer):
@@ -25,34 +32,57 @@ class ImportVisitor(ast.NodeTransformer):
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         # Import patterns we want to avoid mapping
-        self.exempt_imports: List[str] = ['*']
+        self.exempt_imports: list[str] = ['*', 'TYPE_CHECKING']
 
         # All imports in each bucket
-        self.local_imports: Dict[str, dict] = {}
-        self.remote_imports: Dict[str, dict] = {}
+        self.local_imports: dict[str, dict] = {}
+        self.remote_imports: dict[str, dict] = {}
 
         # Map of import name to verbose import name and bool indicating whether it's a local or remote import
-        self.import_names: Dict[str, Tuple[str, bool]] = {}
+        self.import_names: dict[str, tuple[str, bool]] = {}
 
         # List of all names and ids, except type declarations - used to find otherwise unused imports
-        self.uses: List[str] = []
+        self.uses: list[str] = []
 
         # Tuple of (node, import name) for all import defined within a type-checking block
-        self.type_checking_block_imports: Set[Tuple[ImportType, str]] = set()
+        self.type_checking_block_imports: set[tuple[ImportType, str]] = set()
+        self.unused_type_checking_block_imports: set[tuple[ImportType, str]] = set()
 
         # All type annotations in the file, without quotes around them
-        self.unwrapped_annotations: List[Tuple[int, int, str]] = []
+        self.unwrapped_annotations: list[tuple[int, int, str]] = []
 
         # All type annotations in the file, with quotes around them
-        self.wrapped_annotations: List[Tuple[int, int, str]] = []
+        self.wrapped_annotations: list[tuple[int, int, str]] = []
 
         # Whether there is a `from __futures__ import annotations` is present
-        self.futures_annotation: Optional[bool] = None
+        self.futures_annotation: bool | None = None
 
         # Where the type checking block exists (line_start, line_end)
-        self.type_checking: Optional[Tuple[int, int]] = None
+        self.type_checking: tuple[int, int] | None = None
 
-    # Map imports
+    @property
+    def names(self) -> set[str]:
+        """Return unique names."""
+        return set(self.uses)
+
+    # -- Map type checking block ---------------
+
+    def _import_defined_inside_type_checking_block(self, node: ImportType) -> bool:
+        """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
+        if node.col_offset == 0:
+            return False
+        if self.type_checking is None:
+            return False
+        return self.type_checking[0] <= node.lineno <= self.type_checking[1]
+
+    def visit_If(self, node: ast.If) -> Any:
+        """Look for a TYPE_CHECKING block."""
+        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore
+            self.type_checking = (node.lineno, node.end_lineno or node.lineno)
+        self.generic_visit(node)
+        return node
+
+    # -- Map imports -------------------------------
 
     def _import_is_local(self, import_name: str) -> bool:
         """
@@ -77,32 +107,14 @@ class ImportVisitor(ast.NodeTransformer):
         except ModuleNotFoundError:
             return False
 
-        # assumption 1
         if not spec:
             return False
 
-        # assumption 2
         if not spec.origin or 'venv' in spec.origin:
             return False
 
-        # assumption 3
         origin = Path(spec.origin)
         return self.cwd in origin.parents
-
-    def _import_defined_inside_type_checking_block(self, node: ImportType) -> bool:
-        """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
-        if node.col_offset == 0:
-            return False
-        if self.type_checking is None:
-            return False
-        return self.type_checking[0] <= node.lineno <= self.type_checking[1]
-
-    def visit_If(self, node: ast.If) -> Any:
-        """Look for a TYPE_CHECKING block."""
-        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore
-            self.type_checking = (node.lineno, node.end_lineno or node.lineno)
-        self.generic_visit(node)
-        return node
 
     def _add_import(self, node: ImportType) -> None:
         """
@@ -123,17 +135,16 @@ class ImportVisitor(ast.NodeTransformer):
             return None
         for name_node in node.names:
             # Check for `from __futures__ import annotations`
-            if (
-                self.futures_annotation is False
-                and not self.futures_annotation
-                and getattr(node, 'module', '') == '__future__'
-                and any(name.name == 'annotations' for name in node.names)
-            ):
-                self.futures_annotation = True
-            else:
-                # futures imports should always be the first line
-                # in a file, so we should only need to check this once
-                self.futures_annotation = False
+            if self.futures_annotation is None:
+                if getattr(node, 'module', '') == '__future__' and any(
+                    name.name == 'annotations' for name in node.names
+                ):
+                    self.futures_annotation = True
+                    return
+                else:
+                    # futures imports should always be the first line
+                    # in a file, so we should only need to check this once
+                    self.futures_annotation = False
 
             # Map imports as belonging to the current module, or belonging to a third-party mod
             if name_node.name not in self.exempt_imports:
@@ -152,22 +163,15 @@ class ImportVisitor(ast.NodeTransformer):
                     self.remote_imports[import_name] = {'error': TYO101, 'node': node}
                     self.import_names[name] = import_name, False
 
-    def visit_Import(self, node: ast.Import) -> ast.Import:
+    def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
         self._add_import(node)
-        return node
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.ImportFrom:
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Append objects to our import map."""
         self._add_import(node)
-        return node
 
-    # Map uses in a file
-
-    @property
-    def names(self) -> Set[str]:
-        """Return unique names."""
-        return set(self.uses)
+    # -- Map uses in a file ---------------------------
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
@@ -179,43 +183,46 @@ class ImportVisitor(ast.NodeTransformer):
         self.uses.append(node.value)
         return node
 
-    # Map annotations
+    # -- Map annotations ------------------------------
 
-    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
+    def _add_annotation(self, node: ast.AST) -> None:
+        if isinstance(node, ast.Constant) and node.value is not None:
+            self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
+        elif isinstance(node, ast.Subscript):
+            self._add_annotation(node.value)
+            self._add_annotation(node.slice)
+        elif isinstance(node, ast.Name):
+            self.unwrapped_annotations.append((node.lineno, node.col_offset, node.id))
+        elif isinstance(node, ast.Tuple):
+            for n in node.elts:
+                self._add_annotation(n)
+        elif node is None:
+            return
+        elif isinstance(node, ast.Attribute):
+            self._add_annotation(node.value)
+        else:
+            try:
+                print('unhandled annotation type:', type(node), node.__dict__)  # noqa
+                print('unhandled annotation type:', type(node), node.value.__dict__)  # type: ignore  # noqa
+            except AttributeError:
+                print('unhandled annotation type:', type(node), node)  # noqa
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotation assignments."""
-        if hasattr(node, 'annotation') and node.annotation:
-            if isinstance(node.annotation, ast.Name):
-                self.unwrapped_annotations.append((node.lineno, node.col_offset, node.annotation.id))
-                delattr(node, 'annotation')
-            elif isinstance(node.annotation, ast.Constant):
-                self.wrapped_annotations.append((node.lineno, node.col_offset, node.annotation.value))
-                delattr(node, 'annotation')
-        self.generic_visit(node)
-        return node
+        self._add_annotation(node.annotation)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
-        """Remove all function arguments."""
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Remove and map function arguments and returns."""
         for path in [node.args.args, node.args.kwonlyargs]:
             argument: ast.arg
             for argument in path:
                 if hasattr(argument, 'annotation'):
-                    if hasattr(argument.annotation, 'id'):
-                        self.unwrapped_annotations.append(
-                            (argument.lineno, argument.col_offset, argument.annotation.id)  # type:ignore
-                        )
-                    elif hasattr(argument.annotation, 'value'):
-                        self.wrapped_annotations.append(
-                            (argument.lineno, argument.col_offset, argument.annotation.value)
-                        )
+                    self._add_annotation(argument.annotation)  # type: ignore
                     delattr(argument, 'annotation')
         if hasattr(node, 'returns'):
-            if hasattr(node.returns, 'id'):
-                self.unwrapped_annotations.append((node.lineno, node.col_offset, node.returns.id))  # type: ignore
-            elif hasattr(node.returns, 'value'):
-                self.wrapped_annotations.append((node.lineno, node.col_offset, node.returns.value))
+            self._add_annotation(node.returns)  # type: ignore
             delattr(node, 'returns')
         self.generic_visit(node)
-        return node
 
 
 class TypingOnlyImportsChecker:
@@ -225,19 +232,21 @@ class TypingOnlyImportsChecker:
         'cwd',
         'visitor',
         'generators',
+        'future_option_enabled',
     ]
 
-    def __init__(self, node: ast.Module) -> None:
+    def __init__(self, node: ast.Module, future_option_enabled: bool = True) -> None:
         self.cwd = Path(os.getcwd())
         self.visitor = ImportVisitor(self.cwd)
         self.visitor.visit(node)
+        self.future_option_enabled = future_option_enabled
 
         self.generators = [
             self.unused_import,
             self.unused_third_party_import,
             self.missing_futures_import,
             self.missing_quotes,
-            # self.excess_quotes,
+            self.excess_quotes,
         ]
 
     def unused_import(self) -> flake8_generator:
@@ -260,24 +269,65 @@ class TypingOnlyImportsChecker:
 
     def missing_futures_import(self) -> flake8_generator:
         """TYO200."""
-        if not self.visitor.futures_annotation and self.visitor.type_checking_block_imports:
-            yield 0, 0, TYO200, None
-
-    def missing_quotes(self) -> flake8_generator:
-        """TYO201."""
-        if not self.visitor.futures_annotation:
-            for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
-                if any(annotation == name for _, name in self.visitor.type_checking_block_imports):
-                    yield lineno, col_offset, TYO201.format(annotation=annotation), None
+        if (
+            not self.visitor.futures_annotation
+            and {name for _, name in self.visitor.type_checking_block_imports} - self.visitor.names
+        ):
+            yield 1, 0, TYO200, None
 
     def excess_quotes(self) -> flake8_generator:
-        """TYO202."""
-        if self.visitor.futures_annotation:
+        """TYO201."""
+        # - TYO 201 errors
+
+        # If futures imports are present, any ast.Constant captured in _add_annotation should yield an error
+        if self.future_option_enabled and self.visitor.futures_annotation:
             for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-                if any(annotation == name for _, name in self.visitor.type_checking_block_imports):
-                    yield lineno, col_offset, TYO201.format(annotation=annotation), None
-        elif self.visitor.type_checking_block_imports:
-            print(f'{self.visitor.type_checking_block_imports=}')  # noqa
+                yield lineno, col_offset, TYO201.format(annotation=annotation), None
+        # If we have no imports inside a type-checking block, all ast.Constant should also yield an error
+        elif self.future_option_enabled and len(self.visitor.type_checking_block_imports) == 0:
+            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+                yield lineno, col_offset, TYO201.format(annotation=annotation), None
+
+        # - TYO 301 errors
+        elif not self.future_option_enabled and len(self.visitor.type_checking_block_imports) == 0:
+            # If we have no imports inside a type-checking block, all ast.Constant should yield an error
+            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+                yield lineno, col_offset, TYO301.format(annotation=annotation), None
+        elif not self.future_option_enabled:
+            """
+            If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
+
+            When you annotate something like this:
+
+                `x: Dict[int]`
+
+            You receive an ast.AnnAssign element with a subscript containing the int as it's own unit. It means you
+            have a separation between the `Dict` and the `int`, and the Dict can be mathed against a `Dict` import.
+
+            However, when you annotate something inside quotes, like this:
+
+                 `x: 'Dict[int]'`
+
+            The annotation is *not* broken down into its components, but rather returns an ast.Constant with a string
+            value representation of the annotation. In other words, you get one element, with the value `'Dict[int]'`.
+
+            This makes matching deeply nested annotations inside quotes very hard to match against import objects,
+            to the point where I've not even started to attempt it. All we do in this next block is look for exact
+            matches (no subscripts).
+
+            For anyone with more insight into how this might be tackled, contributions are very welcome.
+            """
+            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+                for _, import_name in self.visitor.type_checking_block_imports:
+                    if annotation == import_name:
+                        yield lineno, col_offset, TYO301.format(annotation=annotation), None
+
+    def missing_quotes(self) -> flake8_generator:
+        """TYO300."""
+        for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
+            for _, name in self.visitor.type_checking_block_imports:
+                if annotation == name:
+                    yield lineno, col_offset, TYO300.format(annotation=annotation), None
 
     @property
     def errors(self) -> flake8_generator:
