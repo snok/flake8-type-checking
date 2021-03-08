@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
-from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200, TYO201
+from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200, TYO201, TYO300, TYO301
 
 if TYPE_CHECKING:
     from flake8_typing_only_imports.types import ImportType, flake8_generator
@@ -113,7 +113,7 @@ class ImportVisitor(ast.NodeTransformer):
                 spec = find_spec('.'.join(import_name.split('.')[:-1]), import_name.split('.')[-1])
             else:
                 spec = find_spec(import_name)
-        except (ModuleNotFoundError, ValueError):
+        except ModuleNotFoundError:
             return False
         except possible_local_errors:
             return True
@@ -252,17 +252,23 @@ class TypingOnlyImportsChecker:
         'future_option_enabled',
     ]
 
-    def __init__(self, node: ast.Module, future_option_enabled: bool = True) -> None:
+    def __init__(self, node: ast.Module) -> None:
         self.cwd = Path(os.getcwd())
         self.visitor = ImportVisitor(self.cwd)
         self.visitor.visit(node)
-        self.future_option_enabled = future_option_enabled
 
         self.generators = [
+            # TYO101
             self.unused_import,
+            # TYO102
             self.unused_third_party_import,
+            # TYO200
             self.missing_futures_import,
-            # self.missing_quotes,
+            # TYO201
+            self.futures_excess_quotes,
+            # TYO300
+            self.missing_quotes,
+            # TYO301
             self.excess_quotes,
         ]
 
@@ -292,60 +298,65 @@ class TypingOnlyImportsChecker:
         ):
             yield 1, 0, TYO200, None
 
-    def excess_quotes(self) -> flake8_generator:
+    def futures_excess_quotes(self) -> flake8_generator:
         """TYO201."""
-        # - TYO 201 errors
-
         # If futures imports are present, any ast.Constant captured in _add_annotation should yield an error
-        if self.future_option_enabled and self.visitor.futures_annotation:
+        if self.visitor.futures_annotation:
             for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
                 yield lineno, col_offset, TYO201.format(annotation=annotation), None
         # If we have no imports inside a type-checking block, all ast.Constant should also yield an error
-        elif self.future_option_enabled and len(self.visitor.type_checking_block_imports) == 0:
+        elif len(self.visitor.type_checking_block_imports) == 0:
             for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
                 yield lineno, col_offset, TYO201.format(annotation=annotation), None
+        else:
+            """
+            If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
 
-    #     # - TYO 301 errors
-    #     elif not self.future_option_enabled and len(self.visitor.type_checking_block_imports) == 0:
-    #         # If we have no imports inside a type-checking block, all ast.Constant should yield an error
-    #         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-    #             yield lineno, col_offset, TYO301.format(annotation=annotation), None
-    #     elif not self.future_option_enabled:
-    #         """
-    #         If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
-    #
-    #         When you annotate something like this:
-    #
-    #             `x: Dict[int]`
-    #
-    #         You receive an ast.AnnAssign element with a subscript containing the int as it's own unit. It means you
-    #         have a separation between the `Dict` and the `int`, and the Dict can be mathed against a `Dict` import.
-    #
-    #         However, when you annotate something inside quotes, like this:
-    #
-    #              `x: 'Dict[int]'`
-    #
-    #         The annotation is *not* broken down into its components, but rather returns an ast.Constant with a string
-    #         value representation of the annotation. In other words, you get one element, with the value `'Dict[int]'`.
-    #
-    #         This makes matching deeply nested annotations inside quotes very hard to match against import objects,
-    #         to the point where I've not even started to attempt it. All we do in this next block is look for exact
-    #         matches (no subscripts).
-    #
-    #         For anyone with more insight into how this might be tackled, contributions are very welcome.
-    #         """
-    #         print('here')
-    #         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-    #             for _, import_name in self.visitor.type_checking_block_imports:
-    #                 if annotation == import_name:
-    #                     yield lineno, col_offset, TYO301.format(annotation=annotation), None
-    #
-    # def missing_quotes(self) -> flake8_generator:
-    #     """TYO300."""
-    #     for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
-    #         for _, name in self.visitor.type_checking_block_imports:
-    #             if annotation == name:
-    #                 yield lineno, col_offset, TYO300.format(annotation=annotation), None
+            When you annotate something like this:
+
+                `x: Dict[int]`
+
+            You receive an ast.AnnAssign element with a subscript containing the int as it's own unit. It means you
+            have a separation between the `Dict` and the `int`, and the Dict can be matched against a `Dict` import.
+
+            However, when you annotate something inside quotes, like this:
+
+                 `x: 'Dict[int]'`
+
+            The annotation is *not* broken down into its components, but rather returns an ast.Constant with a string
+            value representation of the annotation. In other words, you get one element, with the value `'Dict[int]'`.
+
+            Because we can't match exactly, I've erred on the side of caution below, opting for some false negatives
+            instead of some false positives.
+
+            For anyone with more insight into how this might be tackled, contributions are very welcome.
+            """
+            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+                for _, import_name in self.visitor.type_checking_block_imports:
+                    if import_name in annotation:
+                        break
+                else:
+                    yield lineno, col_offset, TYO201.format(annotation=annotation), None
+
+    def missing_quotes(self) -> flake8_generator:
+        """TYO300."""
+        for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
+            for _, name in self.visitor.type_checking_block_imports:
+                if annotation == name:
+                    yield lineno, col_offset, TYO300.format(annotation=annotation), None
+
+    def excess_quotes(self) -> flake8_generator:
+        """TYO301."""
+        for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+            if len(self.visitor.type_checking_block_imports) == 0:
+                yield lineno, col_offset, TYO301.format(annotation=annotation), None
+            else:
+                # See comment in futures_excess_quotes
+                for _, import_name in self.visitor.type_checking_block_imports:
+                    if import_name in annotation:
+                        break
+                else:
+                    yield lineno, col_offset, TYO201.format(annotation=annotation), None
 
     @property
     def errors(self) -> flake8_generator:

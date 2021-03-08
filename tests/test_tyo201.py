@@ -12,10 +12,11 @@ from tests import _get_error
 examples = [
     # No error
     ('', set()),
-    # Basic AnnAssign with futures import
+    ("x: 'int'", {'1:3 ' + TYO201.format(annotation='int')}),
     ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TYO201.format(annotation='int')}),
-    # Basic AnnAssign with quotes and no type checking block
+    ("if TYPE_CHECKING:\n\timport y\nx: 'y'", set()),
     ("x: 'Dict[int]'", {'1:3 ' + TYO201.format(annotation='Dict[int]')}),
+    ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
     # Basic AnnAssign with type-checking block and exact match
     (
         "from __future__ import annotations\nif TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'",
@@ -75,6 +76,15 @@ examples = [
             f'''
         from __future__ import annotations
 
+        def example(x: "something") -> "something":
+            pass
+        '''
+        ),
+        {'4:15 ' + TYO201.format(annotation='something'), '4:31 ' + TYO201.format(annotation='something')},
+    ),
+    (
+        textwrap.dedent(
+            f'''
         if TYPE_CHECKING:
             import something
 
@@ -82,18 +92,7 @@ examples = [
             pass
         '''
         ),
-        {'7:15 ' + TYO201.format(annotation='something'), '7:31 ' + TYO201.format(annotation='something')},
-    ),
-    (
-        textwrap.dedent(
-            f'''
-    import something
-
-    def example(x: "something") -> "something":
-        pass
-    '''
-        ),
-        {'4:15 ' + TYO201.format(annotation='something'), '4:31 ' + TYO201.format(annotation='something')},
+        set(),
     ),
 ]
 
