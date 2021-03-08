@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import os
+from contextlib import suppress
 from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -9,10 +10,18 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
-from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200, TYO201, TYO300, TYO301
+from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200, TYO201
 
 if TYPE_CHECKING:
     from flake8_typing_only_imports.types import ImportType, flake8_generator
+
+
+possible_local_errors = ()
+with suppress(ModuleNotFoundError):
+    # noinspection PyUnresolvedReferences
+    from django.core.exceptions import AppRegistryNotReady
+
+    possible_local_errors += (AppRegistryNotReady,)  # type: ignore
 
 
 class ImportVisitor(ast.NodeTransformer):
@@ -104,8 +113,10 @@ class ImportVisitor(ast.NodeTransformer):
                 spec = find_spec('.'.join(import_name.split('.')[:-1]), import_name.split('.')[-1])
             else:
                 spec = find_spec(import_name)
-        except ModuleNotFoundError:
+        except (ModuleNotFoundError, ValueError):
             return False
+        except possible_local_errors:
+            return True
 
         if not spec:
             return False
@@ -186,20 +197,24 @@ class ImportVisitor(ast.NodeTransformer):
     # -- Map annotations ------------------------------
 
     def _add_annotation(self, node: ast.AST) -> None:
-        if isinstance(node, ast.Constant) and node.value is not None:
+        if isinstance(node, ast.Constant):
+            if node.value is None:
+                return
             self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
         elif isinstance(node, ast.Subscript):
             self._add_annotation(node.value)
             self._add_annotation(node.slice)
         elif isinstance(node, ast.Name):
             self.unwrapped_annotations.append((node.lineno, node.col_offset, node.id))
-        elif isinstance(node, ast.Tuple):
+        elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
                 self._add_annotation(n)
         elif node is None:
             return
         elif isinstance(node, ast.Attribute):
             self._add_annotation(node.value)
+        elif isinstance(node, ast.BinOp):
+            return
         else:
             try:
                 print('unhandled annotation type:', type(node), node.__dict__)  # noqa
@@ -210,6 +225,8 @@ class ImportVisitor(ast.NodeTransformer):
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotation assignments."""
         self._add_annotation(node.annotation)
+        if getattr(node, 'value', None):
+            self.generic_visit(node.value)  # type: ignore
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Remove and map function arguments and returns."""
@@ -245,7 +262,7 @@ class TypingOnlyImportsChecker:
             self.unused_import,
             self.unused_third_party_import,
             self.missing_futures_import,
-            self.missing_quotes,
+            # self.missing_quotes,
             self.excess_quotes,
         ]
 
@@ -288,46 +305,47 @@ class TypingOnlyImportsChecker:
             for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
                 yield lineno, col_offset, TYO201.format(annotation=annotation), None
 
-        # - TYO 301 errors
-        elif not self.future_option_enabled and len(self.visitor.type_checking_block_imports) == 0:
-            # If we have no imports inside a type-checking block, all ast.Constant should yield an error
-            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-                yield lineno, col_offset, TYO301.format(annotation=annotation), None
-        elif not self.future_option_enabled:
-            """
-            If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
-
-            When you annotate something like this:
-
-                `x: Dict[int]`
-
-            You receive an ast.AnnAssign element with a subscript containing the int as it's own unit. It means you
-            have a separation between the `Dict` and the `int`, and the Dict can be mathed against a `Dict` import.
-
-            However, when you annotate something inside quotes, like this:
-
-                 `x: 'Dict[int]'`
-
-            The annotation is *not* broken down into its components, but rather returns an ast.Constant with a string
-            value representation of the annotation. In other words, you get one element, with the value `'Dict[int]'`.
-
-            This makes matching deeply nested annotations inside quotes very hard to match against import objects,
-            to the point where I've not even started to attempt it. All we do in this next block is look for exact
-            matches (no subscripts).
-
-            For anyone with more insight into how this might be tackled, contributions are very welcome.
-            """
-            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-                for _, import_name in self.visitor.type_checking_block_imports:
-                    if annotation == import_name:
-                        yield lineno, col_offset, TYO301.format(annotation=annotation), None
-
-    def missing_quotes(self) -> flake8_generator:
-        """TYO300."""
-        for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
-            for _, name in self.visitor.type_checking_block_imports:
-                if annotation == name:
-                    yield lineno, col_offset, TYO300.format(annotation=annotation), None
+    #     # - TYO 301 errors
+    #     elif not self.future_option_enabled and len(self.visitor.type_checking_block_imports) == 0:
+    #         # If we have no imports inside a type-checking block, all ast.Constant should yield an error
+    #         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+    #             yield lineno, col_offset, TYO301.format(annotation=annotation), None
+    #     elif not self.future_option_enabled:
+    #         """
+    #         If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
+    #
+    #         When you annotate something like this:
+    #
+    #             `x: Dict[int]`
+    #
+    #         You receive an ast.AnnAssign element with a subscript containing the int as it's own unit. It means you
+    #         have a separation between the `Dict` and the `int`, and the Dict can be mathed against a `Dict` import.
+    #
+    #         However, when you annotate something inside quotes, like this:
+    #
+    #              `x: 'Dict[int]'`
+    #
+    #         The annotation is *not* broken down into its components, but rather returns an ast.Constant with a string
+    #         value representation of the annotation. In other words, you get one element, with the value `'Dict[int]'`.
+    #
+    #         This makes matching deeply nested annotations inside quotes very hard to match against import objects,
+    #         to the point where I've not even started to attempt it. All we do in this next block is look for exact
+    #         matches (no subscripts).
+    #
+    #         For anyone with more insight into how this might be tackled, contributions are very welcome.
+    #         """
+    #         print('here')
+    #         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+    #             for _, import_name in self.visitor.type_checking_block_imports:
+    #                 if annotation == import_name:
+    #                     yield lineno, col_offset, TYO301.format(annotation=annotation), None
+    #
+    # def missing_quotes(self) -> flake8_generator:
+    #     """TYO300."""
+    #     for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
+    #         for _, name in self.visitor.type_checking_block_imports:
+    #             if annotation == name:
+    #                 yield lineno, col_offset, TYO300.format(annotation=annotation), None
 
     @property
     def errors(self) -> flake8_generator:

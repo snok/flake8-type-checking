@@ -17,7 +17,10 @@ examples = [
     # Basic AnnAssign with quotes and no type checking block
     ("x: 'Dict[int]'", {'1:3 ' + TYO201.format(annotation='Dict[int]')}),
     # Basic AnnAssign with type-checking block and exact match
-    ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'", {'3:3 ' + TYO201.format(annotation='Dict')}),
+    (
+        "from __future__ import annotations\nif TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'",
+        {'4:3 ' + TYO201.format(annotation='Dict')},
+    ),
     # Nested ast.AnnAssign with quotes
     (
         "from __future__ import annotations\nfrom typing import Dict\nx: Dict['int']",
@@ -39,11 +42,6 @@ examples = [
     ),
     # No futures import and no type checking block
     ("from typing import Dict\nx: 'Dict'", {'2:3 ' + TYO201.format(annotation='Dict')}),
-    # Note: This would be a set if used with TYO201 over TYO200
-    (
-        "if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'",
-        {'3:3 ' + TYO201.format(annotation='Dict')},
-    ),
     (
         textwrap.dedent(
             f'''
@@ -75,6 +73,8 @@ examples = [
     (
         textwrap.dedent(
             f'''
+        from __future__ import annotations
+
         if TYPE_CHECKING:
             import something
 
@@ -82,7 +82,7 @@ examples = [
             pass
         '''
         ),
-        {'5:15 ' + TYO201.format(annotation='something'), '5:31 ' + TYO201.format(annotation='something')},
+        {'7:15 ' + TYO201.format(annotation='something'), '7:31 ' + TYO201.format(annotation='something')},
     ),
     (
         textwrap.dedent(

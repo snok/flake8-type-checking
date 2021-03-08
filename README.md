@@ -16,6 +16,8 @@
 
 # flake8-typing-only-imports
 
+>Plugin is still a work in progress
+
 flake8 plugin that helps identify which imports to put into type-checking blocks,
 and how to adjust your type annotations once imports are moved.
 
