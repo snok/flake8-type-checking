@@ -20,7 +20,10 @@ examples = [
         "from __future__ import annotations\nfrom typing import Dict\nx: Dict['int']",
         {'3:8 ' + TYO301.format(annotation='int')},
     ),
-    ("from __future__ import annotations\nif TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict['int']", set()),
+    (
+        "from __future__ import annotations\nif TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict['int']",
+        {'4:8 ' + TYO301.format(annotation='int')},
+    ),
     (
         textwrap.dedent(
             f'''
@@ -45,6 +48,27 @@ examples = [
         def example(x: "something") -> something:
             pass
         '''
+        ),
+        set(),
+    ),
+    (
+        textwrap.dedent(
+            f'''
+    class X:
+        def foo(self) -> 'X':
+            pass
+    '''
+        ),
+        set(),
+    ),
+    (
+        textwrap.dedent(
+            f'''
+    from __future__ import annotations
+    class X:
+        def foo(self) -> 'X':
+            pass
+    '''
         ),
         set(),
     ),
