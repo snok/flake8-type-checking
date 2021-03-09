@@ -94,6 +94,27 @@ examples = [
         ),
         set(),
     ),
+    (
+        textwrap.dedent(
+            f'''
+        class X:
+            def foo(self) -> 'X':
+                pass
+        '''
+        ),
+        set(),
+    ),
+    (
+        textwrap.dedent(
+            f'''
+        from __future__ import annotations
+        class X:
+            def foo(self) -> 'X':
+                pass
+        '''
+        ),
+        {'4:21 ' + TYO201.format(annotation='X')},
+    ),
 ]
 
 

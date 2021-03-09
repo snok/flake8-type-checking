@@ -55,6 +55,8 @@ class ImportVisitor(ast.NodeTransformer):
 
         # Tuple of (node, import name) for all import defined within a type-checking block
         self.type_checking_block_imports: set[tuple[ImportType, str]] = set()
+        self.class_names: set[str] = set()
+
         self.unused_type_checking_block_imports: set[tuple[ImportType, str]] = set()
 
         # All type annotations in the file, without quotes around them
@@ -184,6 +186,12 @@ class ImportVisitor(ast.NodeTransformer):
 
     # -- Map uses in a file ---------------------------
 
+    def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
+        """Note down class names."""
+        self.class_names.add(node.name)
+        self.generic_visit(node)
+        return node
+
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
         self.uses.append(node.id)
@@ -197,11 +205,17 @@ class ImportVisitor(ast.NodeTransformer):
     # -- Map annotations ------------------------------
 
     def _add_annotation(self, node: ast.AST) -> None:
+        if isinstance(node, ast.Ellipsis):
+            return
         if isinstance(node, ast.Constant):
             if node.value is None:
                 return
             self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
         elif isinstance(node, ast.Subscript):
+            if hasattr(node.value, 'id') and node.value.id == 'Literal':  # type: ignore
+                # Type hinting like `x: Literal['one', 'two', 'three']`
+                # creates false TYOX01 positives unless excluded
+                return
             self._add_annotation(node.value)
             self._add_annotation(node.slice)
         elif isinstance(node, ast.Name):
@@ -304,10 +318,6 @@ class TypingOnlyImportsChecker:
         if self.visitor.futures_annotation:
             for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
                 yield lineno, col_offset, TYO201.format(annotation=annotation), None
-        # If we have no imports inside a type-checking block, all ast.Constant should also yield an error
-        elif len(self.visitor.type_checking_block_imports) == 0:
-            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-                yield lineno, col_offset, TYO201.format(annotation=annotation), None
         else:
             """
             If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
@@ -335,8 +345,13 @@ class TypingOnlyImportsChecker:
                 for _, import_name in self.visitor.type_checking_block_imports:
                     if import_name in annotation:
                         break
+
                 else:
-                    yield lineno, col_offset, TYO201.format(annotation=annotation), None
+                    for class_name in self.visitor.class_names:
+                        if class_name == annotation:
+                            break
+                    else:
+                        yield lineno, col_offset, TYO201.format(annotation=annotation), None
 
     def missing_quotes(self) -> flake8_generator:
         """TYO300."""
@@ -348,15 +363,16 @@ class TypingOnlyImportsChecker:
     def excess_quotes(self) -> flake8_generator:
         """TYO301."""
         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-            if len(self.visitor.type_checking_block_imports) == 0:
-                yield lineno, col_offset, TYO301.format(annotation=annotation), None
+            # See comment in futures_excess_quotes
+            for _, import_name in self.visitor.type_checking_block_imports:
+                if import_name in annotation:
+                    break
             else:
-                # See comment in futures_excess_quotes
-                for _, import_name in self.visitor.type_checking_block_imports:
-                    if import_name in annotation:
+                for class_name in self.visitor.class_names:
+                    if class_name == annotation:
                         break
                 else:
-                    yield lineno, col_offset, TYO201.format(annotation=annotation), None
+                    yield lineno, col_offset, TYO301.format(annotation=annotation), None
 
     @property
     def errors(self) -> flake8_generator:

@@ -94,3 +94,21 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == set()
+
+    def test_ellipsis(self):
+        example = textwrap.dedent(
+            """
+        x: Tuple[str, ...]
+        """
+        )
+        assert _get_error(example) == set()
+
+    def test_literal(self):
+        example = textwrap.dedent(
+            """
+        from __future__ import annotations
+
+        x: Literal['string']
+        """
+        )
+        assert _get_error(example) == set()
