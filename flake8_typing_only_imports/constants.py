@@ -7,4 +7,4 @@ TYO201 = "TYO201: Annotation '{annotation}' is wrapped in unnecessary quotes"
 TYO300 = "TYO300: Annotation '{annotation}' should be wrapped in quotes"
 TYO301 = "TYO301: Annotation '{annotation}' is wrapped in unnecessary quotes"
 
-disabled_by_default: list[str] = ['TYO101', 'TYO300', 'TYO301']
+disabled_by_default: list[str] = ['TYO101', 'TYO300', 'TYO301', 'TYO200', 'TYO201']
