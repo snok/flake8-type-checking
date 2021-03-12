@@ -1,14 +1,16 @@
 [tool.poetry]
 name = "flake8-typing-only-imports"
 version = "0.1.12"
-description = "A flake8 plugin that flags imports exclusively used for type annotations"
+description = "A flake8 plugin to flag imports exclusively used for type annotations"
 homepage = "https://github.com/sondrelg/flake8-typing-only-imports"
 repository = "https://github.com/sondrelg/flake8-typing-only-imports"
 documentation = "https://github.com/sondrelg/flake8-typing-only-imports"
 authors = ["Sondre Lillebø Gundersen <sondrelg@live.no>"]
 license = "BSD-2-Clause"
 readme = "README.md"
-keywords = ["flake8", "lint", "type hint", "typing", "imports"]
+keywords = ["flake8", "linting", "type hint", "typing", "imports"]
+include = ["CHANGELOG.md"]
+packages = [{ include = "flake8_typing_only_imports" }]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
@@ -23,17 +25,13 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Typing :: Typed",
 ]
-include = ["CHANGELOG.md"]
-packages = [
-    { include = "flake8_typing_only_imports" },
-]
 
 [tool.poetry.dependencies]
 python = "^3.7"
+flake8 = "*"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.2"
-flake8 = "^3.8.4"
 ipython = "^7.20.0"
 coverage = "^5.4"
 pytest-cov = "^2.11.1"

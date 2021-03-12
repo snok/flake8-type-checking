@@ -36,6 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: [ "3.7", "3.8", "3.9" ]  # "3.10"
+        flake8-version: [ "1", "2", "3" ]
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
@@ -44,7 +45,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install poetry
-        uses: snok/install-poetry@v1.1.1
+        uses: snok/install-poetry@v1.1.2
         with:
           virtualenvs-create: true
           virtualenvs-in-project: true
@@ -57,6 +58,7 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction --no-root
         if: steps.cache-venv.outputs.cache-hit != 'true'
+      - run: pip install flake8==${{ matrix.flake8-version }}
       - name: Install package
         run: poetry install --no-interaction
       - name: Run tests
