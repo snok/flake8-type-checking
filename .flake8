@@ -11,6 +11,11 @@ ignore=
     # W503 line break before binary operator
     W503
 
+select =
+    TYO100
+    TYO101
+    TYO200
+    TYO201
 
 exclude =
     .git,

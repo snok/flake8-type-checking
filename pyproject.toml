@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flake8-typing-only-imports"
-version = "0.1.11"
+version = "0.1.12"
 description = "A flake8 plugin that flags imports exclusively used for type annotations"
 homepage = "https://github.com/sondrelg/flake8-typing-only-imports"
 repository = "https://github.com/sondrelg/flake8-typing-only-imports"
@@ -40,7 +40,7 @@ pytest-cov = "^2.11.1"
 
 [tool.poetry.plugins]
 [tool.poetry.plugins."flake8.extension"]
-TYO = "flake8_typing_only_imports:Plugin"
+TYO100 = "flake8_typing_only_imports:Plugin"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
