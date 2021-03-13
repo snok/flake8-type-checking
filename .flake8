@@ -16,6 +16,8 @@ select =
     TYO101
     TYO200
     TYO201
+    TYO300
+    TYO301
 
 exclude =
     .git,

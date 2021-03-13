@@ -18,47 +18,7 @@
 
 > Plugin is still a work in progress
 
-A flake8 plugin to help you identify which imports to put into type-checking blocks.
-
-Beyond this, it will also help you manage forward references however you would like to.
-
-## Installation
-
-```shell
-pip install flake8-typing-only-imports
-```
-
-## Examples
-
-Bad code:
-
-```python
-import bar
-
-from typing import List
-
-def listify(arg: bar.BarClass) -> List[bar.BarClass]:
-    return [arg]
-```
-
-Good code:
-
-```python
-from typing import List, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import bar
-
-def listify(arg: 'bar.BarClass') -> 'List[bar.BarClass]':
-    return [arg]
-```
-
-## Rationale
-`TYO100` primarily (and to a lesser degree, `TYO101`) guards against [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles).
-
-The remaining error codes are there to help manage [forward references](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#class-name-forward-references),
-either by stringifying annotation or by enabling [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/), by
-using a futures import in Python 3.7+. See [this](https://stackoverflow.com/a/55344418/8083459) stackoverflow answer for a great explanation.
+Tells you which imports to put inside type-checking blocks.
 
 ## Codes
 
@@ -71,20 +31,98 @@ using a futures import in Python 3.7+. See [this](https://stackoverflow.com/a/55
 | TYO300 | Annotation needs to be made into a string literal |
 | TYO301 | Annotation does not need to be a string literal |
 
+## Rationale
+
+`TYO100` guards
+against [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles)
+. `TYO101` applies the same logic, for `venv` or `stdlib` imports.
+
+Remaining error codes are there to help manage
+[forward references](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#class-name-forward-references),
+either by telling your to use string literals where needed, or by enabling
+[postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
+The error code series `TYO2XX` and `TYO3XX` should therefore be considered
+mutually exclusive, as they represent two different ways of managing forward
+references.
+
+See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer for a
+quick explanation of forward references.
+
+## Installation
+
+```shell
+pip install flake8-typing-only-imports
+```
+
 ## Suggested use
 
-The split between `TYO100` and `TYO101` was made because venv imports don't really guard against import cycles like
-module imports might. Enabling `TYO101` is not as beneficial, so enabling it should be given some thought.
+Only enable `TYO101` if you're after micro performance gains on start-up.
 
-Beyond import cycles, `TYO200` and `TYO300` are reserved for error codes to help manage forward references.
+`TYO2XX` and `TYO3XX` are reserved for error codes to help manage forward references.
 It does not make sense to enable both series, and they should be considered mutually exclusive.
 
-If you're adding this to your project, we would recommend this setup
+If you're adding this to your project, we would recommend something like this:
 
 ```python
 select = TYO100, TYO200, TYO200  # or TYO300 and TYO301
 
 ignore = TYO101, TYO300, TYO301  # or TYO200 and TYO201
+```
+
+## Examples
+
+**Bad code**
+
+`models/a.py`
+```python
+from models.b import B
+
+class A(Model):
+    def foo(self, b: B): ...
+```
+
+`models/b.py`
+```python
+from models.a import A
+
+class B(Model):
+    def bar(self, a: A): ...
+```
+
+Which will first result in these errors
+```shell
+>> a.py: TYO101: Move third-party import 'models.b.B' into a type-checking block
+>> b.py: TYO101: Move third-party import 'models.a.A' into a type-checking block
+```
+
+and consequently trigger these errors if imports are purely moved into type-checking block, without proper forward reference handling
+
+```shell
+>> a.py: TYO300: Annotation 'B' needs to be made into a string literal
+>> b.py: TYO300: Annotation 'A' needs to be made into a string literal
+```
+
+**Good code**
+
+`models/a.py`
+```python
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.b import B
+
+class A(Model):
+    def foo(self, b: 'B'): ...
+```
+`models/b.py`
+```python
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.a import A
+
+class B(Model):
+    def bar(self, a: 'A'): ...
 ```
 
 ## As a pre-commit hook
@@ -95,8 +133,8 @@ You can run this flake8 plugin as a [pre-commit](https://github.com/pre-commit/p
 - repo: https://gitlab.com/pycqa/flake8
   rev: 3.7.8
   hooks:
-  - id: flake8
-    additional_dependencies: [flake8-typing-only-imports]
+    - id: flake8
+      additional_dependencies: [ flake8-typing-only-imports ]
 ```
 
 ## Supporting the project
