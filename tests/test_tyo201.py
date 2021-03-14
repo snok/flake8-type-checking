@@ -27,6 +27,10 @@ examples = [
         "from __future__ import annotations\nfrom typing import Dict\nx: Dict['int']",
         {'3:8 ' + TYO201.format(annotation='int')},
     ),
+    (
+        'from __future__ import annotations\nfrom typing import Dict\nx: Dict | int',
+        set(),
+    ),
     # ast.AnnAssign from type checking block import with quotes
     (
         textwrap.dedent(

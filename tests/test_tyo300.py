@@ -17,7 +17,7 @@ examples = [
     ('from typing import Dict\nx: Dict[int]', set()),
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict', {'3:3 ' + TYO300.format(annotation='Dict')}),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'", set()),
-    ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
+    ("if TYPE_CHECKING:\n\tfrom typing import Dict as d\nx: 'd[int]'", set()),
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict[int]', {'3:3 ' + TYO300.format(annotation='Dict')}),
     ('if TYPE_CHECKING:\n\timport something\nx: something', {'3:3 ' + TYO300.format(annotation='something')}),
     (

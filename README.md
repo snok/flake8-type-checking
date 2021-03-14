@@ -26,6 +26,7 @@ Tells you which imports to put inside type-checking blocks.
 |--------|-----------------------------------------------------|
 | TYO100 | Move import into a type-checking block  |
 | TYO101 | Move third-party import into a type-checking block |
+| TYO102 | Found multiple type checking blocks |
 | TYO200 | Add 'from \_\_future\_\_ import annotations' import |
 | TYO201 | Annotation does not need to be a string literal |
 | TYO300 | Annotation needs to be made into a string literal |

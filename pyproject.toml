@@ -1,60 +1,62 @@
 [tool.poetry]
-name = "flake8-typing-only-imports"
-version = "0.1.12"
-description = "A flake8 plugin to flag imports exclusively used for type annotations"
-homepage = "https://github.com/sondrelg/flake8-typing-only-imports"
-repository = "https://github.com/sondrelg/flake8-typing-only-imports"
-documentation = "https://github.com/sondrelg/flake8-typing-only-imports"
-authors = ["Sondre Lillebø Gundersen <sondrelg@live.no>"]
-license = "BSD-2-Clause"
-readme = "README.md"
-keywords = ["flake8", "linting", "type hint", "typing", "imports"]
-include = ["CHANGELOG.md"]
-packages = [{ include = "flake8_typing_only_imports" }]
+name = 'flake8-typing-only-imports'
+version = '0.2.0'
+description = 'A flake8 plugin to flag imports exclusively used for type annotations'
+homepage = 'https://github.com/sondrelg/flake8-typing-only-imports'
+repository = 'https://github.com/sondrelg/flake8-typing-only-imports'
+documentation = 'https://github.com/sondrelg/flake8-typing-only-imports'
+authors = ['Sondre Lillebø Gundersen <sondrelg@live.no>']
+license = 'BSD-2-Clause'
+readme = 'README.md'
+keywords = ['flake8', 'linting', 'type hint', 'typing', 'imports']
+include = ['CHANGELOG.md']
+packages = [{ include = 'flake8_typing_only_imports' }]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
-    "Intended Audience :: Developers",
-    "Environment :: Console",
-    "Operating System :: OS Independent",
-    "License :: OSI Approved :: BSD License",
-    "Topic :: Software Development :: Quality Assurance",
-    "Programming Language :: Python",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Typing :: Typed",
+    'Development Status :: 2 - Pre-Alpha',
+    'Intended Audience :: Developers',
+    'Environment :: Console',
+    'Operating System :: OS Independent',
+    'License :: OSI Approved :: BSD License',
+    'Topic :: Software Development :: Quality Assurance',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Typing :: Typed',
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
-flake8 = "*"
+python = '^3.7'
+flake8 = '*'
 
 [tool.poetry.dev-dependencies]
-pytest = "^6.2.2"
-ipython = "^7.20.0"
-coverage = "^5.4"
-pytest-cov = "^2.11.1"
+pytest = '^6.2.2'
+ipython = '^7.20.0'
+coverage = '^5.4'
+pytest-cov = '^2.11.1'
 
 [tool.poetry.plugins]
-[tool.poetry.plugins."flake8.extension"]
-TYO100 = "flake8_typing_only_imports:Plugin"
+[tool.poetry.plugins.'flake8.extension']
+TYO100 = 'flake8_typing_only_imports:Plugin'
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ['poetry-core>=1.0.0']
+build-backend = 'poetry.core.masonry.api'
 
 [tool.coverage.run]
-source = ["flake8_typing_only_imports/*"]
-omit = []
+source = ['flake8_typing_only_imports/*']
+omit = ['flake8_typing_only_imports/types.py']
 branch = false
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
 exclude_lines = [
-    "if TYPE_CHECKING:",
-    "mgr.extend_default_ignore"
+    'if TYPE_CHECKING:',
+    'mgr.extend_default_ignore',
+    'from importlib_metadata import version',
+    'except possible_local_errors:',
 ]
 
 [tool.black]
@@ -63,9 +65,12 @@ include = '\.pyi?$'
 skip-string-normalization = true
 
 [tool.isort]
-profile = "black"
+profile = 'black'
 multi_line_output = 3
 include_trailing_comma = true
 line_length = 120
-known_third_party = ["flake8"]
-known_first_party = ["flake8_typing_imports"]
+known_third_party = ['flake8']
+known_first_party = ['flake8_typing_imports']
+
+[tool.pytest.ini_options]
+addopts = ['--cov=flake8_typing_only_imports','--cov-report', 'term-missing']
