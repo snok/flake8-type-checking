@@ -3,7 +3,7 @@ Contains special test cases that fall outside the scope of remaining test files.
 """
 import textwrap
 
-from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200
+from flake8_typing_only_imports.constants import TYO100, TYO101, TYO102, TYO200
 from tests import _get_error, mod
 
 
@@ -112,3 +112,30 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == set()
+
+    def test_conditional_import(self):
+        example = textwrap.dedent(
+            """
+        version = 2
+
+        if version == 2:
+            import x
+        else:
+            import y as x
+
+        var: x
+        """
+        )
+        assert _get_error(example) == {"7:4 TYO101: Move third-party import 'x' into a type-checking block"}
+
+    def test_duplicate_type_checking_blocks(self):
+        example = textwrap.dedent(
+            """
+        if TYPE_CHECKING:
+            from typing import Any
+
+        if TYPE_CHECKING:
+            from flake8_typing_only_imports.types import ImportType, Flake8Generator
+        """
+        )
+        assert _get_error(example, error_code_filter='TYO102') == {'5:0 ' + TYO102}

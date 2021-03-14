@@ -5,16 +5,15 @@ import os
 from contextlib import suppress
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
+
+from flake8_typing_only_imports.constants import TYO100, TYO101, TYO102, TYO200, TYO201, TYO300, TYO301
 
 if TYPE_CHECKING:
     from typing import Any
 
-from flake8_typing_only_imports.constants import TYO100, TYO101, TYO200, TYO201, TYO300, TYO301
-
 if TYPE_CHECKING:
-    from flake8_typing_only_imports.types import ImportType, flake8_generator
-
+    from flake8_typing_only_imports.types import Flake8Generator, ImportType
 
 possible_local_errors = ()
 with suppress(ModuleNotFoundError):
@@ -66,10 +65,10 @@ class ImportVisitor(ast.NodeTransformer):
         self.wrapped_annotations: list[tuple[int, int, str]] = []
 
         # Whether there is a `from __futures__ import annotations` is present
-        self.futures_annotation: bool | None = None
+        self.futures_annotation: Optional[bool] = None
 
         # Where the type checking block exists (line_start, line_end)
-        self.type_checking: tuple[int, int] | None = None
+        self.type_checking_blocks: List[tuple[int, int]] = []
 
     @property
     def names(self) -> set[str]:
@@ -82,14 +81,17 @@ class ImportVisitor(ast.NodeTransformer):
         """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
         if node.col_offset == 0:
             return False
-        if self.type_checking is None:
+        if not self.type_checking_blocks:
             return False
-        return self.type_checking[0] <= node.lineno <= self.type_checking[1]
+        return any(
+            type_checking_block[0] <= node.lineno <= type_checking_block[1]
+            for type_checking_block in self.type_checking_blocks
+        )
 
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
         if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore
-            self.type_checking = (node.lineno, node.end_lineno or node.lineno)
+            self.type_checking_blocks.append((node.lineno, node.end_lineno or node.lineno))
         self.generic_visit(node)
         return node
 
@@ -229,12 +231,6 @@ class ImportVisitor(ast.NodeTransformer):
             self._add_annotation(node.value)
         elif isinstance(node, ast.BinOp):
             return
-        else:
-            try:
-                print('unhandled annotation type:', type(node), node.__dict__)  # noqa
-                print('unhandled annotation type:', type(node), node.value.__dict__)  # type: ignore  # noqa
-            except AttributeError:
-                print('unhandled annotation type:', type(node), node)  # noqa
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotation assignments."""
@@ -272,10 +268,12 @@ class TypingOnlyImportsChecker:
         self.visitor.visit(node)
 
         self.generators = [
-            # TYO101
+            # TYO100
             self.unused_import,
-            # TYO102
+            # TYO101
             self.unused_third_party_import,
+            # TYO102
+            self.multiple_type_checking_blocks,
             # TYO200
             self.missing_futures_import,
             # TYO201
@@ -286,7 +284,7 @@ class TypingOnlyImportsChecker:
             self.excess_quotes,
         ]
 
-    def unused_import(self) -> flake8_generator:
+    def unused_import(self) -> Flake8Generator:
         """TYO100."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
@@ -295,7 +293,7 @@ class TypingOnlyImportsChecker:
                 error_message, node = obj['error'], obj['node']
                 yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
-    def unused_third_party_import(self) -> flake8_generator:
+    def unused_third_party_import(self) -> Flake8Generator:
         """TYO101."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
@@ -304,7 +302,12 @@ class TypingOnlyImportsChecker:
                 error_message, node = obj['error'], obj['node']
                 yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
-    def missing_futures_import(self) -> flake8_generator:
+    def multiple_type_checking_blocks(self) -> Flake8Generator:
+        """TYO102."""
+        if len(self.visitor.type_checking_blocks) > 1:
+            yield self.visitor.type_checking_blocks[-1][0], 0, TYO102, None
+
+    def missing_futures_import(self) -> Flake8Generator:
         """TYO200."""
         if (
             not self.visitor.futures_annotation
@@ -312,7 +315,7 @@ class TypingOnlyImportsChecker:
         ):
             yield 1, 0, TYO200, None
 
-    def futures_excess_quotes(self) -> flake8_generator:
+    def futures_excess_quotes(self) -> Flake8Generator:
         """TYO201."""
         # If futures imports are present, any ast.Constant captured in _add_annotation should yield an error
         if self.visitor.futures_annotation:
@@ -353,14 +356,14 @@ class TypingOnlyImportsChecker:
                     else:
                         yield lineno, col_offset, TYO201.format(annotation=annotation), None
 
-    def missing_quotes(self) -> flake8_generator:
+    def missing_quotes(self) -> Flake8Generator:
         """TYO300."""
         for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
             for _, name in self.visitor.type_checking_block_imports:
                 if annotation == name:
                     yield lineno, col_offset, TYO300.format(annotation=annotation), None
 
-    def excess_quotes(self) -> flake8_generator:
+    def excess_quotes(self) -> Flake8Generator:
         """TYO301."""
         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
             # See comment in futures_excess_quotes
@@ -375,7 +378,7 @@ class TypingOnlyImportsChecker:
                     yield lineno, col_offset, TYO301.format(annotation=annotation), None
 
     @property
-    def errors(self) -> flake8_generator:
+    def errors(self) -> Flake8Generator:
         """
         Return relevant errors in the required flake8-defined format.
 
