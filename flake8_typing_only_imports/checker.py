@@ -12,7 +12,6 @@ from flake8_typing_only_imports.constants import TYO100, TYO101, TYO102, TYO200,
 if TYPE_CHECKING:
     from typing import Any
 
-if TYPE_CHECKING:
     from flake8_typing_only_imports.types import Flake8Generator, ImportType
 
 possible_local_errors = ()
