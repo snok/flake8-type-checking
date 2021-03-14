@@ -5,14 +5,15 @@ import os
 from contextlib import suppress
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from flake8_typing_only_imports.constants import TYO100, TYO101, TYO102, TYO200, TYO201, TYO300, TYO301
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, List, Optional
 
     from flake8_typing_only_imports.types import Flake8Generator, ImportType
+
 
 possible_local_errors = ()
 with suppress(ModuleNotFoundError):
