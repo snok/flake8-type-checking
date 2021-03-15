@@ -127,15 +127,3 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {"7:4 TYO101: Move third-party import 'x' into a type-checking block"}
-
-    def test_duplicate_type_checking_blocks(self):
-        example = textwrap.dedent(
-            """
-        if TYPE_CHECKING:
-            from typing import Any
-
-        if TYPE_CHECKING:
-            from flake8_typing_only_imports.types import ImportType, Flake8Generator
-        """
-        )
-        assert _get_error(example, error_code_filter='TYO102') == {'5:0 ' + TYO102}

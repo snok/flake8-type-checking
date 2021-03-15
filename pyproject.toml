@@ -1,6 +1,6 @@
 [tool.poetry]
 name = 'flake8-typing-only-imports'
-version = '0.2.1'
+version = '0.2.2'
 description = 'A flake8 plugin to flag imports exclusively used for type annotations'
 homepage = 'https://github.com/sondrelg/flake8-typing-only-imports'
 repository = 'https://github.com/sondrelg/flake8-typing-only-imports'

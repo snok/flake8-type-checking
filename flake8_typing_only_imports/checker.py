@@ -67,8 +67,8 @@ class ImportVisitor(ast.NodeTransformer):
         # Whether there is a `from __futures__ import annotations` is present
         self.futures_annotation: Optional[bool] = None
 
-        # Where the type checking block exists (line_start, line_end)
-        self.type_checking_blocks: List[tuple[int, int]] = []
+        # Where the type checking block exists (line_start, line_end, col_offset)
+        self.type_checking_blocks: List[tuple[int, int, int]] = []
 
     @property
     def names(self) -> set[str]:
@@ -91,7 +91,7 @@ class ImportVisitor(ast.NodeTransformer):
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
         if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore
-            self.type_checking_blocks.append((node.lineno, node.end_lineno or node.lineno))
+            self.type_checking_blocks.append((node.lineno, node.end_lineno or node.lineno, node.col_offset))
         self.generic_visit(node)
         return node
 
@@ -306,7 +306,7 @@ class TypingOnlyImportsChecker:
 
     def multiple_type_checking_blocks(self) -> Flake8Generator:
         """TYO102."""
-        if len(self.visitor.type_checking_blocks) > 1:
+        if len([i for i in self.visitor.type_checking_blocks if i[2] == 0]) > 1:
             yield self.visitor.type_checking_blocks[-1][0], 0, TYO102, None
 
     def missing_futures_import(self) -> Flake8Generator:
