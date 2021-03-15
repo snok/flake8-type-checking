@@ -121,6 +121,8 @@ class ImportVisitor(ast.NodeTransformer):
             return False
         except possible_local_errors:
             return True
+        except ValueError:
+            return False
 
         if not spec:
             return False
