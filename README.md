@@ -16,8 +16,6 @@
 
 # flake8-typing-only-imports
 
-> Plugin is still a work in progress
-
 Tells you which imports to put inside type-checking blocks.
 
 ## Codes
