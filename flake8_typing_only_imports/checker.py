@@ -198,6 +198,8 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
+        if hasattr(node, 'parent'):
+            self.uses.append(f'{node.id}.{node.parent}')  # type: ignore
         self.uses.append(node.id)
         return node
 
@@ -233,6 +235,22 @@ class ImportVisitor(ast.NodeTransformer):
             self._add_annotation(node.value)
         elif isinstance(node, ast.BinOp):
             return
+
+    def visit_Attribute(self, node: ast.Attribute) -> Any:
+        # Set the attribute of the current node
+        try:
+            parent = node.parent  # type: ignore
+            node.attr = f'{node.attr}.{parent}'
+        except Exception:
+            pass
+
+        # Set the parent attribute on the current node children
+        for key, value in node.__dict__.items():
+            if type(value) not in [int, str]:
+                setattr(node.__dict__[key], 'parent', node.attr)
+
+        self.generic_visit(node)
+        return node
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotation assignments."""
@@ -291,18 +309,20 @@ class TypingOnlyImportsChecker:
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
             if local_import:
-                obj = self.visitor.local_imports.pop(unused_import)
-                error_message, node = obj['error'], obj['node']
-                yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
+                if not any(unused_import in str(use) for use in self.visitor.uses):
+                    obj = self.visitor.local_imports.pop(unused_import)
+                    error_message, node = obj['error'], obj['node']
+                    yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def unused_third_party_import(self) -> Flake8Generator:
         """TYO101."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
             if not local_import:
-                obj = self.visitor.remote_imports.pop(unused_import)
-                error_message, node = obj['error'], obj['node']
-                yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
+                if not any(unused_import in str(use) for use in self.visitor.uses):
+                    obj = self.visitor.remote_imports.pop(unused_import)
+                    error_message, node = obj['error'], obj['node']
+                    yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def multiple_type_checking_blocks(self) -> Flake8Generator:
         """TYO102."""
