@@ -1,6 +1,6 @@
 [tool.poetry]
 name = 'flake8-type-checking'
-version = '0.2.3'
+version = '0.1.0'
 description = 'A flake8 plugin to flag imports exclusively used for type annotations'
 homepage = 'https://github.com/sondrelg/flake8-type-checking'
 repository = 'https://github.com/sondrelg/flake8-type-checking'
@@ -10,7 +10,7 @@ license = 'BSD-2-Clause'
 readme = 'README.md'
 keywords = ['flake8', 'linting', 'type hint', 'typing', 'imports']
 include = ['CHANGELOG.md']
-packages = [{ include = 'flake8_typing_only_imports' }]
+packages = [{ include = 'flake8_type_checking' }]
 classifiers = [
     'Development Status :: 2 - Pre-Alpha',
     'Intended Audience :: Developers',
@@ -38,15 +38,15 @@ pytest-cov = '^2.11.1'
 
 [tool.poetry.plugins]
 [tool.poetry.plugins.'flake8.extension']
-TCH100 = 'flake8_typing_only_imports:Plugin'
+TCH100 = 'flake8_type_checking:Plugin'
 
 [build-system]
 requires = ['poetry-core>=1.0.0']
 build-backend = 'poetry.core.masonry.api'
 
 [tool.coverage.run]
-source = ['flake8_typing_only_imports/*']
-omit = ['flake8_typing_only_imports/types.py']
+source = ['flake8_type_checking/*']
+omit = ['flake8_type_checking/types.py']
 branch = false
 
 [tool.coverage.report]
@@ -73,4 +73,4 @@ known_third_party = ['flake8']
 known_first_party = ['flake8_typing_imports']
 
 [tool.pytest.ini_options]
-addopts = ['--cov=flake8_typing_only_imports','--cov-report', 'term-missing']
+addopts = ['--cov=flake8_type_checking','--cov-report', 'term-missing']

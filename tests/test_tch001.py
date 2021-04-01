@@ -13,7 +13,7 @@ import textwrap
 
 import pytest
 
-from flake8_typing_only_imports.constants import TCH001
+from flake8_type_checking.constants import TCH001
 from tests import _get_error, mod
 
 examples = [

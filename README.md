@@ -33,7 +33,7 @@ See the [typing.TYPE_CHECKING](https://docs.python.org/3/library/typing.html#typ
 
 ### Secondary codes
 
-Choose `TCHA` or `TCHB` as they are incompatible (but both valid).
+Choose `TCHA` or `TCHB` as they are mutually exclusive.
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|

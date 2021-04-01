@@ -7,12 +7,12 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flake8_typing_only_imports.constants import TCH001, TCH002, TCH003, TCHA001, TCHA002, TCHB001, TCHB002
+from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCHA001, TCHA002, TCHB001, TCHB002
 
 if TYPE_CHECKING:
     from typing import Any, List, Optional
 
-    from flake8_typing_only_imports.types import Flake8Generator, ImportType
+    from flake8_type_checking.types import Flake8Generator, ImportType
 
 
 possible_local_errors = ()
