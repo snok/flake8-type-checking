@@ -16,10 +16,9 @@
 
 # flake8-type-checking
 
-Lets you know which imports to put inside type-checking blocks,
-and helps you manage forward references.
+Lets you know which imports to put inside [type-checking blocks](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING).
 
-See the [typing.TYPE_CHECKING](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING) docs for context.
+Also helps you manage [forward references](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#class-name-forward-references).
 
 ## Codes
 
@@ -44,6 +43,8 @@ Choose `TCHA` or `TCHB` as they are mutually exclusive.
 |--------|-----------------------------------------------------|
 | TCHB001 | Annotation needs to be made into a string literal |
 | TCHB002 | Annotation does not need to be a string literal |
+
+See [rationale](#rationale) or [examples](#examples) for a better explanation of the difference.
 
 ## Rationale
 
