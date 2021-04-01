@@ -3,7 +3,7 @@ Contains special test cases that fall outside the scope of remaining test files.
 """
 import textwrap
 
-from flake8_typing_only_imports.constants import TYO100, TYO101, TYO102, TYO200
+from flake8_typing_only_imports.constants import TCH001, TCH002, TCH003, TCHA001
 from tests import _get_error, mod
 
 
@@ -17,9 +17,9 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {
-            '2:0 ' + TYO100.format(module=f'{mod}'),
-            '3:0 ' + TYO101.format(module=f'pytest'),
-            '4:0 ' + TYO101.format(module=f'x.y'),
+            '2:0 ' + TCH001.format(module=f'{mod}'),
+            '3:0 ' + TCH002.format(module=f'pytest'),
+            '4:0 ' + TCH002.format(module=f'x.y'),
         }
 
     def test_type_checking_block_imports_dont_generate_errors(self):
@@ -40,9 +40,9 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {
-            '1:0 ' + TYO200,
-            '2:0 ' + TYO101.format(module='x'),
-            '3:0 ' + TYO101.format(module='y.z'),
+            '1:0 ' + TCHA001,
+            '2:0 ' + TCH002.format(module='x'),
+            '3:0 ' + TCH002.format(module='y.z'),
         }
 
     def test_model_declarations_dont_trigger_error(self):
@@ -126,4 +126,4 @@ class TestFoundBugs:
         var: x
         """
         )
-        assert _get_error(example) == {"7:4 TYO101: Move third-party import 'x' into a type-checking block"}
+        assert _get_error(example) == {"7:4 TCH002: Move third-party import 'x' into a type-checking block"}

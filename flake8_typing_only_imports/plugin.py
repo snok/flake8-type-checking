@@ -20,8 +20,8 @@ else:
 class Plugin:
     """Flake8 plugin."""
 
-    name = 'flake8-typing-only-imports'
-    version = version('flake8-typing-only-imports')
+    name = 'flake8-type-checking'
+    version = version('flake8-type-checking')
 
     __slots__ = ('_tree',)
 

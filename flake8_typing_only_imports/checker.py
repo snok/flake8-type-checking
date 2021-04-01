@@ -7,7 +7,7 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flake8_typing_only_imports.constants import TYO100, TYO101, TYO102, TYO200, TYO201, TYO300, TYO301
+from flake8_typing_only_imports.constants import TCH001, TCH002, TCH003, TCHA001, TCHA002, TCHB001, TCHB002
 
 if TYPE_CHECKING:
     from typing import Any, List, Optional
@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 possible_local_errors = ()
 with suppress(ModuleNotFoundError):
     # noinspection PyUnresolvedReferences
-    from django.core.exceptions import AppRegistryNotReady
+    from django.core.exceptions import AppRegistryNotReady, ImproperlyConfigured
 
-    possible_local_errors += (AppRegistryNotReady,)  # type: ignore
+    possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)  # type: ignore
 
 
 class ImportVisitor(ast.NodeTransformer):
@@ -141,8 +141,8 @@ class ImportVisitor(ast.NodeTransformer):
         """
         if self._import_defined_inside_type_checking_block(node):
             # For type checking blocks we want to
-            # 1. Record annotations for TYO2XX errors
-            # 2. Avoid recording imports for TYO1XX errors, by returning early
+            # 1. Record annotations for TCH2XX errors
+            # 2. Avoid recording imports for TCH1XX errors, by returning early
             for name_node in node.names:
                 if hasattr(name_node, 'asname') and name_node.asname:
                     name = name_node.asname
@@ -174,10 +174,10 @@ class ImportVisitor(ast.NodeTransformer):
                     import_name = module + name_node.name
                 is_local = self._import_is_local(f'{module}{name_node.name}')
                 if is_local:
-                    self.local_imports[import_name] = {'error': TYO100, 'node': node}
+                    self.local_imports[import_name] = {'error': TCH001, 'node': node}
                     self.import_names[name] = import_name, True
                 else:
-                    self.remote_imports[import_name] = {'error': TYO101, 'node': node}
+                    self.remote_imports[import_name] = {'error': TCH002, 'node': node}
                     self.import_names[name] = import_name, False
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -220,7 +220,7 @@ class ImportVisitor(ast.NodeTransformer):
         elif isinstance(node, ast.Subscript):
             if hasattr(node.value, 'id') and node.value.id == 'Literal':  # type: ignore
                 # Type hinting like `x: Literal['one', 'two', 'three']`
-                # creates false TYOX01 positives unless excluded
+                # creates false TCHX01 positives unless excluded
                 return
             self._add_annotation(node.value)
             self._add_annotation(node.slice)
@@ -288,24 +288,24 @@ class TypingOnlyImportsChecker:
         self.visitor.visit(node)
 
         self.generators = [
-            # TYO100
+            # TCH001
             self.unused_import,
-            # TYO101
+            # TCH002
             self.unused_third_party_import,
-            # TYO102
+            # TCH003
             self.multiple_type_checking_blocks,
-            # TYO200
+            # TCHA001
             self.missing_futures_import,
-            # TYO201
+            # TCHA002
             self.futures_excess_quotes,
-            # TYO300
+            # TCHB001
             self.missing_quotes,
-            # TYO301
+            # TCHB002
             self.excess_quotes,
         ]
 
     def unused_import(self) -> Flake8Generator:
-        """TYO100."""
+        """TCH001."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
             if local_import:
@@ -315,7 +315,7 @@ class TypingOnlyImportsChecker:
                     yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def unused_third_party_import(self) -> Flake8Generator:
-        """TYO101."""
+        """TCH002."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
             if not local_import:
@@ -325,24 +325,24 @@ class TypingOnlyImportsChecker:
                     yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def multiple_type_checking_blocks(self) -> Flake8Generator:
-        """TYO102."""
+        """TCH003."""
         if len([i for i in self.visitor.type_checking_blocks if i[2] == 0]) > 1:
-            yield self.visitor.type_checking_blocks[-1][0], 0, TYO102, None
+            yield self.visitor.type_checking_blocks[-1][0], 0, TCH003, None
 
     def missing_futures_import(self) -> Flake8Generator:
-        """TYO200."""
+        """TCHA001."""
         if (
             not self.visitor.futures_annotation
             and {name for _, name in self.visitor.type_checking_block_imports} - self.visitor.names
         ):
-            yield 1, 0, TYO200, None
+            yield 1, 0, TCHA001, None
 
     def futures_excess_quotes(self) -> Flake8Generator:
-        """TYO201."""
+        """TCHA002."""
         # If futures imports are present, any ast.Constant captured in _add_annotation should yield an error
         if self.visitor.futures_annotation:
             for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-                yield lineno, col_offset, TYO201.format(annotation=annotation), None
+                yield lineno, col_offset, TCHA002.format(annotation=annotation), None
         else:
             """
             If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
@@ -376,17 +376,17 @@ class TypingOnlyImportsChecker:
                         if class_name == annotation:
                             break
                     else:
-                        yield lineno, col_offset, TYO201.format(annotation=annotation), None
+                        yield lineno, col_offset, TCHA002.format(annotation=annotation), None
 
     def missing_quotes(self) -> Flake8Generator:
-        """TYO300."""
+        """TCHB001."""
         for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
             for _, name in self.visitor.type_checking_block_imports:
                 if annotation == name:
-                    yield lineno, col_offset, TYO300.format(annotation=annotation), None
+                    yield lineno, col_offset, TCHB001.format(annotation=annotation), None
 
     def excess_quotes(self) -> Flake8Generator:
-        """TYO301."""
+        """TCHB002."""
         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
             # See comment in futures_excess_quotes
             for _, import_name in self.visitor.type_checking_block_imports:
@@ -397,7 +397,7 @@ class TypingOnlyImportsChecker:
                     if class_name == annotation:
                         break
                 else:
-                    yield lineno, col_offset, TYO301.format(annotation=annotation), None
+                    yield lineno, col_offset, TCHB002.format(annotation=annotation), None
 
     @property
     def errors(self) -> Flake8Generator:

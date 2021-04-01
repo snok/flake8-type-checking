@@ -10,4 +10,4 @@ To contribute, please follow these steps:
 4. Create a new branch for your changes, and make sure to add tests!
 5. Push the topic branch to your personal fork
 6. Run `pre-commit run --all-files` locally to ensure proper linting
-6. Create a pull request to the  `flake8-typing-only-imports` repository with a detailed summary of your changes and what motivated the change
+6. Create a pull request to the  `flake8-type-checking` repository with a detailed summary of your changes and what motivated the change

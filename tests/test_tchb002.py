@@ -1,28 +1,28 @@
 """
-File tests TYO301:
+File tests TCHB002:
     Annotation is wrapped in unnecessary quotes
 """
 import textwrap
 
 import pytest
 
-from flake8_typing_only_imports.constants import TYO301
+from flake8_typing_only_imports.constants import TCHB002
 from tests import _get_error
 
 examples = [
     ('', set()),
-    ("x: 'int'", {'1:3 ' + TYO301.format(annotation='int')}),
-    ("x: 'Dict[int]'", {'1:3 ' + TYO301.format(annotation='Dict[int]')}),
-    ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TYO301.format(annotation='int')}),
+    ("x: 'int'", {'1:3 ' + TCHB002.format(annotation='int')}),
+    ("x: 'Dict[int]'", {'1:3 ' + TCHB002.format(annotation='Dict[int]')}),
+    ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TCHB002.format(annotation='int')}),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'", set()),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
     (
         "from __future__ import annotations\nfrom typing import Dict\nx: Dict['int']",
-        {'3:8 ' + TYO301.format(annotation='int')},
+        {'3:8 ' + TCHB002.format(annotation='int')},
     ),
     (
         "from __future__ import annotations\nif TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict['int']",
-        {'4:8 ' + TYO301.format(annotation='int')},
+        {'4:8 ' + TCHB002.format(annotation='int')},
     ),
     (
         textwrap.dedent(
@@ -76,5 +76,5 @@ examples = [
 
 
 @pytest.mark.parametrize('example, expected', examples)
-def test_tyo301_errors(example, expected):
-    assert _get_error(example, error_code_filter='TYO301') == expected
+def test_TCHB002_errors(example, expected):
+    assert _get_error(example, error_code_filter='TCHB002') == expected
