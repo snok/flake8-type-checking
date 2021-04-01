@@ -119,6 +119,30 @@ examples = [
         ),
         set(),
     ),
+    (
+        textwrap.dedent(
+            '''
+            import proj.app.enums
+
+
+            class Migration:
+                enum=proj.app.enums
+            '''
+        ),
+        set(),
+    ),
+    (
+        textwrap.dedent(
+            '''
+            import proj.app.enums
+
+
+            class Migration:
+                enum=proj.app.enums.EnumClass
+            '''
+        ),
+        set(),
+    ),
 ]
 
 

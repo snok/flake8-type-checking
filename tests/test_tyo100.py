@@ -9,6 +9,7 @@ One thing to note: The local/remote is a semi-arbitrary division and really just
     2. In the current working dir, but inside a venv
 
 """
+import textwrap
 
 import pytest
 
@@ -72,6 +73,7 @@ examples = [
     # ast.ImportFrom
     (f'from {mod} import Plugin\ndef example() -> Plugin:\n\tpass', {'1:0 ' + TYO100.format(module=f'{mod}.Plugin')}),
     # Aliased imports
+    (f'import {mod} as x\ndef example() -> x:\n\tpass', {'1:0 ' + TYO100.format(module=f'x')}),
     (f'import {mod} as x\ndef example() -> x:\n\tpass', {'1:0 ' + TYO100.format(module=f'x')}),
 ]
 

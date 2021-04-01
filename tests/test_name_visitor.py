@@ -31,7 +31,7 @@ examples = [
     ('x = y()', {'x', 'y'}),
     ('def example(): x = y(); z()', {'x', 'y', 'z'}),
     # Attribute
-    ('x.y', {'x'}),
+    ('x.y', {'x.y', 'x'}),
     (
         textwrap.dedent(
             """
@@ -55,7 +55,7 @@ examples = [
     b = a.y
     """
         ),
-        {'self', 'a', 'z', 'x', 13, 'b', 'Test'},
+        {'self.y', 'z', 'Test', 'self', 13, 'a', 'b', 'x', 'a.y'},
     ),
     (
         textwrap.dedent(
@@ -70,14 +70,14 @@ examples = [
     (
         textwrap.dedent(
             """
-    import ast
-    def _get_usages(example):
-        visitor = UnusedImportVisitor()
-        visitor.visit(parse(example))
-        return visitor.usage_names
-    """
+        import ast
+        def _get_usages(example):
+            visitor = UnusedImportVisitor()
+            visitor.visit(parse(example))
+            return visitor.usage_names
+        """
         ),
-        {'visitor', 'UnusedImportVisitor', 'parse', 'example'},
+        {'UnusedImportVisitor', 'example', 'parse', 'visitor', 'visitor.usage_names', 'visitor.visit'},
     ),
 ]
 
@@ -103,4 +103,4 @@ def test_model_declarations_are_included_in_names():
         )
     """
     )
-    assert _get_names(example) == {'models', 'fk', 'SomeModel'}
+    assert _get_names(example) == {'SomeModel', 'fk', 'models', 'models.CASCADE', 'models.ForeignKey', 'models.Model'}
