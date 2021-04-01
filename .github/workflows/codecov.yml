@@ -31,7 +31,7 @@ jobs:
     - run: poetry install --no-interaction --no-root
       if: steps.cache-venv.outputs.cache-hit != 'true'
     - run: poetry install --no-interaction
-    - run: poetry run pytest --cov=flake8_typing_only_imports --cov-report=xml
+    - run: poetry run pytest --cov=flake8_type_checking --cov-report=xml
     - uses: codecov/codecov-action@v1
       with:
         file: ./coverage.xml

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from flake8_typing_only_imports.checker import TypingOnlyImportsChecker
+from flake8_type_checking.checker import TypingOnlyImportsChecker
 
 if TYPE_CHECKING:
     from ast import Module
@@ -20,8 +20,8 @@ else:
 class Plugin:
     """Flake8 plugin."""
 
-    name = 'flake8-typing-only-imports'
-    version = version('flake8-typing-only-imports')
+    name = 'flake8-type-checking'
+    version = version('flake8-type-checking')
 
     __slots__ = ('_tree',)
 

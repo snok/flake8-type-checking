@@ -3,10 +3,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from flake8_typing_only_imports import Plugin
+from flake8_type_checking import Plugin
 
 REPO_ROOT = Path(os.getcwd()).parent
-mod = 'flake8_typing_only_imports'
+mod = 'flake8_type_checking'
 
 
 def _get_error(example, error_code_filter: Optional[str] = None):

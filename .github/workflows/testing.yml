@@ -64,5 +64,5 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          poetry run pytest --cov=flake8_typing_only_imports --verbose --assert=plain
+          poetry run pytest --cov=flake8_type_checking --verbose --assert=plain
           poetry run coverage report

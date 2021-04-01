@@ -4,7 +4,7 @@ from typing import Set
 
 import pytest
 
-from flake8_typing_only_imports.checker import ImportVisitor
+from flake8_type_checking.checker import ImportVisitor
 
 
 def _get_names(example: str) -> Set[str]:
@@ -17,11 +17,11 @@ examples = [
     # ast.Import
     ('import x', set()),
     ('import pytest', set()),
-    ('import flake8_typing_only_imports', set()),
+    ('import flake8_type_checking', set()),
     # ast.ImportFrom
     ('from x import y', set()),
     ('from _pytest import fixtures', set()),
-    ('from flake8_typing_only_imports import constants', set()),
+    ('from flake8_type_checking import constants', set()),
     # Assignments
     ('x = y', {'x', 'y'}),
     ('x, y = z', {'x', 'y', 'z'}),
