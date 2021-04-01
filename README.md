@@ -16,17 +16,24 @@
 
 # flake8-type-checking
 
-> Plugin is still a work in progress
+Lets you know which imports to put inside type-checking blocks,
+and helps you manage forward references.
 
-Tells you which imports to put inside type-checking blocks.
+See the [typing.TYPE_CHECKING](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING) docs for context.
 
 ## Codes
+
+### Primary codes
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
 | TCH001 | Move import into a type-checking block  |
 | TCH101 | Move third-party import into a type-checking block |
 | TCH102 | Found multiple type checking blocks |
+
+### Secondary codes
+
+Choose `TCHA` or `TCHB` as they are incompatible (but both valid).
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
@@ -40,17 +47,18 @@ Tells you which imports to put inside type-checking blocks.
 
 ## Rationale
 
-`TCH100` guards
-against [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles)
-. `TCH101` applies the same logic, for `venv` or `stdlib` imports.
+We generally want to use `TYPE_CHECKING` blocks for imports where we can, to guard
+against [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles).
+An added bonus is that guarded imports are not loaded when you start your app, so
+theoretically you should get a slight performance boost there as well.
 
-Remaining error codes are there to help manage
-[forward references](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#class-name-forward-references),
+Once imports are guarded, type hints should be treated as [forward references](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#class-name-forward-references).
+Remaining error codes are there to help manage that,
 either by telling your to use string literals where needed, or by enabling
 [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
-The error code series `TCH2XX` and `TCH3XX` should therefore be considered
-mutually exclusive, as they represent two different ways of managing forward
-references.
+
+The error code series `TCHA` and `TCHB` should therefore be considered
+mutually exclusive, as they represent two different ways of solving the same problem.
 
 See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer for a
 quick explanation of forward references.
@@ -59,21 +67,6 @@ quick explanation of forward references.
 
 ```shell
 pip install flake8-type-checking
-```
-
-## Suggested use
-
-Only enable `TCH101` if you're after micro performance gains on start-up.
-
-`TCH2XX` and `TCH3XX` are reserved for error codes to help manage forward references.
-It does not make sense to enable both series, and they should be considered mutually exclusive.
-
-If you're adding this to your project, we would recommend something like this:
-
-```python
-select = TCH100, TCHA001, TCHA001  # or TCHB001 and TCHB002
-
-ignore = TCH101, TCHB001, TCHB002  # or TCHA001 and TCHA002
 ```
 
 ## Examples
@@ -96,13 +89,21 @@ class B(Model):
     def bar(self, a: A): ...
 ```
 
-Which will first result in these errors
+Will result in these errors
+
 ```shell
 >> a.py: TCH101: Move third-party import 'models.b.B' into a type-checking block
 >> b.py: TCH101: Move third-party import 'models.a.A' into a type-checking block
 ```
 
 and consequently trigger these errors if imports are purely moved into type-checking block, without proper forward reference handling
+
+```shell
+>> a.py: TCHA001: Add 'from __future__ import annotations' import
+>> b.py: TCHA001: Add 'from __future__ import annotations' import
+```
+
+or
 
 ```shell
 >> a.py: TCHB001: Annotation 'B' needs to be made into a string literal
@@ -123,6 +124,22 @@ class A(Model):
 ```
 `models/b.py`
 ```python
+# TCHA
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.a import A
+
+class B(Model):
+    def bar(self, a: A): ...
+```
+
+or
+
+```python
+# TCHB
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -146,6 +163,6 @@ You can run this flake8 plugin as a [pre-commit](https://github.com/pre-commit/p
 
 ## Supporting the project
 
-Leave a&nbsp;⭐️&nbsp; if this project helped you!
+Leave a ✯ if this project helped you!
 
 Contributions are always welcome 👏
