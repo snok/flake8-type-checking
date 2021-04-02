@@ -49,7 +49,7 @@ class ImportVisitor(ast.NodeTransformer):
         self.import_names: dict[str, tuple[str, bool]] = {}
 
         # List of all names and ids, except type declarations - used to find otherwise unused imports
-        self.uses: list[str] = []
+        self.uses: dict[str, ast.AST] = {}
 
         # Tuple of (node, import name) for all import defined within a type-checking block
         self.type_checking_block_imports: set[tuple[ImportType, str]] = set()
@@ -72,11 +72,11 @@ class ImportVisitor(ast.NodeTransformer):
     @property
     def names(self) -> set[str]:
         """Return unique names."""
-        return set(self.uses)
+        return set(self.uses.keys())
 
     # -- Map type checking block ---------------
 
-    def _import_defined_inside_type_checking_block(self, node: ImportType) -> bool:
+    def _in_type_checking_block(self, node: ast.AST) -> bool:
         """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
         if node.col_offset == 0:
             return False
@@ -138,7 +138,7 @@ class ImportVisitor(ast.NodeTransformer):
 
         :param node: ast.Import or ast.ImportFrom object
         """
-        if self._import_defined_inside_type_checking_block(node):
+        if self._in_type_checking_block(node):
             # For type checking blocks we want to
             # 1. Record annotations for TCH2XX errors
             # 2. Avoid recording imports for TCH1XX errors, by returning early
@@ -198,13 +198,13 @@ class ImportVisitor(ast.NodeTransformer):
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
         if hasattr(node, 'parent'):
-            self.uses.append(f'{node.id}.{node.parent}')  # type: ignore
-        self.uses.append(node.id)
+            self.uses[f'{node.id}.{node.parent}'] = node  # type: ignore
+        self.uses[node.id] = node
         return node
 
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
         """Map constants."""
-        self.uses.append(node.value)
+        self.uses[node.value] = node
         return node
 
     # -- Map annotations ------------------------------
@@ -344,7 +344,8 @@ class TypingOnlyImportsChecker:
         """TC004."""
         for _import, import_name in self.visitor.type_checking_block_imports:
             if import_name in self.visitor.uses:
-                yield _import.lineno, 0, TC004.format(module=import_name), None
+                if not self.visitor._in_type_checking_block(self.visitor.uses[import_name]):
+                    yield _import.lineno, 0, TC004.format(module=import_name), None
 
     def missing_futures_import(self) -> Flake8Generator:
         """TC100."""
