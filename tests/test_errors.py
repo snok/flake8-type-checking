@@ -144,3 +144,17 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {'5:0 ' + TCH004.format(module='datetime'), '6:0 ' + TCH004.format(module='date')}
+
+    def failing_tch004_test(self):
+        example = textwrap.dedent(
+            """
+        from typing import TYPE_CHECKING
+
+        if TYPE_CHECKING:
+            from typing import Any
+
+        def example(**kwargs: Any):
+            return
+        """
+        )
+        assert _get_error(example, error_code_filter='TCH004') == set()
