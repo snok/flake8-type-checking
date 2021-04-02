@@ -22,29 +22,40 @@ Also helps you manage [forward references](https://mypy.readthedocs.io/en/stable
 
 ## Codes
 
-### Primary codes
+### Enabled by default
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
-| TCH001 | Move import into a type-checking block  |
-| TCH101 | Move third-party import into a type-checking block |
-| TCH102 | Found multiple type checking blocks |
+| TC001 | Move import into a type-checking block  |
+| TC002 | Move third-party import into a type-checking block |
+| TC003 | Found multiple type checking blocks |
+| TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
 
-### Secondary codes
+### Disabled by default
 
-Choose `TCHA` or `TCHB` as they are mutually exclusive.
-
-| Code   | Description                                         |
-|--------|-----------------------------------------------------|
-| TCHA001 | Add 'from \_\_future\_\_ import annotations' import |
-| TCHA002 | Annotation does not need to be a string literal |
+Depending on how you wish to manage your forward references, you should choose
+**one of** the `TCH1` and `TCH2` error ranges, as they are mutually exclusive.
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
-| TCHB001 | Annotation needs to be made into a string literal |
-| TCHB002 | Annotation does not need to be a string literal |
+| TC100 | Add 'from \_\_future\_\_ import annotations' import |
+| TC101 | Annotation does not need to be a string literal |
+| TC200 | Annotation needs to be made into a string literal |
+| TC201 | Annotation does not need to be a string literal |
 
-See [rationale](#rationale) or [examples](#examples) for a better explanation of the difference.
+To enable them, just specify them in your flake8 config
+
+```toml
+[flake8]
+max-line-length = 80
+max-complexity = 12
+...
+ignore = E501
+select = C,E,F,W,B,TC2
+```
+
+If you're not sure which to pick, see [rationale](#rationale) or [examples](#examples)
+for a better explanation of the difference.
 
 ## Rationale
 
@@ -58,11 +69,10 @@ Remaining error codes are there to help manage that,
 either by telling your to use string literals where needed, or by enabling
 [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
 
-The error code series `TCHA` and `TCHB` should therefore be considered
+The error code series `TCH1` and `TCH2` should therefore be considered
 mutually exclusive, as they represent two different ways of solving the same problem.
-
-See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer for a
-quick explanation of forward references.
+See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer
+for a quick explanation of the differences.
 
 ## Installation
 
@@ -93,22 +103,22 @@ class B(Model):
 Will result in these errors
 
 ```shell
->> a.py: TCH101: Move third-party import 'models.b.B' into a type-checking block
->> b.py: TCH101: Move third-party import 'models.a.A' into a type-checking block
+>> a.py: TC002: Move third-party import 'models.b.B' into a type-checking block
+>> b.py: TC002: Move third-party import 'models.a.A' into a type-checking block
 ```
 
 and consequently trigger these errors if imports are purely moved into type-checking block, without proper forward reference handling
 
 ```shell
->> a.py: TCHA001: Add 'from __future__ import annotations' import
->> b.py: TCHA001: Add 'from __future__ import annotations' import
+>> a.py: TC100: Add 'from __future__ import annotations' import
+>> b.py: TC100: Add 'from __future__ import annotations' import
 ```
 
 or
 
 ```shell
->> a.py: TCHB001: Annotation 'B' needs to be made into a string literal
->> b.py: TCHB001: Annotation 'A' needs to be made into a string literal
+>> a.py: TC200: Annotation 'B' needs to be made into a string literal
+>> b.py: TC200: Annotation 'A' needs to be made into a string literal
 ```
 
 **Good code**
@@ -125,7 +135,7 @@ class A(Model):
 ```
 `models/b.py`
 ```python
-# TCHA
+# TCH1
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -140,7 +150,7 @@ class B(Model):
 or
 
 ```python
-# TCHB
+# TC2
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

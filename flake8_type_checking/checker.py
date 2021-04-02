@@ -7,7 +7,7 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCH004, TCHA001, TCHA002, TCHB001, TCHB002
+from flake8_type_checking.constants import TC001, TC002, TC003, TC004, TC100, TC101, TC200, TC201
 
 if TYPE_CHECKING:
     from typing import Any, List, Optional
@@ -173,10 +173,10 @@ class ImportVisitor(ast.NodeTransformer):
                     import_name = module + name_node.name
                 is_local = self._import_is_local(f'{module}{name_node.name}')
                 if is_local:
-                    self.local_imports[import_name] = {'error': TCH001, 'node': node}
+                    self.local_imports[import_name] = {'error': TC001, 'node': node}
                     self.import_names[name] = import_name, True
                 else:
-                    self.remote_imports[import_name] = {'error': TCH002, 'node': node}
+                    self.remote_imports[import_name] = {'error': TC002, 'node': node}
                     self.import_names[name] = import_name, False
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -287,26 +287,26 @@ class TypingOnlyImportsChecker:
         self.visitor.visit(node)
 
         self.generators = [
-            # TCH001
+            # TC001
             self.unused_import,
-            # TCH002
+            # TC002
             self.unused_third_party_import,
-            # TCH003
+            # TC003
             self.multiple_type_checking_blocks,
-            # TCH004
+            # TC004
             self.used_type_checking_imports,
-            # TCHA001
+            # TC100
             self.missing_futures_import,
-            # TCHA002
+            # TC101
             self.futures_excess_quotes,
-            # TCHB001
+            # TC200
             self.missing_quotes,
-            # TCHB002
+            # TC201
             self.excess_quotes,
         ]
 
     def unused_import(self) -> Flake8Generator:
-        """TCH001."""
+        """TC001."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
             if local_import:
@@ -316,7 +316,7 @@ class TypingOnlyImportsChecker:
                     yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def unused_third_party_import(self) -> Flake8Generator:
-        """TCH002."""
+        """TC002."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
             if not local_import:
@@ -326,30 +326,30 @@ class TypingOnlyImportsChecker:
                     yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def multiple_type_checking_blocks(self) -> Flake8Generator:
-        """TCH003."""
+        """TC003."""
         if len([i for i in self.visitor.type_checking_blocks if i[2] == 0]) > 1:
-            yield self.visitor.type_checking_blocks[-1][0], 0, TCH003, None
+            yield self.visitor.type_checking_blocks[-1][0], 0, TC003, None
 
     def used_type_checking_imports(self) -> Flake8Generator:
-        """TCH004."""
+        """TC004."""
         for _import, import_name in self.visitor.type_checking_block_imports:
             if import_name in self.visitor.uses:
-                yield _import.lineno, 0, TCH004.format(module=import_name), None
+                yield _import.lineno, 0, TC004.format(module=import_name), None
 
     def missing_futures_import(self) -> Flake8Generator:
-        """TCHA001."""
+        """TC100."""
         if (
             not self.visitor.futures_annotation
             and {name for _, name in self.visitor.type_checking_block_imports} - self.visitor.names
         ):
-            yield 1, 0, TCHA001, None
+            yield 1, 0, TC100, None
 
     def futures_excess_quotes(self) -> Flake8Generator:
-        """TCHA002."""
+        """TC101."""
         # If futures imports are present, any ast.Constant captured in _add_annotation should yield an error
         if self.visitor.futures_annotation:
             for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
-                yield lineno, col_offset, TCHA002.format(annotation=annotation), None
+                yield lineno, col_offset, TC101.format(annotation=annotation), None
         else:
             """
             If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
@@ -383,17 +383,17 @@ class TypingOnlyImportsChecker:
                         if class_name == annotation:
                             break
                     else:
-                        yield lineno, col_offset, TCHA002.format(annotation=annotation), None
+                        yield lineno, col_offset, TC101.format(annotation=annotation), None
 
     def missing_quotes(self) -> Flake8Generator:
-        """TCHB001."""
+        """TC200."""
         for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
             for _, name in self.visitor.type_checking_block_imports:
                 if annotation == name:
-                    yield lineno, col_offset, TCHB001.format(annotation=annotation), None
+                    yield lineno, col_offset, TC200.format(annotation=annotation), None
 
     def excess_quotes(self) -> Flake8Generator:
-        """TCHB002."""
+        """TC201."""
         for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
             # See comment in futures_excess_quotes
             for _, import_name in self.visitor.type_checking_block_imports:
@@ -404,7 +404,7 @@ class TypingOnlyImportsChecker:
                     if class_name == annotation:
                         break
                 else:
-                    yield lineno, col_offset, TCHB002.format(annotation=annotation), None
+                    yield lineno, col_offset, TC201.format(annotation=annotation), None
 
     @property
     def errors(self) -> Flake8Generator:
