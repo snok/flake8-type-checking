@@ -3,7 +3,7 @@ Contains special test cases that fall outside the scope of remaining test files.
 """
 import textwrap
 
-from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCHA001
+from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCH004, TCHA001
 from tests import _get_error, mod
 
 
@@ -127,3 +127,20 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {"7:4 TCH002: Move third-party import 'x' into a type-checking block"}
+
+    def test_called_typing_import(self):
+        example = textwrap.dedent(
+            """
+        from typing import TYPE_CHECKING
+
+        if TYPE_CHECKING:
+            from datetime import datetime
+            from datetime import date
+
+        x = datetime
+
+        def example():
+            return date()
+        """
+        )
+        assert _get_error(example) == {'5:0 ' + TCH004.format(module='datetime'), '6:0 ' + TCH004.format(module='date')}
