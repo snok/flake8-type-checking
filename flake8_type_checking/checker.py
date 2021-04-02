@@ -7,13 +7,12 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCHA001, TCHA002, TCHB001, TCHB002
+from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCH004, TCHA001, TCHA002, TCHB001, TCHB002
 
 if TYPE_CHECKING:
     from typing import Any, List, Optional
 
     from flake8_type_checking.types import Flake8Generator, ImportType
-
 
 possible_local_errors = ()
 with suppress(ModuleNotFoundError):
@@ -294,6 +293,8 @@ class TypingOnlyImportsChecker:
             self.unused_third_party_import,
             # TCH003
             self.multiple_type_checking_blocks,
+            # TCH004
+            self.used_type_checking_imports,
             # TCHA001
             self.missing_futures_import,
             # TCHA002
@@ -328,6 +329,12 @@ class TypingOnlyImportsChecker:
         """TCH003."""
         if len([i for i in self.visitor.type_checking_blocks if i[2] == 0]) > 1:
             yield self.visitor.type_checking_blocks[-1][0], 0, TCH003, None
+
+    def used_type_checking_imports(self) -> Flake8Generator:
+        """TCH004."""
+        for _import, import_name in self.visitor.type_checking_block_imports:
+            if import_name in self.visitor.uses:
+                yield _import.lineno, 0, TCH004.format(module=import_name), None
 
     def missing_futures_import(self) -> Flake8Generator:
         """TCHA001."""

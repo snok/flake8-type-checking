@@ -26,6 +26,9 @@ classifiers = [
     'Typing :: Typed',
 ]
 
+[tool.poetry.urls]
+"Issue Tracker" = "https://github.com/sondrelg/flake8-type-checking/issues"
+
 [tool.poetry.dependencies]
 python = '^3.7'
 flake8 = '*'
@@ -38,7 +41,7 @@ pytest-cov = '^2.11.1'
 
 [tool.poetry.plugins]
 [tool.poetry.plugins.'flake8.extension']
-TCH100 = 'flake8_type_checking:Plugin'
+TCH = 'flake8_type_checking:Plugin'
 
 [build-system]
 requires = ['poetry-core>=1.0.0']

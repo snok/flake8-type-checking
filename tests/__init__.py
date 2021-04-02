@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from flake8_type_checking import Plugin
+from flake8_type_checking.plugin import Plugin
 
 REPO_ROOT = Path(os.getcwd()).parent
 mod = 'flake8_type_checking'
