@@ -1,7 +1,7 @@
 [tool.poetry]
 name = 'flake8-type-checking'
-version = '0.1.0'
-description = 'A flake8 plugin to flag imports exclusively used for type annotations'
+version = '0.1.1'
+description = 'A flake8 plugin for managing type-checking imports & forward references'
 homepage = 'https://github.com/sondrelg/flake8-type-checking'
 repository = 'https://github.com/sondrelg/flake8-type-checking'
 documentation = 'https://github.com/sondrelg/flake8-type-checking'
