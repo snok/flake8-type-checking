@@ -127,34 +127,3 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {"7:4 TC002: Move third-party import 'x' into a type-checking block"}
-
-    def test_called_typing_import(self):
-        example = textwrap.dedent(
-            """
-        from typing import TYPE_CHECKING
-
-        if TYPE_CHECKING:
-            from datetime import datetime
-            from datetime import date
-
-        x = datetime
-
-        def example():
-            return date()
-        """
-        )
-        assert _get_error(example) == {'5:0 ' + TC004.format(module='datetime'), '6:0 ' + TC004.format(module='date')}
-
-    def test_failing_TC004(self):
-        example = textwrap.dedent(
-            """
-        from typing import TYPE_CHECKING
-
-        if TYPE_CHECKING:
-            from typing import Any
-
-        def example(**kwargs: Any):
-            return
-        """
-        )
-        assert _get_error(example, error_code_filter='TC004') == set()

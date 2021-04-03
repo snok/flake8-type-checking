@@ -265,6 +265,16 @@ class ImportVisitor(ast.NodeTransformer):
                 if hasattr(argument, 'annotation'):
                     self._add_annotation(argument.annotation)  # type: ignore
                     delattr(argument, 'annotation')
+        if hasattr(node.args, 'kwarg'):
+            kwarg = node.args.kwarg
+            if hasattr(kwarg, 'annotation'):
+                self._add_annotation(kwarg.annotation)  # type: ignore
+                delattr(kwarg, 'annotation')
+        if hasattr(node.args, 'vararg'):
+            vararg = node.args.vararg
+            if hasattr(vararg, 'annotation'):
+                self._add_annotation(vararg.annotation)  # type: ignore
+                delattr(vararg, 'annotation')
         if hasattr(node, 'returns'):
             self._add_annotation(node.returns)  # type: ignore
             delattr(node, 'returns')
