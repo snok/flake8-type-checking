@@ -43,6 +43,18 @@ examples = [
         ),
         {'5:0 ' + TC004.format(module='date')},
     ),
+    # Used, but only used inside the type checking block
+    (
+        textwrap.dedent(
+            """
+    if TYPE_CHECKING:
+        from typing import Any
+
+        CustomType = Any
+    """
+        ),
+        set(),
+    ),
     # Used for typing only
     (
         textwrap.dedent(
@@ -52,6 +64,8 @@ examples = [
 
     def example(*args: Any, **kwargs: Any):
         return
+
+    my_type: Type[Any] | Any
     """
         ),
         set(),
