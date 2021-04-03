@@ -5,7 +5,7 @@ import os
 from contextlib import suppress
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 from flake8_type_checking.constants import TC001, TC002, TC003, TC004, TC100, TC101, TC200, TC201
 
@@ -68,6 +68,10 @@ class ImportVisitor(ast.NodeTransformer):
 
         # Where the type checking block exists (line_start, line_end, col_offset)
         self.type_checking_blocks: List[tuple[int, int, int]] = []
+
+        # Function scopes can tell us if imports that appear in type-checking blocks
+        # are repeated inside a function. This prevents false TC004 positives.
+        self.function_scopes: dict[int, dict] = {}
 
     @property
     def names(self) -> set[str]:
@@ -149,6 +153,7 @@ class ImportVisitor(ast.NodeTransformer):
                     name = name_node.name
                 self.type_checking_block_imports.add((node, name))
             return None
+
         for name_node in node.names:
             # Check for `from __futures__ import annotations`
             if self.futures_annotation is None:
@@ -175,9 +180,14 @@ class ImportVisitor(ast.NodeTransformer):
                 if is_local:
                     self.local_imports[import_name] = {'error': TC001, 'node': node}
                     self.import_names[name] = import_name, True
+
                 else:
                     self.remote_imports[import_name] = {'error': TC002, 'node': node}
                     self.import_names[name] = import_name, False
+
+                if node.lineno not in self.function_scopes:
+                    self.function_scopes[node.lineno] = {'imports': []}
+                self.function_scopes[node.lineno]['imports'].append(name)
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
@@ -259,6 +269,7 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Remove and map function arguments and returns."""
+        # Map annotations
         for path in [node.args.args, node.args.kwonlyargs]:
             argument: ast.arg
             for argument in path:
@@ -278,6 +289,15 @@ class ImportVisitor(ast.NodeTransformer):
         if hasattr(node, 'returns'):
             self._add_annotation(node.returns)  # type: ignore
             delattr(node, 'returns')
+
+        # Register function start and end
+        for i in range(node.lineno, node.end_lineno + 1):  # type: ignore
+            # TODO: Find a better data structure for this
+            if i not in self.function_scopes:
+                self.function_scopes[i] = {'imports': []}
+            self.function_scopes[i]['start'] = node.lineno
+            self.function_scopes[i]['end'] = node.end_lineno + 1  # type: ignore
+
         self.generic_visit(node)
 
 
@@ -344,8 +364,28 @@ class TypingOnlyImportsChecker:
         """TC004."""
         for _import, import_name in self.visitor.type_checking_block_imports:
             if import_name in self.visitor.uses:
-                if not self.visitor._in_type_checking_block(self.visitor.uses[import_name]):
-                    yield _import.lineno, 0, TC004.format(module=import_name), None
+                # If we get to here, we're pretty sure that the import
+                # shouldn't actually live inside a type-checking block
+
+                use = self.visitor.uses[import_name]
+
+                # before we yield we just want to check one thing: whether the use is inside a type checking block..
+                if self.visitor._in_type_checking_block(use):
+                    return
+
+                # .. or whether there is another duplicate import inside the function scope
+                # (if the use is in a function scope)
+                if use.lineno in self.visitor.function_scopes:
+                    for i in range(
+                        self.visitor.function_scopes[use.lineno]['start'],
+                        self.visitor.function_scopes[use.lineno]['end'],
+                    ):
+                        print(import_name)
+                        print(self.visitor.function_scopes[i]['imports'])
+                        if import_name in self.visitor.function_scopes[i]['imports']:
+                            return
+
+                yield _import.lineno, 0, TC004.format(module=import_name), None
 
     def missing_futures_import(self) -> Flake8Generator:
         """TC100."""

@@ -70,6 +70,20 @@ examples = [
         ),
         set(),
     ),
+    # Used different places, but where each function scope has it's own import
+    (
+        textwrap.dedent(
+            """
+    if TYPE_CHECKING:
+        from typing import Any
+
+    def example():
+        from typing import Any
+        x = Any
+    """
+        ),
+        set(),
+    ),
 ]
 
 
