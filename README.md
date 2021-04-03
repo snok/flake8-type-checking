@@ -33,13 +33,23 @@ Also helps you manage [forward references](https://mypy.readthedocs.io/en/stable
 
 ### Disabled by default
 
-Depending on how you wish to manage your forward references, you should choose
-**one of** the `TCH1` and `TCH2` error ranges, as they are mutually exclusive.
+Codes related to forward reference management should probably be activated,
+but since there are two different ways of managing them, they are disbaled
+by default and you need to choose one of them.
+
+`TCH100` and `TCH101` manage forward references by taking advantage of
+[postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
 | TC100 | Add 'from \_\_future\_\_ import annotations' import |
 | TC101 | Annotation does not need to be a string literal |
+
+`TCH200` and `TCH201` manage forward references using string string literals
+(wrapping the annotation in quotes).
+
+| Code   | Description                                         |
+|--------|-----------------------------------------------------|
 | TC200 | Annotation needs to be made into a string literal |
 | TC201 | Annotation does not need to be a string literal |
 
