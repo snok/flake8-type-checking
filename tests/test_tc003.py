@@ -1,6 +1,6 @@
 import textwrap
 
-from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCHA001
+from flake8_type_checking.constants import TC001, TC002, TC003, TC100
 from tests import _get_error, mod
 
 
@@ -14,7 +14,7 @@ def test_duplicate_type_checking_blocks():
         from flake8_type_checking.types import ImportType, Flake8Generator
     """
     )
-    assert _get_error(example, error_code_filter='TCH003') == {'5:0 ' + TCH003}
+    assert _get_error(example, error_code_filter='TC003') == {'5:0 ' + TC003}
 
 
 def test_duplicate_type_checking_blocks_at_different_levels_of_indentation():
@@ -28,4 +28,4 @@ def test_duplicate_type_checking_blocks_at_different_levels_of_indentation():
             from flake8_type_checking.types import ImportType, Flake8Generator
     """
     )
-    assert _get_error(example, error_code_filter='TCH003') == set()
+    assert _get_error(example, error_code_filter='TC003') == set()

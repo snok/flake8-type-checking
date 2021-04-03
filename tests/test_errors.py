@@ -3,7 +3,7 @@ Contains special test cases that fall outside the scope of remaining test files.
 """
 import textwrap
 
-from flake8_type_checking.constants import TCH001, TCH002, TCH003, TCH004, TCHA001
+from flake8_type_checking.constants import TC001, TC002, TC004, TC100
 from tests import _get_error, mod
 
 
@@ -17,9 +17,9 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {
-            '2:0 ' + TCH001.format(module=f'{mod}'),
-            '3:0 ' + TCH002.format(module=f'pytest'),
-            '4:0 ' + TCH002.format(module=f'x.y'),
+            '2:0 ' + TC001.format(module=f'{mod}'),
+            '3:0 ' + TC002.format(module=f'pytest'),
+            '4:0 ' + TC002.format(module=f'x.y'),
         }
 
     def test_type_checking_block_imports_dont_generate_errors(self):
@@ -40,9 +40,9 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {
-            '1:0 ' + TCHA001,
-            '2:0 ' + TCH002.format(module='x'),
-            '3:0 ' + TCH002.format(module='y.z'),
+            '1:0 ' + TC100,
+            '2:0 ' + TC002.format(module='x'),
+            '3:0 ' + TC002.format(module='y.z'),
         }
 
     def test_model_declarations_dont_trigger_error(self):
@@ -126,7 +126,7 @@ class TestFoundBugs:
         var: x
         """
         )
-        assert _get_error(example) == {"7:4 TCH002: Move third-party import 'x' into a type-checking block"}
+        assert _get_error(example) == {"7:4 TC002: Move third-party import 'x' into a type-checking block"}
 
     def test_called_typing_import(self):
         example = textwrap.dedent(
@@ -143,9 +143,9 @@ class TestFoundBugs:
             return date()
         """
         )
-        assert _get_error(example) == {'5:0 ' + TCH004.format(module='datetime'), '6:0 ' + TCH004.format(module='date')}
+        assert _get_error(example) == {'5:0 ' + TC004.format(module='datetime'), '6:0 ' + TC004.format(module='date')}
 
-    def failing_tch004_test(self):
+    def test_failing_TC004(self):
         example = textwrap.dedent(
             """
         from typing import TYPE_CHECKING
@@ -157,4 +157,4 @@ class TestFoundBugs:
             return
         """
         )
-        assert _get_error(example, error_code_filter='TCH004') == set()
+        assert _get_error(example, error_code_filter='TC004') == set()
