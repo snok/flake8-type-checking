@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 from flake8_type_checking.checker import TypingOnlyImportsChecker
 
 if TYPE_CHECKING:
+    from argparse import Namespace
     from ast import Module
-    from typing import Generator
+    from typing import Generator, Optional
 
 if sys.version_info >= (3, 8):
     from importlib.metadata import version
@@ -27,7 +28,7 @@ class Plugin:
 
     __slots__ = ('_tree', 'options')
 
-    def __init__(self, tree: Module, options=None) -> None:
+    def __init__(self, tree: Module, options: Optional[Namespace] = None) -> None:
         self._tree = tree
         self.options = options
 
