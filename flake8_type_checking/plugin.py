@@ -35,7 +35,7 @@ class Plugin:
         """Run flake8 plugin and return any relevant errors."""
         visitor = TypingOnlyImportsChecker(self._tree)
         for e in visitor.errors:
-            if self.should_warn(e[2].split(' ')[0]):
+            if self.should_warn(e[2].split(':')[0]):
                 yield e
 
     def should_warn(self, code: str) -> bool:
@@ -48,8 +48,11 @@ class Plugin:
 
         This function is a workaround for this behavior. Stolen from flake8-bugbear because it's good.
         """
+        logger.debug('Received code %s', code)
+
         if code[2] == '0':
             # Any error in the TC0XX range is safe to include by default
+            logger.debug('Returning true for code %s, as it is in the 0s range', code)
             return True
 
         # Our desired behavior is to have the TC100 and TC200 range disabled by default
@@ -57,13 +60,16 @@ class Plugin:
         # config that overrides the default
 
         if self.options is None:
+            # Don't warn if not opted-in
             logger.info('Options not provided to flake8-type-checking, optional warning %s selected.', code)
-            return True
+            return False
 
-        for i in range(2, len(code) + 1):
+        for i in range(3, len(code) + 1):
             if code[:i] in self.options.select:
+                # Warn if opted-in
                 return True
 
+        # Don't warn if not opted-in
         logger.info(
             'Optional warning %s not present in selected warnings: %r. Not running it at all.',
             code,
