@@ -32,6 +32,7 @@ repos:
             'flake8-pytest-style',
             'flake8-docstrings',
             'flake8-annotations',
+            'flake8-printf-formatting',
             'flake8-type-checking',
         ]
   - repo: https://github.com/asottile/pyupgrade
