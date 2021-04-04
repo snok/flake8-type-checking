@@ -41,7 +41,7 @@ pytest-cov = '^2.11.1'
 
 [tool.poetry.plugins]
 [tool.poetry.plugins.'flake8.extension']
-TCH = 'flake8_type_checking:Plugin'
+TCH = 'flake8_type_checking.plugin:Plugin'
 
 [build-system]
 requires = ['poetry-core>=1.0.0']
