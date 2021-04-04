@@ -45,15 +45,14 @@ so please only choose one.
 | TC100 | Add 'from \_\_future\_\_ import annotations' import |
 | TC101 | Annotation does not need to be a string literal |
 
-`TCH200` and `TCH201` manage forward references using string literals
-(wrapping the annotation in quotes).
+`TCH200` and `TCH201` manage forward references using [string literals](https://www.python.org/dev/peps/pep-0484/#forward-references).
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
 | TC200 | Annotation needs to be made into a string literal |
 | TC201 | Annotation does not need to be a string literal |
 
-To enable them, just specify them in your flake8 config
+To one of the ranges, just specify the code in your flake8 config:
 
 ```
 [flake8]
@@ -61,30 +60,31 @@ max-line-length = 80
 max-complexity = 12
 ...
 ignore = E501
-select = C,E,F,W,..., TC2  # or TC1
+select = C,E,F,W,..., TC, TC2  # or TC1
 ```
 
 ## Rationale
 
-In large projects, imports made for type annotations can increase the risk of
-[import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles).
-The recommended way of preventing this is to use `typing.TYPE_CHECKING` blocks
-to guard these imports.
+Good type hinting requires a lot of imports, which can increase the risk of
+[import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles)
+in your project.
+The recommended way of preventing this problem is to use `typing.TYPE_CHECKING` blocks
+to guard these types of imports.
 
-Both `TC001` and `TC002` help users manage imports; the reason there are two
+Both `TC001` and `TC002` help alleviate this problem; the reason there are two
 codes instead of one, is because the import cycles rarely occur from
-library/third-party imports, so the split provides a way to filter down the
-total pool of imports for users that want like to guard against import cycles,
+library/third-party imports, so this artificial split provides a way to filter down
+the total pool of imports for users that want to guard against import cycles,
 but don't want to manage every import in their projects *this* strictly.
 
-Once imports are guarded, they will no longer be evaluated during runtime,
-and so the imports cannot be treated type hints should be treated as normal.
-Instead we need to use [forward references](https://www.python.org/dev/peps/pep-0484/#forward-references).
+Once imports are guarded, they will no longer be evaluated during runtime. The
+consequence of this is that these imports can no longer be treated as if they
+were imported outside the block. Instead we need to use [forward references](https://www.python.org/dev/peps/pep-0484/#forward-references).
 
-Right now, for Python version `>= 3.7`, there are two options available to us.
-You can either make your annotations string literals, or you can use a futures import to enable [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
+For Python version `>= 3.7`, there are actually two ways of solving this issue.
+You can either make your annotations string literals, or you can use a `__futures__` import to enable [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
 See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer
-for a great explanation of the differences.
+for a better explanation of the differences.
 
 ## Installation
 
@@ -186,6 +186,5 @@ You can run this flake8 plugin as a [pre-commit](https://github.com/pre-commit/p
 
 ## Supporting the project
 
-Leave a ✯ if this project helped you!
-
-Contributions are always welcome 👏
+Contributions are always welcome, and leaving a ⭐️
+is always useful as it helps raise the profile of the repo 🚀

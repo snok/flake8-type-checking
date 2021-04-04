@@ -1,17 +1,17 @@
 [tool.poetry]
 name = 'flake8-type-checking'
-version = '0.1.5'
+version = '1.0.0'
 description = 'A flake8 plugin for managing type-checking imports & forward references'
 homepage = 'https://github.com/snok'
 repository = 'https://github.com/sondrelg/flake8-type-checking'
 authors = ['Sondre Lillebø Gundersen <sondrelg@live.no>']
-license = 'BSD-2-Clause'
+license = 'BSD-3-Clause'
 readme = 'README.md'
-keywords = ['flake8', 'linting', 'type hint', 'typing', 'imports']
+keywords = ['flake8', 'plugin', 'linting', 'type hint', 'typing', 'imports']
 include = ['CHANGELOG.md']
 packages = [{ include = 'flake8_type_checking' }]
 classifiers = [
-    'Development Status :: 4 - Beta',
+    'Development Status :: 5 - Production/Stable',
     'Intended Audience :: Developers',
     'Environment :: Console',
     'Operating System :: OS Independent',
