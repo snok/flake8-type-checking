@@ -143,6 +143,22 @@ examples = [
         ),
         set(),
     ),
+    (
+        textwrap.dedent(
+            '''
+            from typing import Any, Generator, Union
+
+            if TYPE_CHECKING:
+                ImportType = Union[ast.Import, ast.ImportFrom]
+                Flake8Generator = Generator[tuple[int, int, str, Any], None, None]
+            '''
+        ),
+        {
+            '2:0 ' + TC002.format(module='typing.Any'),
+            '2:0 ' + TC002.format(module='typing.Generator'),
+            '2:0 ' + TC002.format(module='typing.Union'),
+        },
+    ),
 ]
 
 
