@@ -40,7 +40,6 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {
-            '1:0 ' + TC100,
             '2:0 ' + TC002.format(module='x'),
             '3:0 ' + TC002.format(module='y.z'),
         }

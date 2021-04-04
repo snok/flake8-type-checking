@@ -384,6 +384,18 @@ pytest = ">=4.6"
 testing = ["fields", "hunter", "process-tests (==2.0.2)", "six", "pytest-xdist", "virtualenv"]
 
 [[package]]
+name = "pytest-flake8dir"
+version = "2.3.1"
+description = "A pytest fixture for testing flake8 plugins."
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+flake8 = "*"
+pytest = "*"
+
+[[package]]
 name = "pyyaml"
 version = "5.4.1"
 description = "YAML parser and emitter for Python"
@@ -471,7 +483,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = '^3.7'
-content-hash = "14d00ef7a26641796b0a426f649ac39e75c5a2a20cc816fe5df5474f5dbe1fd7"
+content-hash = "2c5885a28473bbd7e60a7f451817da5da8c186fbd499779db27086b13052c75a"
 
 [metadata.files]
 appdirs = [
@@ -660,6 +672,10 @@ pytest = [
 pytest-cov = [
     {file = "pytest-cov-2.11.1.tar.gz", hash = "sha256:359952d9d39b9f822d9d29324483e7ba04a3a17dd7d05aa6beb7ea01e359e5f7"},
     {file = "pytest_cov-2.11.1-py2.py3-none-any.whl", hash = "sha256:bdb9fdb0b85a7cc825269a4c56b48ccaa5c7e365054b6038772c32ddcdc969da"},
+]
+pytest-flake8dir = [
+    {file = "pytest-flake8dir-2.3.1.tar.gz", hash = "sha256:f3b9a0f35e9d8502e8c24622b7e61683a83ef11f73740a304b5705bfb6a30c1c"},
+    {file = "pytest_flake8dir-2.3.1-py3-none-any.whl", hash = "sha256:dd49f03bd4431c662bc1758e0b7ab91071ab7a8facdc091fa1d4f8b6d100f84e"},
 ]
 pyyaml = [
     {file = "PyYAML-5.4.1-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:3b2b1824fe7112845700f815ff6a489360226a5609b96ec2190a45e62a9fc922"},
