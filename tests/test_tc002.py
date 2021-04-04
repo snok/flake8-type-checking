@@ -154,9 +154,9 @@ examples = [
             '''
         ),
         {
-            '1:0 ' + TC002.format(module='typing.Any'),
-            '1:0 ' + TC002.format(module='typing.Generator'),
-            '1:0 ' + TC002.format(module='typing.Union'),
+            '2:0 ' + TC002.format(module='typing.Any'),
+            '2:0 ' + TC002.format(module='typing.Generator'),
+            '2:0 ' + TC002.format(module='typing.Union'),
         },
     ),
 ]

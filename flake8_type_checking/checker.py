@@ -212,6 +212,8 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
+        if self._in_type_checking_block(node):
+            return node
         if hasattr(node, 'parent'):
             self.uses[f'{node.id}.{node.parent}'] = node  # type: ignore
         self.uses[node.id] = node
@@ -219,6 +221,8 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
         """Map constants."""
+        if self._in_type_checking_block(node):
+            return node
         self.uses[node.value] = node
         return node
 
@@ -250,19 +254,21 @@ class ImportVisitor(ast.NodeTransformer):
         elif isinstance(node, ast.BinOp):
             return
 
-    def visit_Attribute(self, node: ast.Attribute) -> Any:
-        # Set the attribute of the current node
-        try:
-            parent = node.parent  # type: ignore
-            node.attr = f'{node.attr}.{parent}'
-        except Exception:
-            pass
-
+    def _set_child_node_attribute(self, node, attr: str, val: Any):
         # Set the parent attribute on the current node children
         for key, value in node.__dict__.items():
-            if type(value) not in [int, str]:
-                setattr(node.__dict__[key], 'parent', node.attr)
+            if type(value) not in [int, str, list, bool]:
+                setattr(node.__dict__[key], attr, val)
+        return node
 
+    def visit_Attribute(self, node: ast.Attribute) -> Any:
+        # Set the attribute of the current node
+        # This lets us read attribute names for `a.b.c` as `a.b.c` when we're treating the
+        # `c` node, which is important to match attributes to imports
+        with suppress(Exception):
+            parent = node.parent  # type: ignore
+            node.attr = f'{node.attr}.{parent}'
+        node = self._set_child_node_attribute(node, 'parent', node.attr)
         self.generic_visit(node)
         return node
 
