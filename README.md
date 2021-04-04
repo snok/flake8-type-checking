@@ -16,13 +16,14 @@
 
 # flake8-type-checking
 
-Lets you know which imports to put inside [type-checking blocks](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING).
+Lets you know which imports to put in [type-checking](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING) blocks.
 
-Also helps you manage [forward references](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#class-name-forward-references).
+For the imports you've already defined inside type-checking blocks, it can
+also help you manage [forward references](https://www.python.org/dev/peps/pep-0484/#forward-references)
+using [PEP 484](https://www.python.org/dev/peps/pep-0484) or [PEP 563](https://www.python.org/dev/peps/pep-0563/) style references.
 
 ## Codes
 
-### Enabled by default
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
@@ -31,11 +32,10 @@ Also helps you manage [forward references](https://mypy.readthedocs.io/en/stable
 | TC003 | Found multiple type checking blocks |
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
 
-### Disabled by default
+### Forward reference codes
 
-Codes related to forward reference management should probably be activated,
-but since there are two different ways of managing them, they are disbaled
-by default and you need to choose one of them.
+These code ranges are opt-in. They represent two different ways of solving the same problem,
+so please only choose one.
 
 `TCH100` and `TCH101` manage forward references by taking advantage of
 [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
@@ -45,7 +45,7 @@ by default and you need to choose one of them.
 | TC100 | Add 'from \_\_future\_\_ import annotations' import |
 | TC101 | Annotation does not need to be a string literal |
 
-`TCH200` and `TCH201` manage forward references using string string literals
+`TCH200` and `TCH201` manage forward references using string literals
 (wrapping the annotation in quotes).
 
 | Code   | Description                                         |
@@ -61,28 +61,30 @@ max-line-length = 80
 max-complexity = 12
 ...
 ignore = E501
-select = C,E,F,W,B,TC2  # or TC1
+select = C,E,F,W,..., TC2  # or TC1
 ```
-
-If you're not sure which to pick, see [rationale](#rationale) or [examples](#examples)
-for a better explanation of the difference.
 
 ## Rationale
 
-We generally want to use `TYPE_CHECKING` blocks for imports where we can, to guard
-against [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles).
-An added bonus is that guarded imports are not loaded when you start your app, so
-theoretically you should get a slight performance boost there as well.
+In large projects, imports made for type annotations can increase the risk of
+[import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles).
+The recommended way of preventing this is to use `typing.TYPE_CHECKING` blocks
+to guard these imports.
 
-Once imports are guarded, type hints should be treated as [forward references](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#class-name-forward-references).
-Remaining error codes are there to help manage that,
-either by telling your to use string literals where needed, or by enabling
-[postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
+Both `TC001` and `TC002` help users manage imports; the reason there are two
+codes instead of one, is because the import cycles rarely occur from
+library/third-party imports, so the split provides a way to filter down the
+total pool of imports for users that want like to guard against import cycles,
+but don't want to manage every import in their projects *this* strictly.
 
-The error code series `TCH1` and `TCH2` should therefore be considered
-mutually exclusive, as they represent two different ways of solving the same problem.
+Once imports are guarded, they will no longer be evaluated during runtime,
+and so the imports cannot be treated type hints should be treated as normal.
+Instead we need to use [forward references](https://www.python.org/dev/peps/pep-0484/#forward-references).
+
+Right now, for Python version `>= 3.7`, there are two options available to us.
+You can either make your annotations string literals, or you can use a futures import to enable [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
 See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer
-for a quick explanation of the differences.
+for a great explanation of the differences.
 
 ## Installation
 
