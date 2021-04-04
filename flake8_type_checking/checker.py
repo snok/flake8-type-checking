@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     ImportType = Union[ast.Import, ast.ImportFrom]
     Flake8Generator = Generator[tuple[int, int, str, Any], None, None]
 
+ATTRIBUTE_PROPERTY = 'flake8-type-checking_parent'
+
 
 class ImportVisitor(ast.NodeTransformer):
     """Map all imports outside of type-checking blocks."""
@@ -226,8 +228,8 @@ class ImportVisitor(ast.NodeTransformer):
         """Map names."""
         if self._in_type_checking_block(node):
             return node
-        if hasattr(node, 'parent'):
-            self.uses[f'{node.id}.{node.parent}'] = node  # type: ignore
+        if hasattr(node, ATTRIBUTE_PROPERTY):
+            self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node  # type: ignore
         self.uses[node.id] = node
         return node
 
@@ -266,7 +268,7 @@ class ImportVisitor(ast.NodeTransformer):
         elif isinstance(node, ast.BinOp):
             return
 
-    def _set_child_node_attribute(self, node, attr: str, val: Any):
+    def _set_child_node_attribute(self, node: Any, attr: str, val: Any) -> Any:
         # Set the parent attribute on the current node children
         for key, value in node.__dict__.items():
             if type(value) not in [int, str, list, bool]:
@@ -274,13 +276,19 @@ class ImportVisitor(ast.NodeTransformer):
         return node
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
+        """
+        Alter attributes slightly so they're more comparable to imports.
+
+        Specifically, we set a property on child attributes so that attributes with the
+        property can have their names altered.
+        """
         # Set the attribute of the current node
         # This lets us read attribute names for `a.b.c` as `a.b.c` when we're treating the
         # `c` node, which is important to match attributes to imports
         with suppress(Exception):
-            parent = node.parent  # type: ignore
+            parent = getattr(node, ATTRIBUTE_PROPERTY)  # type: ignore
             node.attr = f'{node.attr}.{parent}'
-        node = self._set_child_node_attribute(node, 'parent', node.attr)
+        node = self._set_child_node_attribute(node, ATTRIBUTE_PROPERTY, node.attr)
         self.generic_visit(node)
         return node
 
@@ -362,21 +370,19 @@ class TypingOnlyImportsChecker:
         """TC001."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
-            if local_import:
-                if not any(unused_import in str(use) for use in self.visitor.uses):
-                    obj = self.visitor.local_imports.pop(unused_import)
-                    error_message, node = obj['error'], obj['node']
-                    yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
+            if local_import and all(unused_import not in str(use) for use in self.visitor.uses):
+                obj = self.visitor.local_imports.pop(unused_import)
+                error_message, node = obj['error'], obj['node']
+                yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def unused_third_party_import(self) -> Flake8Generator:
         """TC002."""
         for name in set(self.visitor.import_names) - self.visitor.names:
             unused_import, local_import = self.visitor.import_names[name]
-            if not local_import:
-                if not any(unused_import in str(use) for use in self.visitor.uses):
-                    obj = self.visitor.remote_imports.pop(unused_import)
-                    error_message, node = obj['error'], obj['node']
-                    yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
+            if not local_import and all(unused_import not in str(use) for use in self.visitor.uses):
+                obj = self.visitor.remote_imports.pop(unused_import)
+                error_message, node = obj['error'], obj['node']
+                yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def multiple_type_checking_blocks(self) -> Flake8Generator:
         """TC003."""
