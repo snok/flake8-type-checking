@@ -380,10 +380,6 @@ class TypingOnlyImportsChecker:
 
                 use = self.visitor.uses[import_name]
 
-                # before we yield we just want to check one thing: whether the use is inside a type checking block..
-                if self.visitor._in_type_checking_block(use):
-                    return
-
                 # .. or whether there is another duplicate import inside the function scope
                 # (if the use is in a function scope)
                 if use.lineno in self.visitor.function_scopes:

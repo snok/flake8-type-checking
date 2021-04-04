@@ -2,9 +2,11 @@
 Contains special test cases that fall outside the scope of remaining test files.
 """
 import textwrap
+from unittest.mock import patch
 
-from flake8_type_checking.codes import TC001, TC002, TC100
-from tests import _get_error, mod
+from flake8_type_checking.checker import ImportVisitor
+from flake8_type_checking.codes import TC001, TC002
+from tests import REPO_ROOT, _get_error, mod
 
 
 class TestFoundBugs:
@@ -126,3 +128,19 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {"7:4 TC002: Move third-party import 'x' into a type-checking block"}
+
+
+def test_import_is_local():
+    """
+    Check that if ValueErrors are raised in _import_is_local, we bump it into the TC002 bucket.
+    """
+
+    def raise_value_error(*args, **kwargs):
+        raise ValueError('test')
+
+    visitor = ImportVisitor(REPO_ROOT)
+    assert visitor._import_is_local(mod) is True
+
+    patch('flake8_type_checking.checker.find_spec', raise_value_error).start()
+    assert visitor._import_is_local(mod) is False
+    patch.stopall()
