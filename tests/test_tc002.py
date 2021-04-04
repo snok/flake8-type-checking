@@ -159,6 +159,32 @@ examples = [
             '2:0 ' + TC002.format(module='typing.Union'),
         },
     ),
+    (
+        textwrap.dedent(
+            '''
+            from x import y
+
+            if TYPE_CHECKING:
+                _type = x
+            else:
+                _type = y
+            '''
+        ),
+        set(),
+    ),
+    (
+        textwrap.dedent(
+            '''
+            from x import y
+
+            if TYPE_CHECKING:
+                _type = x
+            elif True:
+                _type = y
+            '''
+        ),
+        set(),
+    ),
 ]
 
 

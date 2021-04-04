@@ -99,7 +99,19 @@ class ImportVisitor(ast.NodeTransformer):
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
         if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore
-            self.type_checking_blocks.append((node.lineno, node.end_lineno or node.lineno, node.col_offset))
+            # Here we want to define the line-number-range where the type-checking block exists
+            # Initially I just set the node.lineno and node.end_lineno, but it turns out that else blocks are
+            # included in this span. Because of this, we now first look for else block to help us limit the range
+            start_of_else_block = None
+            if hasattr(node, 'orelse') and node.orelse:
+                # Just set the lineno of the first element in the else block - 1
+                start_of_else_block = node.orelse[0].lineno - 1
+
+            # Define range
+            self.type_checking_blocks.append(
+                (node.lineno, start_of_else_block or node.end_lineno or node.lineno, node.col_offset)
+            )
+
         self.generic_visit(node)
         return node
 
@@ -387,8 +399,6 @@ class TypingOnlyImportsChecker:
                         self.visitor.function_scopes[use.lineno]['start'],
                         self.visitor.function_scopes[use.lineno]['end'],
                     ):
-                        print(import_name)
-                        print(self.visitor.function_scopes[i]['imports'])
                         if import_name in self.visitor.function_scopes[i]['imports']:
                             return
 
