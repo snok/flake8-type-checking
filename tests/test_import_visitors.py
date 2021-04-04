@@ -24,11 +24,11 @@ f = _get_local_imports
 local_imports = [
     # ast.Import
     (f'import {mod}', [f'{mod}'], f),
-    (f'import {mod}.constants', [f'{mod}.constants'], f),
-    (f'import {mod}.constants.TC001', [f'{mod}.constants.TC001'], f),
+    (f'import {mod}.codes', [f'{mod}.codes'], f),
+    (f'import {mod}.codes.TC001', [f'{mod}.codes.TC001'], f),
     # ast.ImportFrom
-    (f'from {mod} import constants', [f'{mod}.constants'], f),
-    (f'\nfrom {mod}.constants import TC001', [f'{mod}.constants.TC001'], f),
+    (f'from {mod} import codes', [f'{mod}.codes'], f),
+    (f'\nfrom {mod}.codes import TC001', [f'{mod}.codes.TC001'], f),
 ]
 
 f = _get_remote_imports

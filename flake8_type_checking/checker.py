@@ -5,21 +5,26 @@ import os
 from contextlib import suppress
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 
-from flake8_type_checking.constants import TC001, TC002, TC003, TC004, TC100, TC101, TC200, TC201
-
-if TYPE_CHECKING:
-    from typing import Any, List, Optional
-
-    from flake8_type_checking.types import Flake8Generator, ImportType
+from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC100, TC101, TC200, TC201
 
 possible_local_errors = ()
 with suppress(ModuleNotFoundError):
-    # noinspection PyUnresolvedReferences
     from django.core.exceptions import AppRegistryNotReady, ImproperlyConfigured
 
+    # TODO: Find a better solution for this
+    # The problem is essentially that we're triggering these errors in Django projects
+    # when running the code in _import_is_local. Perhaps user's could pass a map of which errors
+    # to handle and which values to return
     possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)  # type: ignore
+
+
+if TYPE_CHECKING:
+    from typing import Any, Generator, Optional, Union
+
+    ImportType = Union[ast.Import, ast.ImportFrom]
+    Flake8Generator = Generator[tuple[int, int, str, Any], None, None]
 
 
 class ImportVisitor(ast.NodeTransformer):
@@ -67,7 +72,7 @@ class ImportVisitor(ast.NodeTransformer):
         self.futures_annotation: Optional[bool] = None
 
         # Where the type checking block exists (line_start, line_end, col_offset)
-        self.type_checking_blocks: List[tuple[int, int, int]] = []
+        self.type_checking_blocks: list[tuple[int, int, int]] = []
 
         # Function scopes can tell us if imports that appear in type-checking blocks
         # are repeated inside a function. This prevents false TC004 positives.

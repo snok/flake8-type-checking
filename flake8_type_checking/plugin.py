@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
@@ -8,8 +9,6 @@ from flake8_type_checking.checker import TypingOnlyImportsChecker
 if TYPE_CHECKING:
     from ast import Module
     from typing import Generator
-
-import sys
 
 if sys.version_info >= (3, 8):
     from importlib.metadata import version
@@ -40,15 +39,14 @@ class Plugin:
                 yield e
 
     def should_warn(self, code: str) -> bool:
-        """Returns `True` if we should emit a particular warning.
-        flake8 overrides default ignores when the user specifies
-        `ignore = ` in configuration.  This is problematic because it means
-        specifying anything in `ignore = ` implicitly enables all optional
-        warnings.  This function is a workaround for this behavior.
-        As documented in the README, the user is expected to explicitly select
-        the warnings.
+        """
+        Decide whether we should emit a particular warning.
 
-        Stolen from flake8-bugbear because it's good.
+        Flake8 overrides default ignores when the user specifies `ignore = ` in their configuration.
+        This is problematic because it means specifying anything in `ignore = ` implicitly enables all optional
+        warnings.
+
+        This function is a workaround for this behavior. Stolen from flake8-bugbear because it's good.
         """
         if code[2] == '0':
             # Any error in the TC0XX range is safe to include by default

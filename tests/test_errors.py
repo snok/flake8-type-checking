@@ -3,7 +3,7 @@ Contains special test cases that fall outside the scope of remaining test files.
 """
 import textwrap
 
-from flake8_type_checking.constants import TC001, TC002, TC004, TC100
+from flake8_type_checking.codes import TC001, TC002, TC100
 from tests import _get_error, mod
 
 
