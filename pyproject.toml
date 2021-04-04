@@ -2,9 +2,8 @@
 name = 'flake8-type-checking'
 version = '0.1.5'
 description = 'A flake8 plugin for managing type-checking imports & forward references'
-homepage = 'https://github.com/sondrelg/flake8-type-checking'
+homepage = 'https://github.com/snok'
 repository = 'https://github.com/sondrelg/flake8-type-checking'
-documentation = 'https://github.com/sondrelg/flake8-type-checking'
 authors = ['Sondre Lillebø Gundersen <sondrelg@live.no>']
 license = 'BSD-2-Clause'
 readme = 'README.md'
@@ -27,9 +26,7 @@ classifiers = [
 ]
 
 [tool.poetry.urls]
-"Issue Tracker" = "https://github.com/sondrelg/flake8-type-checking/issues"
 "Changelog" = "https://github.com/sondrelg/flake8-type-checking/blob/master/CHANGELOG.md"
-"Organization" = "https://github.com/snok"
 
 [tool.poetry.dependencies]
 python = '^3.7'
