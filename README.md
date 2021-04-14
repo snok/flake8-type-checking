@@ -61,6 +61,8 @@ max-complexity = 12
 ...
 ignore = E501
 select = C,E,F,W,..., TC, TC2  # or TC1
+# alternatively:
+enable-extensions = TC, TC2  # or TC1
 ```
 
 ## Rationale
