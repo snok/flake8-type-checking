@@ -271,7 +271,7 @@ class ImportVisitor(ast.NodeTransformer):
     def _set_child_node_attribute(self, node: Any, attr: str, val: Any) -> Any:
         # Set the parent attribute on the current node children
         for key, value in node.__dict__.items():
-            if type(value) not in [int, str, list, bool, None]:
+            if type(value) not in [int, str, list, bool] and value is not None:
                 setattr(node.__dict__[key], attr, val)
         return node
 
