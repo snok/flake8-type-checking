@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.7", "3.8", "3.9" ]
+        python-version: [ "3.7", "3.8", "3.9", "3.10.0-beta.1" ]
         flake8-version: [ "1", "2", "3" ]
     steps:
       - name: Check out repository
@@ -45,9 +45,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install poetry
-        uses: snok/install-poetry@v1.1.2
+        uses: snok/install-poetry@v1.1.6
         with:
-          virtualenvs-create: true
+          version: 1.2.0a1
           virtualenvs-in-project: true
       - name: Load cached venv
         uses: actions/cache@v2
