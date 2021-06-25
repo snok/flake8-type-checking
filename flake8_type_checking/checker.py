@@ -19,7 +19,6 @@ with suppress(ModuleNotFoundError):
     # to handle and which values to return
     possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)  # type: ignore
 
-
 if TYPE_CHECKING:
     from typing import Any, Generator, Optional, Union
 
@@ -268,7 +267,8 @@ class ImportVisitor(ast.NodeTransformer):
         elif isinstance(node, ast.BinOp):
             return
 
-    def _set_child_node_attribute(self, node: Any, attr: str, val: Any) -> Any:
+    @staticmethod
+    def _set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
         # Set the parent attribute on the current node children
         for key, value in node.__dict__.items():
             if type(value) not in [int, str, list, bool] and value is not None:
@@ -298,7 +298,7 @@ class ImportVisitor(ast.NodeTransformer):
         if getattr(node, 'value', None):
             self.generic_visit(node.value)  # type: ignore
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+    def visit_FunctionDef(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
         """Remove and map function arguments and returns."""
         # Map annotations
         for path in [node.args.args, node.args.kwonlyargs]:
@@ -330,6 +330,10 @@ class ImportVisitor(ast.NodeTransformer):
             self.function_scopes[i]['end'] = node.end_lineno + 1  # type: ignore
 
         self.generic_visit(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        self.visit_FunctionDef(node)
 
 
 class TypingOnlyImportsChecker:
