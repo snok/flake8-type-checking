@@ -66,7 +66,10 @@ class Plugin:
             return False
 
         for i in range(3, len(code) + 1):
-            if code[:i] in self.options.select:
+            if (
+                code[:i]
+                in self.options.select + list(self.options.extended_default_select) + self.options.enable_extensions
+            ):
                 # Warn if opted-in
                 return True
 

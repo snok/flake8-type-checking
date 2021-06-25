@@ -15,6 +15,8 @@ def _get_error(example, error_code_filter: Optional[str] = None):
     if error_code_filter:
         mock_options = Mock()
         mock_options.select = [error_code_filter]
+        mock_options.extended_default_select = []
+        mock_options.enable_extensions = []
         plugin = Plugin(ast.parse(example), options=mock_options)
     else:
         plugin = Plugin(ast.parse(example))
