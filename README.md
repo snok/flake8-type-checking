@@ -52,7 +52,7 @@ so please only choose one.
 | TC200 | Annotation needs to be made into a string literal |
 | TC201 | Annotation does not need to be a string literal |
 
-To one of the ranges, just specify the code in your flake8 config:
+To select one of the ranges, just specify the code in your flake8 config:
 
 ```
 [flake8]
