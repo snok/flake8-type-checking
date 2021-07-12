@@ -37,7 +37,7 @@ using [PEP 484](https://www.python.org/dev/peps/pep-0484) or [PEP 563](https://w
 These code ranges are opt-in. They represent two different ways of solving the same problem,
 so please only choose one.
 
-`TCH100` and `TCH101` manage forward references by taking advantage of
+`TC100` and `TC101` manage forward references by taking advantage of
 [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
 
 | Code   | Description                                         |
@@ -45,7 +45,7 @@ so please only choose one.
 | TC100 | Add 'from \_\_future\_\_ import annotations' import |
 | TC101 | Annotation does not need to be a string literal |
 
-`TCH200` and `TCH201` manage forward references using [string literals](https://www.python.org/dev/peps/pep-0484/#forward-references).
+`TC200` and `TC201` manage forward references using [string literals](https://www.python.org/dev/peps/pep-0484/#forward-references).
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
@@ -149,7 +149,7 @@ class A(Model):
 ```
 `models/b.py`
 ```python
-# TCH1
+# TC1
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
