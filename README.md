@@ -8,7 +8,7 @@
     <img src="https://github.com/sondrelg/flake8-type-checking/actions/workflows/testing.yml/badge.svg" alt="Test status">
 </a>
 <a href="https://pypi.org/project/flake8-type-checking/">
-    <img src="https://img.shields.io/badge/python-3.7%2B-blue" alt="Supported Python versions">
+    <img src="https://img.shields.io/badge/python-3.8%2B-blue" alt="Supported Python versions">
 </a>
 <a href="http://mypy-lang.org/">
     <img src="http://www.mypy-lang.org/static/mypy_badge.svg" alt="Checked with mypy">
@@ -179,8 +179,8 @@ class B(Model):
 You can run this flake8 plugin as a [pre-commit](https://github.com/pre-commit/pre-commit) hook:
 
 ```yaml
-- repo: https://gitlab.com/pycqa/flake8
-  rev: 3.7.8
+- repo: https://github.com/pycqa/flake8
+  rev: 3.9.2
   hooks:
     - id: flake8
       additional_dependencies: [ flake8-type-checking ]
@@ -190,3 +190,4 @@ You can run this flake8 plugin as a [pre-commit](https://github.com/pre-commit/p
 
 Contributions are always welcome, and leaving a ⭐️
 is always useful as it helps raise the profile of the repo 🚀
+d
