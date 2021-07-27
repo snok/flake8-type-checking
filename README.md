@@ -185,9 +185,3 @@ You can run this flake8 plugin as a [pre-commit](https://github.com/pre-commit/p
     - id: flake8
       additional_dependencies: [ flake8-type-checking ]
 ```
-
-## Supporting the project
-
-Contributions are always welcome, and leaving a ⭐️
-is always useful as it helps raise the profile of the repo 🚀
-d
