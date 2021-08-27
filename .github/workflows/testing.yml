@@ -10,21 +10,7 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.cache/pre-commit
-          key: ${{ runner.os }}-pip-2
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
-      - run: python -m pip install pre-commit
-      - run: pre-commit run --all-files
+      - uses: snok/.github/workflows/linting@main
   test:
     # ---------------------------------------------------
     #    Documentation and examples can be found at
@@ -35,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.7", "3.8", "3.9", "3.10.0-beta.1" ]
+        python-version: [ "3.7", "3.8", "3.9", "3.10.0-rc.1" ]
         flake8-version: [ "1", "2", "3" ]
     steps:
       - name: Check out repository
