@@ -1,4 +1,4 @@
-name: publish package on pypi
+name: Publish package
 
 on:
   release:
@@ -6,30 +6,17 @@ on:
 
 jobs:
   build-and-publish-test:
-    name: Build and publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: snok/.github/workflows/publish@main
         with:
-          python-version: 3.9
-      - uses: snok/install-poetry@v1.1.2
-      - name: Publish to test-pypi
-        run: |
-          poetry config repositories.test https://test.pypi.org/legacy/
-          poetry config pypi-token.test ${{ secrets.TEST_PYPI_TOKEN }}
-          poetry publish --build --no-interaction --repository test
+          overwrite-repository: true
+          repository-url: https://test.pypi.org/legacy/
+          token: ${{ secrets.TEST_PYPI_TOKEN }}
   build-and-publish:
     needs: build-and-publish-test
-    name: Build and publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: snok/.github/workflows/publish@main
         with:
-          python-version: 3.9
-      - uses: snok/install-poetry@v1.1.2
-      - name: Publish to pypi
-        run: |
-          poetry config pypi-token.pypi ${{ secrets.PYPI_TOKEN }}
-          poetry publish --build --no-interaction
+          token: ${{ secrets.PYPI_TOKEN }}
