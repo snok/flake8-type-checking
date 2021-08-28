@@ -31,6 +31,7 @@ using [PEP 484](https://www.python.org/dev/peps/pep-0484) or [PEP 563](https://w
 | TC002 | Move third-party import into a type-checking block |
 | TC003 | Found multiple type checking blocks |
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
+| TC005 | Empty type-checking block |
 
 ### Forward reference codes
 
