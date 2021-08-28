@@ -228,7 +228,7 @@ class ImportVisitor(ast.NodeTransformer):
         if self._in_type_checking_block(node):
             return node
         if hasattr(node, ATTRIBUTE_PROPERTY):
-            self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node  # type: ignore
+            self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node
         self.uses[node.id] = node
         return node
 
@@ -286,7 +286,7 @@ class ImportVisitor(ast.NodeTransformer):
         # This lets us read attribute names for `a.b.c` as `a.b.c` when we're treating the
         # `c` node, which is important to match attributes to imports
         with suppress(Exception):
-            parent = getattr(node, ATTRIBUTE_PROPERTY)  # type: ignore
+            parent = getattr(node, ATTRIBUTE_PROPERTY)
             node.attr = f'{node.attr}.{parent}'
         node = self._set_child_node_attribute(node, ATTRIBUTE_PROPERTY, node.attr)
         self.generic_visit(node)
