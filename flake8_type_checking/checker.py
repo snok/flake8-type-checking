@@ -7,7 +7,7 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC100, TC101, TC200, TC201
+from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
 
 possible_local_errors = ()
 with suppress(ModuleNotFoundError):
@@ -73,6 +73,7 @@ class ImportVisitor(ast.NodeTransformer):
         self.futures_annotation: Optional[bool] = None
 
         # Where the type checking block exists (line_start, line_end, col_offset)
+        self.empty_type_checking_blocks: list[tuple[int, int, int]] = []
         self.type_checking_blocks: list[tuple[int, int, int]] = []
 
         # Function scopes can tell us if imports that appear in type-checking blocks
@@ -90,11 +91,22 @@ class ImportVisitor(ast.NodeTransformer):
         """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
         if node.col_offset == 0:
             return False
-        if not self.type_checking_blocks:
+        if not self.type_checking_blocks and not self.empty_type_checking_blocks:
             return False
+
+        # The list of empty type checking blocks is maintained for TC005
+        # If we find an import within one of these, we simply move it into self.type_checking_blocks
+        for index, empty_type_checking_block in enumerate(list(self.empty_type_checking_blocks)):
+            if empty_type_checking_block[0] <= node.lineno <= empty_type_checking_block[1]:
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    self.type_checking_blocks.append(empty_type_checking_block)
+                    self.empty_type_checking_blocks.pop(index)
+                else:
+                    return True
+
         return any(
             type_checking_block[0] <= node.lineno <= type_checking_block[1]
-            for type_checking_block in self.type_checking_blocks
+            for type_checking_block in self.type_checking_blocks + self.empty_type_checking_blocks
         )
 
     def visit_If(self, node: ast.If) -> Any:
@@ -108,10 +120,16 @@ class ImportVisitor(ast.NodeTransformer):
                 # Just set the lineno of the first element in the else block - 1
                 start_of_else_block = node.orelse[0].lineno - 1
 
-            # Define range
-            self.type_checking_blocks.append(
-                (node.lineno, start_of_else_block or node.end_lineno or node.lineno, node.col_offset)
-            )
+            # empty_type_checking_blocks' items are moved to self.type_checking_blocks
+            # as soon as we discover an import within one of the "empty" blocks
+            if (node.end_lineno or node.lineno) - node.lineno == 1:
+                self.empty_type_checking_blocks.append(
+                    (node.lineno, start_of_else_block or node.end_lineno or node.lineno, node.col_offset)
+                )
+            else:
+                self.type_checking_blocks.append(
+                    (node.lineno, start_of_else_block or node.end_lineno or node.lineno, node.col_offset)
+                )
 
         self.generic_visit(node)
         return node
@@ -360,6 +378,8 @@ class TypingOnlyImportsChecker:
             self.multiple_type_checking_blocks,
             # TC004
             self.used_type_checking_imports,
+            # TC005
+            self.empty_type_checking_blocks,
             # TC100
             self.missing_futures_import,
             # TC101
@@ -413,6 +433,11 @@ class TypingOnlyImportsChecker:
                             return
 
                 yield _import.lineno, 0, TC004.format(module=import_name), None
+
+    def empty_type_checking_blocks(self) -> Flake8Generator:
+        """TC005."""
+        for empty_type_checking_block in self.visitor.empty_type_checking_blocks:
+            yield empty_type_checking_block[0], 0, TC005, None
 
     def missing_futures_import(self) -> Flake8Generator:
         """TC100."""
