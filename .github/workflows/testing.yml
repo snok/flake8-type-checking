@@ -11,18 +11,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: snok/.github/workflows/linting@main
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-matrix: ${{ steps.export-python-versions.outputs.python-versions }}
+    steps:
+      # Set cache key based on week number, so cache expires once a week
+      - id: set-cache-key
+        run: |
+          week_number=$(date +%V)
+          echo "::set-output name=cache-key::$week_number"
+
+      # Try to load cached versions by week number
+      - name: Load cached versions
+        uses: actions/cache@v2
+        id: cache-versions
+        with:
+          path: .python-versions-file
+          key: ${{ steps.set-cache-key.outputs.cache-key }}
+
+      # Fetch new versions if no cache was found
+      # TODO: Update to v1 when v1 is released
+      - uses: snok/latest-python-versions@v0.1.1
+        if: steps.cache-versions.outputs.cache-hit != 'true'
+        id: get-python-versions
+        with:
+          min-version: 3.8
+          include-prereleases: true
+
+      # Save results to file if no cache was found
+      - name: Create new versions file
+        run: echo "${{ steps.get-python-versions.outputs.latest-python-versions }}" > .python-versions-file
+        if: steps.cache-versions.outputs.cache-hit != 'true'
+
+      # Load file contents and export values
+      - name: Export versions file values
+        id: export-python-versions
+        run: |
+          versions=$(cat .python-versions-file)
+          echo "::set-output name=python-versions::$versions"
   test:
-    # ---------------------------------------------------
-    #    Documentation and examples can be found at
-    #      https://github.com/snok/install-poetry
-    # ---------------------------------------------------
-    needs: linting
+    needs: [linting, get-python-versions]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.8", "3.9", "3.10.0-rc.1" ]
-        flake8-version: [ "1", "2", "3" ]
+        python-version: ${{fromJson(needs.get-python-versions.outputs.python-matrix)}}
+        flake8-version: [ "3" ]
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
