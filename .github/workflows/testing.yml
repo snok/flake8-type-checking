@@ -35,11 +35,10 @@ jobs:
         with:
           # This path assumes the workflow is run on an ubuntu runner
           path: ~/.local
-          key: key-0
+          key: key-1
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@v1.2.0-rc1
         with:
-          version: 1.2.0a2
           virtualenvs-in-project: true
       - name: Load cached venv
         uses: actions/cache@v2
