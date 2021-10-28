@@ -1,6 +1,6 @@
 [tool.poetry]
 name = 'flake8-type-checking'
-version = '1.0.3'
+version = '1.0.4'
 description = 'A flake8 plugin for managing type-checking imports & forward references'
 homepage = 'https://github.com/snok'
 repository = 'https://github.com/sondrelg/flake8-type-checking'
@@ -28,7 +28,7 @@ classifiers = [
 "Changelog" = "https://github.com/sondrelg/flake8-type-checking/blob/master/CHANGELOG.md"
 
 [tool.poetry.dependencies]
-python = '^3.7'
+python = '^3.8'
 flake8 = '*'
 
 [tool.poetry.dev-dependencies]
