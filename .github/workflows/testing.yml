@@ -10,56 +10,69 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-      - uses: snok/.github/workflows/linting@main
-
-  get-python-versions:
-    runs-on: ubuntu-latest
-    outputs:
-      python-matrix: ${{ steps.get-python-versions-action.outputs.latest-python-versions }}
-    steps:
-    - uses: snok/latest-python-versions@v1
-      id: get-python-versions-action
-      with:
-        min-version: 3.8
-        include-prereleases: true
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+      - uses: actions/cache@v2
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-0  # increment to reset
+      - run: |
+          python -m venv .venv --upgrade-deps
+          source .venv/bin/activate
+          pip install pre-commit
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+      - uses: actions/cache@v2
+        id: pre-commit-cache
+        with:
+          path: ~/.cache/pre-commit
+          key: key-0
+      - run: |
+          source .venv/bin/activate
+          pre-commit run --all-files
 
   test:
-    needs: [linting, get-python-versions]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-matrix) }}
+        python-version: [ "3.8", "3.9", "3.10" ]
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-      - name: Set up python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Load cached Poetry installation
-        uses: actions/cache@v2
+          python-version: "${{ matrix.python-version }}"
+      - uses: actions/cache@v2
+        id: poetry-cache
         with:
-          # This path assumes the workflow is run on an ubuntu runner
           path: ~/.local
-          key: key-1
+          key: key-5
       - name: Install Poetry
-        uses: snok/install-poetry@v1.2.0-rc1
+        uses: snok/install-poetry@v1
         with:
-          virtualenvs-in-project: true
-      - name: Load cached venv
-        uses: actions/cache@v2
+          virtualenvs-create: false
+          version: 1.2.0a2
+      - uses: actions/cache@v2
         id: cache-venv
         with:
           path: .venv
-          key: ${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-4
-      - name: Install dependencies
-        run: poetry install --no-interaction --no-root
+          key: ${{ hashFiles('**/poetry.lock') }}-8
+      - run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -U pip wheel
+          poetry install --no-interaction --no-root
         if: steps.cache-venv.outputs.cache-hit != 'true'
-      - name: Install package
-        run: poetry install --no-interaction
       - name: Run tests
         run: |
           source .venv/bin/activate
-          poetry run pytest --cov=flake8_type_checking --verbose --assert=plain
+          poetry run pytest --cov=flake8_type_checking --cov-report=xml
           poetry run coverage report
+      - uses: codecov/codecov-action@v2
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.python-version == '3.10'
