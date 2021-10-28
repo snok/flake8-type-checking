@@ -278,7 +278,7 @@ class ImportVisitor(ast.NodeTransformer):
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
                 self._add_annotation(n)
-        elif node is None:
+        elif node is None:  # noqa: SIM114
             return
         elif isinstance(node, ast.Attribute):
             self._add_annotation(node.value)
