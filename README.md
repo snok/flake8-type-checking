@@ -4,7 +4,7 @@
 <a href="https://codecov.io/gh/sondrelg/flake8-type-checking">
     <img src="https://codecov.io/gh/sondrelg/flake8-type-checking/branch/master/graph/badge.svg" alt="Code coverage">
 </a>
-<a href="https://pypi.org/project/flake8-type-checking/">
+<a href="https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml">
     <img src="https://github.com/sondrelg/flake8-type-checking/actions/workflows/testing.yml/badge.svg" alt="Test status">
 </a>
 <a href="https://pypi.org/project/flake8-type-checking/">
