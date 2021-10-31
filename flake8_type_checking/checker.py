@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 import os
+import sys
+from ast import Index
 from contextlib import suppress
 from importlib.util import find_spec
 from pathlib import Path
@@ -20,12 +22,14 @@ with suppress(ModuleNotFoundError):
     possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)  # type: ignore
 
 if TYPE_CHECKING:
-    from typing import Any, Generator, Optional, Union
+    from typing import Any, Generator, Optional, Tuple, Union
 
     ImportType = Union[ast.Import, ast.ImportFrom]
-    Flake8Generator = Generator[tuple[int, int, str, Any], None, None]
+    Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
 
 ATTRIBUTE_PROPERTY = 'flake8-type-checking_parent'
+
+py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 
 
 class ImportVisitor(ast.NodeTransformer):
@@ -262,6 +266,8 @@ class ImportVisitor(ast.NodeTransformer):
     def _add_annotation(self, node: ast.AST) -> None:
         if isinstance(node, ast.Ellipsis):
             return
+        if py38 and isinstance(node, Index):
+            return self._add_annotation(node.value)  # type: ignore[attr-defined]
         if isinstance(node, ast.Constant):
             if node.value is None:
                 return
