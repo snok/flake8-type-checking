@@ -118,22 +118,22 @@ class B(Model):
 Will result in these errors
 
 ```shell
->> a.py: TC002: Move third-party import 'models.b.B' into a type-checking block
->> b.py: TC002: Move third-party import 'models.a.A' into a type-checking block
+>> a.py: TC002 Move third-party import 'models.b.B' into a type-checking block
+>> b.py: TC002 Move third-party import 'models.a.A' into a type-checking block
 ```
 
 and consequently trigger these errors if imports are purely moved into type-checking block, without proper forward reference handling
 
 ```shell
->> a.py: TC100: Add 'from __future__ import annotations' import
->> b.py: TC100: Add 'from __future__ import annotations' import
+>> a.py: TC100 Add 'from __future__ import annotations' import
+>> b.py: TC100 Add 'from __future__ import annotations' import
 ```
 
 or
 
 ```shell
->> a.py: TC200: Annotation 'B' needs to be made into a string literal
->> b.py: TC200: Annotation 'A' needs to be made into a string literal
+>> a.py: TC200 Annotation 'B' needs to be made into a string literal
+>> b.py: TC200 Annotation 'A' needs to be made into a string literal
 ```
 
 **Good code**

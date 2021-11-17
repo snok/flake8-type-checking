@@ -127,7 +127,7 @@ class TestFoundBugs:
         var: x
         """
         )
-        assert _get_error(example) == {"7:4 TC002: Move third-party import 'x' into a type-checking block"}
+        assert _get_error(example) == {"7:4 TC002 Move third-party import 'x' into a type-checking block"}
 
 
 def test_import_is_local():
