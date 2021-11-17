@@ -66,6 +66,13 @@ select = C,E,F,W,..., TC, TC2  # or TC1
 enable-extensions = TC, TC2  # or TC1
 ```
 
+## Configuration
+
+The plugin currently only has one setting:
+
+- `type-checking-exempt-modules`: Specify a list of modules to ignore TC001/TC002 errors from.
+Could be useful if you, e.g., want to handle big libraries, but prefer not to handle `typing` imports.
+
 ## Rationale
 
 Good type hinting requires a lot of imports, which can increase the risk of
