@@ -3,6 +3,7 @@ The behavior of all TC000 errors should be opt-out.
 
 The behavior of TC100 and TC200 errors should be opt-in.
 """
+import os
 import re
 import sys
 import textwrap
@@ -32,7 +33,7 @@ def test_tc_is_enabled_with_config(flake8dir):
     )
     result = flake8dir.run_flake8()
     assert result.out_lines == [
-        "./example.py:1:1: TC002: Move third-party import 'typing.Union' into a type-checking block"
+        f".{os.sep}example.py:1:1: TC002: Move third-party import 'typing.Union' into a type-checking block"
     ]
 
 
@@ -81,7 +82,7 @@ def test_tc1_works_when_opted_in(flake8dir):
     '''
     )
     result = flake8dir.run_flake8()
-    assert result.out_lines == ["./example.py:1:1: TC100: Add 'from __future__ import annotations' import"]
+    assert result.out_lines == [f".{os.sep}example.py:1:1: TC100: Add 'from __future__ import annotations' import"]
 
 
 def test_tc2_works_when_opted_in(flake8dir):
@@ -104,4 +105,6 @@ def test_tc2_works_when_opted_in(flake8dir):
     '''
     )
     result = flake8dir.run_flake8()
-    assert result.out_lines == ["./example.py:6:4: TC200: Annotation 'Union' needs to be made into a string literal"]
+    assert result.out_lines == [
+        f".{os.sep}example.py:6:4: TC200: Annotation 'Union' needs to be made into a string literal"
+    ]
