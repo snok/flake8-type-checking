@@ -22,6 +22,7 @@ with suppress(ModuleNotFoundError):
     possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)  # type: ignore
 
 if TYPE_CHECKING:
+    from argparse import Namespace
     from typing import Any, Generator, Optional, Tuple, Union
 
     ImportType = Union[ast.Import, ast.ImportFrom]
@@ -45,11 +46,12 @@ class ImportVisitor(ast.NodeTransformer):
         'unwrapped_annotations',
     )
 
-    def __init__(self, cwd: Path) -> None:
+    def __init__(self, cwd: Path, exempt_modules: Optional[list] = None) -> None:
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         # Import patterns we want to avoid mapping
         self.exempt_imports: list[str] = ['*', 'TYPE_CHECKING']
+        self.exempt_modules: list[str] = exempt_modules or []
 
         # All imports in each bucket
         self.local_imports: dict[str, dict] = {}
@@ -194,7 +196,15 @@ class ImportVisitor(ast.NodeTransformer):
                 self.type_checking_block_imports.add((node, name))
             return None
 
+        # 1/2 Skip checking the import if the module is passlisted.
+        if isinstance(node, ast.ImportFrom) and node.module in self.exempt_modules:
+            return
+
         for name_node in node.names:
+            # 2/2 Skip checking the import if the module is passlisted
+            if isinstance(node, ast.Import) and name_node.name in self.exempt_modules:
+                return
+
             # Check for `from __futures__ import annotations`
             if self.futures_annotation is None:
                 if getattr(node, 'module', '') == '__future__' and any(
@@ -370,9 +380,13 @@ class TypingOnlyImportsChecker:
         'future_option_enabled',
     ]
 
-    def __init__(self, node: ast.Module) -> None:
+    def __init__(self, node: ast.Module, options: Optional[Namespace]) -> None:
         self.cwd = Path(os.getcwd())
-        self.visitor = ImportVisitor(self.cwd)
+        if options and hasattr(options, 'type_checking_exempt_modules'):
+            exempt_modules = options.type_checking_exempt_modules
+        else:
+            exempt_modules = []
+        self.visitor = ImportVisitor(self.cwd, exempt_modules=exempt_modules)
         self.visitor.visit(node)
 
         self.generators = [

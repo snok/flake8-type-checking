@@ -10,13 +10,16 @@ REPO_ROOT = Path(os.getcwd()).parent
 mod = 'flake8_type_checking'
 
 
-def _get_error(example, error_code_filter: Optional[str] = None):
+def _get_error(example, error_code_filter: Optional[str] = None, **kwargs):
     os.chdir(REPO_ROOT)
     if error_code_filter:
         mock_options = Mock()
         mock_options.select = [error_code_filter]
         mock_options.extended_default_select = []
         mock_options.enable_extensions = []
+        mock_options.type_checking_exempt_modules = []
+        for k, v in kwargs.items():
+            setattr(mock_options, k, v)
         plugin = Plugin(ast.parse(example), options=mock_options)
     else:
         plugin = Plugin(ast.parse(example))
