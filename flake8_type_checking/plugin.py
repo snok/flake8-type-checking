@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from ast import Module
     from typing import Generator, Optional
 
+    from flake8.options.manager import OptionManager
+
 if sys.version_info >= (3, 8):
     from importlib.metadata import version
 else:
@@ -32,9 +34,20 @@ class Plugin:
         self._tree = tree
         self.options = options
 
+    @classmethod
+    def add_options(cls, option_manager: OptionManager) -> None:
+        """Parse plugin options."""
+        option_manager.add_option(
+            '--type-checking-exempt-modules',
+            comma_separated_list=True,
+            parse_from_config=True,
+            default=[],
+            help='Skip TC001 and TC002 checks for specified modules or libraries.',
+        )
+
     def run(self) -> Generator:
         """Run flake8 plugin and return any relevant errors."""
-        visitor = TypingOnlyImportsChecker(self._tree)
+        visitor = TypingOnlyImportsChecker(self._tree, self.options)
         for e in visitor.errors:
             if self.should_warn(e[2].split(':')[0]):
                 yield e
