@@ -68,6 +68,18 @@ examples = [
         ),
         set(),
     ),
+    (
+        textwrap.dedent(
+            """
+    from typing import TYPE_CHECKING
+    from typing import List
+
+    if TYPE_CHECKING:
+        x: List
+    """
+        ),
+        set(),
+    ),
 ]
 
 
