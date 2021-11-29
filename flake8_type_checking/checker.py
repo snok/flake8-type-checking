@@ -100,16 +100,6 @@ class ImportVisitor(ast.NodeTransformer):
         if not self.type_checking_blocks and not self.empty_type_checking_blocks:
             return False
 
-        # The list of empty type checking blocks is maintained for TC005
-        # If we find an import within one of these, we simply move it into self.type_checking_blocks
-        for index, empty_type_checking_block in enumerate(list(self.empty_type_checking_blocks)):
-            if empty_type_checking_block[0] <= node.lineno <= empty_type_checking_block[1]:
-                if isinstance(node, (ast.Import, ast.ImportFrom)):
-                    self.type_checking_blocks.append(empty_type_checking_block)
-                    self.empty_type_checking_blocks.pop(index)
-                else:
-                    return True
-
         return any(
             type_checking_block[0] <= node.lineno <= type_checking_block[1]
             for type_checking_block in self.type_checking_blocks + self.empty_type_checking_blocks
@@ -126,9 +116,11 @@ class ImportVisitor(ast.NodeTransformer):
                 # Just set the lineno of the first element in the else block - 1
                 start_of_else_block = node.orelse[0].lineno - 1
 
-            # empty_type_checking_blocks' items are moved to self.type_checking_blocks
-            # as soon as we discover an import within one of the "empty" blocks
-            if (node.end_lineno or node.lineno) - node.lineno == 1:
+            # Type checking blocks that only contain 'pass' are appended to an empty-type-checking-block list
+            # and flagged with TC005 errors.
+            if ((node.end_lineno or node.lineno) - node.lineno == 1) and (
+                len(node.body) == 1 and isinstance(node.body[0], ast.Pass)
+            ):
                 self.empty_type_checking_blocks.append(
                     (node.lineno, start_of_else_block or node.end_lineno or node.lineno, node.col_offset)
                 )
