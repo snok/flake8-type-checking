@@ -9,9 +9,11 @@ from flake8_type_checking.checker import TypingOnlyImportsChecker
 if TYPE_CHECKING:
     from argparse import Namespace
     from ast import Module
-    from typing import Generator, Optional
+    from typing import Optional
 
     from flake8.options.manager import OptionManager
+
+    from flake8_type_checking.checker import Flake8Generator
 
 if sys.version_info >= (3, 8):
     from importlib.metadata import version
@@ -45,7 +47,7 @@ class Plugin:
             help='Skip TC001 and TC002 checks for specified modules or libraries.',
         )
 
-    def run(self) -> Generator:
+    def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""
         visitor = TypingOnlyImportsChecker(self._tree, self.options)
         for e in visitor.errors:
