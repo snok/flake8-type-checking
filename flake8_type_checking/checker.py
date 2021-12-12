@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
 
-possible_local_errors = ()
+possible_local_errors: tuple[Any, ...] = ()
 with suppress(ModuleNotFoundError):
     from django.core.exceptions import AppRegistryNotReady, ImproperlyConfigured
 
@@ -19,11 +19,13 @@ with suppress(ModuleNotFoundError):
     # The problem is essentially that we're triggering these errors in Django projects
     # when running the code in _import_is_local. Perhaps user's could pass a map of which errors
     # to handle and which values to return
-    possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)  # type: ignore
+    possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)
 
 if TYPE_CHECKING:
     from argparse import Namespace
     from typing import Any, Generator, Optional, Tuple, Union
+
+    from flake8_type_checking.types import ErrorDict, FunctionRangesDict, FunctionScopeImportsDict
 
     ImportType = Union[ast.Import, ast.ImportFrom]
     Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
@@ -46,7 +48,7 @@ class ImportVisitor(ast.NodeTransformer):
         'unwrapped_annotations',
     )
 
-    def __init__(self, cwd: Path, exempt_modules: Optional[list] = None) -> None:
+    def __init__(self, cwd: Path, exempt_modules: Optional[list[str]] = None) -> None:
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         # Import patterns we want to avoid mapping
@@ -54,8 +56,8 @@ class ImportVisitor(ast.NodeTransformer):
         self.exempt_modules: list[str] = exempt_modules or []
 
         # All imports in each bucket
-        self.local_imports: dict[str, dict] = {}
-        self.remote_imports: dict[str, dict] = {}
+        self.local_imports: dict[str, ErrorDict] = {}
+        self.remote_imports: dict[str, ErrorDict] = {}
 
         # Map of import name to verbose import name and bool indicating whether it's a local or remote import
         self.import_names: dict[str, tuple[str, bool]] = {}
@@ -84,7 +86,8 @@ class ImportVisitor(ast.NodeTransformer):
 
         # Function scopes can tell us if imports that appear in type-checking blocks
         # are repeated inside a function. This prevents false TC004 positives.
-        self.function_scopes: dict[int, dict] = {}
+        self.function_scope_imports: dict[int, FunctionScopeImportsDict] = {}
+        self.function_ranges: dict[int, FunctionRangesDict] = {}
 
     @property
     def names(self) -> set[str]:
@@ -107,7 +110,7 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
-        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore
+        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore[attr-defined]
             # Here we want to define the line-number-range where the type-checking block exists
             # Initially I just set the node.lineno and node.end_lineno, but it turns out that else blocks are
             # included in this span. Because of this, we now first look for else block to help us limit the range
@@ -227,9 +230,9 @@ class ImportVisitor(ast.NodeTransformer):
                     self.remote_imports[import_name] = {'error': TC002, 'node': node}
                     self.import_names[name] = import_name, False
 
-                if node.lineno not in self.function_scopes:
-                    self.function_scopes[node.lineno] = {'imports': []}
-                self.function_scopes[node.lineno]['imports'].append(name)
+                if node.lineno not in self.function_scope_imports:
+                    self.function_scope_imports[node.lineno] = {'imports': []}
+                self.function_scope_imports[node.lineno]['imports'].append(name)
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
@@ -275,9 +278,9 @@ class ImportVisitor(ast.NodeTransformer):
                 return
             self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
         elif isinstance(node, ast.Subscript):
-            if hasattr(node.value, 'id') and node.value.id == 'Literal':  # type: ignore
+            if hasattr(node.value, 'id') and node.value.id == 'Literal':  # type: ignore[attr-defined]
                 # Type hinting like `x: Literal['one', 'two', 'three']`
-                # creates false TCHX01 positives unless excluded
+                # creates false positives unless excluded
                 return
             self._add_annotation(node.value)
             self._add_annotation(node.slice)
@@ -322,7 +325,7 @@ class ImportVisitor(ast.NodeTransformer):
         """Remove all annotation assignments."""
         self._add_annotation(node.annotation)
         if getattr(node, 'value', None):
-            self.generic_visit(node.value)  # type: ignore
+            self.generic_visit(node.value)  # type: ignore[arg-type]
 
     def visit_FunctionDef(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
         """Remove and map function arguments and returns."""
@@ -331,29 +334,25 @@ class ImportVisitor(ast.NodeTransformer):
             argument: ast.arg
             for argument in path:
                 if hasattr(argument, 'annotation'):
-                    self._add_annotation(argument.annotation)  # type: ignore
+                    self._add_annotation(argument.annotation)  # type: ignore[arg-type]
                     delattr(argument, 'annotation')
         if hasattr(node.args, 'kwarg'):
             kwarg = node.args.kwarg
             if hasattr(kwarg, 'annotation'):
-                self._add_annotation(kwarg.annotation)  # type: ignore
+                self._add_annotation(kwarg.annotation)  # type: ignore[arg-type,union-attr]
                 delattr(kwarg, 'annotation')
         if hasattr(node.args, 'vararg'):
             vararg = node.args.vararg
             if hasattr(vararg, 'annotation'):
-                self._add_annotation(vararg.annotation)  # type: ignore
+                self._add_annotation(vararg.annotation)  # type: ignore[arg-type,union-attr]
                 delattr(vararg, 'annotation')
         if hasattr(node, 'returns'):
-            self._add_annotation(node.returns)  # type: ignore
+            self._add_annotation(node.returns)  # type: ignore[arg-type,union-attr]
             delattr(node, 'returns')
 
         # Register function start and end
-        for i in range(node.lineno, node.end_lineno + 1):  # type: ignore
-            # TODO: Find a better data structure for this
-            if i not in self.function_scopes:
-                self.function_scopes[i] = {'imports': []}
-            self.function_scopes[i]['start'] = node.lineno
-            self.function_scopes[i]['end'] = node.end_lineno + 1  # type: ignore
+        for i in range(node.lineno, node.end_lineno + 1):  # type: ignore[arg-type,union-attr,operator]
+            self.function_ranges[i] = {'start': node.lineno, 'end': node.end_lineno + 1}  # type: ignore[operator]
 
         self.generic_visit(node)
 
@@ -436,12 +435,15 @@ class TypingOnlyImportsChecker:
 
                 # .. or whether there is another duplicate import inside the function scope
                 # (if the use is in a function scope)
-                if use.lineno in self.visitor.function_scopes:
+                if use.lineno in self.visitor.function_ranges:
                     for i in range(
-                        self.visitor.function_scopes[use.lineno]['start'],
-                        self.visitor.function_scopes[use.lineno]['end'],
+                        self.visitor.function_ranges[use.lineno]['start'],
+                        self.visitor.function_ranges[use.lineno]['end'],
                     ):
-                        if import_name in self.visitor.function_scopes[i]['imports']:
+                        if (
+                            i in self.visitor.function_scope_imports
+                            and import_name in self.visitor.function_scope_imports[i]['imports']
+                        ):
                             return
 
                 yield _import.lineno, 0, TC004.format(module=import_name), None

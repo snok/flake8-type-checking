@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import ast
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from unittest.mock import Mock
 
 from flake8_type_checking.plugin import Plugin
@@ -10,7 +12,7 @@ REPO_ROOT = Path(os.getcwd()).parent
 mod = 'flake8_type_checking'
 
 
-def _get_error(example, error_code_filter: Optional[str] = None, **kwargs):
+def _get_error(example: str, error_code_filter: Optional[str] = None, **kwargs: Any) -> set[str]:
     os.chdir(REPO_ROOT)
     if error_code_filter:
         mock_options = Mock()
