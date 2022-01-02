@@ -89,6 +89,12 @@ class ImportVisitor(ast.NodeTransformer):
         self.function_scope_imports: dict[int, FunctionScopeImportsDict] = {}
         self.function_ranges: dict[int, FunctionRangesDict] = {}
 
+        # __all__ assignments' strings are counted as uses
+        # to prevent TC001 "false" positives. We need a list
+        # of known assignments to check whether an ast.Constant node
+        # (a string) should be ignored or counted
+        self.__all___assignments: list[ast.Name] = []
+
     @property
     def names(self) -> set[str]:
         """Return unique names."""
@@ -106,6 +112,32 @@ class ImportVisitor(ast.NodeTransformer):
         return any(
             type_checking_block[0] <= node.lineno <= type_checking_block[1]
             for type_checking_block in self.type_checking_blocks + self.empty_type_checking_blocks
+        )
+
+    def _in___all___declaration(self, node: ast.Constant) -> bool:
+        """
+        Indicate whether a node is a sub-node of an __all__ assignment node.
+
+        We want to avoid raising TC001 errors when imports are defined
+        as strings, like this:
+
+            # __init__.py
+            from x import y
+
+            __all__ = ('y',)
+
+        This is a little tricky though. We can't just add string definitions
+        to our 'uses' map, since that will generate false positives elsewhere.
+        Instead we need this helper to tell us when to *not* ignore constants.
+        """
+        if not self.__all___assignments:
+            return False
+        if not isinstance(getattr(node, 'value', ''), str):
+            return False
+        return any(
+            (assignment.lineno is not None and node.lineno is not None and assignment.end_lineno is not None)
+            and (assignment.lineno <= node.lineno <= assignment.end_lineno)
+            for assignment in self.__all___assignments
         )
 
     def visit_If(self, node: ast.If) -> Any:
@@ -252,6 +284,8 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
+        if getattr(node, 'id', '') == '__all__':
+            self.__all___assignments.append(node)
         if self._in_type_checking_block(node):
             return node
         if hasattr(node, ATTRIBUTE_PROPERTY):
@@ -263,7 +297,8 @@ class ImportVisitor(ast.NodeTransformer):
         """Map constants."""
         if self._in_type_checking_block(node):
             return node
-        self.uses[node.value] = node
+        elif self._in___all___declaration(node):
+            self.uses[node.value] = node
         return node
 
     # -- Map annotations ------------------------------

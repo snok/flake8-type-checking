@@ -40,7 +40,7 @@ examples = [
         b = c * 2
     """
         ),
-        {'a', 2, 'b', 'c'},
+        {'a', 'b', 'c'},
     ),
     (
         textwrap.dedent(
@@ -55,7 +55,7 @@ examples = [
     b = a.y
     """
         ),
-        {'self.y', 'z', 'Test', 'self', 13, 'a', 'b', 'x', 'a.y'},
+        {'self.y', 'z', 'Test', 'self', 'a', 'b', 'x', 'a.y'},
     ),
     (
         textwrap.dedent(
