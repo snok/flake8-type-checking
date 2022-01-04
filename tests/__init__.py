@@ -17,9 +17,12 @@ def _get_error(example: str, error_code_filter: Optional[str] = None, **kwargs: 
     if error_code_filter:
         mock_options = Mock()
         mock_options.select = [error_code_filter]
+        # defaults
         mock_options.extended_default_select = []
         mock_options.enable_extensions = []
+        mock_options.type_checking_pydantic_enabled = False
         mock_options.type_checking_exempt_modules = []
+        # kwarg overrides
         for k, v in kwargs.items():
             setattr(mock_options, k, v)
         plugin = Plugin(ast.parse(example), options=mock_options)
@@ -29,4 +32,4 @@ def _get_error(example: str, error_code_filter: Optional[str] = None, **kwargs: 
     errors = {f'{line}:{col} {msg}' for line, col, msg, _ in plugin.run()}
     if error_code_filter is None:
         error_code_filter = ''
-    return {error for error in errors if error_code_filter in error}
+    return {error for error in errors if any(error_code in error for error_code in error_code_filter.split(','))}
