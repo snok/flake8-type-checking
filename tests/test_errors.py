@@ -65,7 +65,7 @@ class TestFoundBugs:
         )
         assert _get_error(example) == set()
 
-    def test_all_declaration(self):
+    def test_all_list_declaration(self):
         """
         __all__ declarations originally generated false positives.
         """
@@ -74,7 +74,27 @@ class TestFoundBugs:
         from app.models import SomeModel
         from another_app.models import AnotherModel
 
-        __all__ = ['SomeModel', 'AnotherModel']
+        __all__ = [
+            'SomeModel',
+            'AnotherModel'
+        ]
+        """
+        )
+        assert _get_error(example) == set()
+
+    def test_all_tuple_declaration(self):
+        """
+        __all__ declarations originally generated false positives.
+        """
+        example = textwrap.dedent(
+            """
+        from app.models import SomeModel
+        from another_app.models import AnotherModel
+
+        __all__ = (
+            'SomeModel',
+            'AnotherModel'
+        )
         """
         )
         assert _get_error(example) == set()

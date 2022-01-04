@@ -93,7 +93,7 @@ class ImportVisitor(ast.NodeTransformer):
         # to prevent TC001 "false" positives. We need a list
         # of known assignments to check whether an ast.Constant node
         # (a string) should be ignored or counted
-        self.__all___assignments: list[ast.Name] = []
+        self.__all___assignments: list[tuple[int, int]] = []
 
     @property
     def names(self) -> set[str]:
@@ -135,8 +135,8 @@ class ImportVisitor(ast.NodeTransformer):
         if not isinstance(getattr(node, 'value', ''), str):
             return False
         return any(
-            (assignment.lineno is not None and node.lineno is not None and assignment.end_lineno is not None)
-            and (assignment.lineno <= node.lineno <= assignment.end_lineno)
+            (assignment[0] is not None and node.lineno is not None and assignment[1] is not None)
+            and (assignment[0] <= node.lineno <= assignment[1])
             for assignment in self.__all___assignments
         )
 
@@ -284,13 +284,34 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
-        if getattr(node, 'id', '') == '__all__':
-            self.__all___assignments.append(node)
         if self._in_type_checking_block(node):
             return node
         if hasattr(node, ATTRIBUTE_PROPERTY):
             self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node
         self.uses[node.id] = node
+        return node
+
+    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+        """
+        Map __all__ assignments.
+
+        We would do this in visit_Name, except the name attribute for the assignment's
+        target's end_lineno only spans the assignment line, not the whole assignment:
+
+
+            ^^^^^^^^ this is all the ast.target for __all__ spans
+            __all__ = [  <
+                'one',   <
+                'two',   <
+                'three'  < \
+            ]            <-- This is the node.value
+
+        So we need to look at the assign element, and inspect both the target(s) and value.
+        """
+        if len(node.targets) == 1 and getattr(node.targets[0], 'id', '') == '__all__':
+            self.__all___assignments.append((node.targets[0].lineno, node.value.end_lineno or node.targets[0].lineno))
+
+        self.generic_visit(node)
         return node
 
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
