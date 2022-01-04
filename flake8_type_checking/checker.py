@@ -38,17 +38,8 @@ py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 class ImportVisitor(ast.NodeTransformer):
     """Map all imports outside of type-checking blocks."""
 
-    __slots__ = (
-        'cwd',
-        'exempt_imports',
-        'local_imports',
-        'remote_imports',
-        'import_names',
-        'uses',
-        'unwrapped_annotations',
-    )
-
-    def __init__(self, cwd: Path, exempt_modules: Optional[list[str]] = None) -> None:
+    def __init__(self, cwd: Path, pydantic_enabled: bool, exempt_modules: Optional[list[str]] = None) -> None:
+        self.pydantic_enabled = pydantic_enabled
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         # Import patterns we want to avoid mapping
@@ -278,6 +269,17 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Note down class names."""
+        if self.pydantic_enabled and node.bases:
+            # When pydantic support is enabled, treat any class variable
+            # annotation as being required during runtime.
+            # We need to do this, or users run the risk of guarding imports
+            # to resources that actually are required at runtime -- required
+            # because Pydantic unlike most libraries, evaluates annotations
+            # *at* runtime.
+            for element in node.body:
+                if isinstance(element, ast.AnnAssign):
+                    self.visit(element.annotation)
+
         self.class_names.add(node.name)
         self.generic_visit(node)
         return node
@@ -288,6 +290,7 @@ class ImportVisitor(ast.NodeTransformer):
             return node
         if hasattr(node, ATTRIBUTE_PROPERTY):
             self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node
+
         self.uses[node.id] = node
         return node
 
@@ -429,11 +432,11 @@ class TypingOnlyImportsChecker:
 
     def __init__(self, node: ast.Module, options: Optional[Namespace]) -> None:
         self.cwd = Path(os.getcwd())
-        if options and hasattr(options, 'type_checking_exempt_modules'):
-            exempt_modules = options.type_checking_exempt_modules
-        else:
-            exempt_modules = []
-        self.visitor = ImportVisitor(self.cwd, exempt_modules=exempt_modules)
+
+        exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
+        pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
+
+        self.visitor = ImportVisitor(self.cwd, pydantic_enabled=pydantic_enabled, exempt_modules=exempt_modules)
         self.visitor.visit(node)
 
         self.generators = [

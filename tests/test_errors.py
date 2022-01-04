@@ -158,7 +158,7 @@ def test_import_is_local():
     def raise_value_error(*args, **kwargs):
         raise ValueError('test')
 
-    visitor = ImportVisitor(REPO_ROOT)
+    visitor = ImportVisitor(REPO_ROOT, False)
     assert visitor._import_is_local(mod) is True
 
     patch('flake8_type_checking.checker.find_spec', raise_value_error).start()

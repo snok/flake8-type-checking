@@ -55,23 +55,48 @@ so please only choose one.
 
 To select one of the ranges, just specify the code in your flake8 config:
 
-```
+```ini
 [flake8]
 max-line-length = 80
 max-complexity = 12
 ...
 ignore = E501
-select = C,E,F,W,..., TC, TC2  # or TC1
-# alternatively:
+# You can use 'select':
+select = C,E,F..., TC, TC2  # or TC1
+# or 'enable-extensions':
 enable-extensions = TC, TC2  # or TC1
 ```
 
 ## Configuration
 
-The plugin currently only has one setting:
+These options are configurable,
+and can be set in your flake8 config.
 
-- `type-checking-exempt-modules`: Specify a list of modules to ignore TC001/TC002 errors from.
-Could be useful if you, e.g., want to handle big libraries, but prefer not to handle `typing` imports.
+### Exempt modules
+
+If you wish to exempt certain modules from
+needing to be moved into type-checking blocks, you can specify which
+modules to ignore.
+
+- **setting name**: `type-checking-exempt-modules`
+- **type**: `list`
+
+```ini
+[flake8]
+type-checking-exempt-modules: typing, typing_extensions  # default []
+```
+
+### Pydantic support
+
+If you use Pydantic models in your code, you should enable Pydantic support.
+This will treat any class variable annotation as being needed during runtime.
+
+- **name**: `type-checking-pydantic-enabled`
+- **type**: `bool`
+```ini
+[flake8]
+type-checking-pydantic-enabled: true  # default false
+```
 
 ## Rationale
 

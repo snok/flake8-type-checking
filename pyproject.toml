@@ -1,6 +1,6 @@
 [tool.poetry]
 name = 'flake8-type-checking'
-version = "1.1.2"
+version = "1.2.0"
 description = 'A flake8 plugin for managing type-checking imports & forward references'
 homepage = 'https://github.com/snok'
 repository = 'https://github.com/sondrelg/flake8-type-checking'

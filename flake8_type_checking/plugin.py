@@ -46,6 +46,13 @@ class Plugin:
             default=[],
             help='Skip TC001 and TC002 checks for specified modules or libraries.',
         )
+        option_manager.add_option(
+            '--type-checking-pydantic-enabled',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Add compatibility for Pydantic models.',
+        )
 
     def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""
