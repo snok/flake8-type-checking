@@ -20,8 +20,8 @@ class TestFoundBugs:
         )
         assert _get_error(example) == {
             '2:0 ' + TC001.format(module=f'{mod}'),
-            '3:0 ' + TC002.format(module=f'pytest'),
-            '4:0 ' + TC002.format(module=f'x.y'),
+            '3:0 ' + TC002.format(module='pytest'),
+            '4:0 ' + TC002.format(module='x.y'),
         }
 
     def test_type_checking_block_imports_dont_generate_errors(self):
