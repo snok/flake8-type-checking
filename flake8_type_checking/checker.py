@@ -17,7 +17,7 @@ with suppress(ModuleNotFoundError):
 
     # TODO: Find a better solution for this
     # The problem is essentially that we're triggering these errors in Django projects
-    # when running the code in _import_is_local. Perhaps user's could pass a map of which errors
+    # when running the code in _import_is_local. Perhaps users could pass a map of which errors
     # to handle and which values to return
     possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)
 
