@@ -46,8 +46,18 @@ TC = 'flake8_type_checking.plugin:Plugin'
 requires = ['poetry-core>=1.0.0']
 build-backend = 'poetry.core.masonry.api'
 
+[tool.black]
+quiet = true
+line-length = 120
+skip-string-normalization = true
+experimental-string-processing = true
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
 [tool.coverage.run]
-source = ['flake8_type_checking/*']
+source = ['flake8_type_checking']
 omit = ['flake8_type_checking/types.py']
 branch = false
 
@@ -60,16 +70,3 @@ exclude_lines = [
     'from importlib_metadata import version',
     'except possible_local_errors:',
 ]
-
-[tool.black]
-line-length = 120
-include = '\.pyi?$'
-skip-string-normalization = true
-
-[tool.isort]
-profile = 'black'
-multi_line_output = 3
-include_trailing_comma = true
-line_length = 120
-known_third_party = ['flake8']
-known_first_party = ['flake8_typing_imports']
