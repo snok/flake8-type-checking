@@ -17,18 +17,21 @@ with suppress(ModuleNotFoundError):
 
     # TODO: Find a better solution for this
     # The problem is essentially that we're triggering these errors in Django projects
-    # when running the code in _import_is_local. Perhaps user's could pass a map of which errors
+    # when running the code in _import_is_local. Perhaps users could pass a map of which errors
     # to handle and which values to return
     possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)
 
 if TYPE_CHECKING:
     from argparse import Namespace
-    from typing import Any, Generator, Optional, Tuple, Union
+    from typing import Any, Optional, Union
 
-    from flake8_type_checking.types import ErrorDict, FunctionRangesDict, FunctionScopeImportsDict
-
-    ImportType = Union[ast.Import, ast.ImportFrom]
-    Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
+    from flake8_type_checking.types import (
+        ErrorDict,
+        Flake8Generator,
+        FunctionRangesDict,
+        FunctionScopeImportsDict,
+        Import,
+    )
 
 ATTRIBUTE_PROPERTY = 'flake8-type-checking_parent'
 
@@ -57,10 +60,10 @@ class ImportVisitor(ast.NodeTransformer):
         self.uses: dict[str, ast.AST] = {}
 
         # Tuple of (node, import name) for all import defined within a type-checking block
-        self.type_checking_block_imports: set[tuple[ImportType, str]] = set()
+        self.type_checking_block_imports: set[tuple[Import, str]] = set()
         self.class_names: set[str] = set()
 
-        self.unused_type_checking_block_imports: set[tuple[ImportType, str]] = set()
+        self.unused_type_checking_block_imports: set[tuple[Import, str]] = set()
 
         # All type annotations in the file, without quotes around them
         self.unwrapped_annotations: list[tuple[int, int, str]] = []
@@ -196,7 +199,7 @@ class ImportVisitor(ast.NodeTransformer):
         origin = Path(spec.origin)
         return self.cwd in origin.parents
 
-    def _add_import(self, node: ImportType) -> None:
+    def _add_import(self, node: Import) -> None:
         """
         Add relevant ast objects to import lists.
 
@@ -204,8 +207,8 @@ class ImportVisitor(ast.NodeTransformer):
         """
         if self._in_type_checking_block(node):
             # For type checking blocks we want to
-            # 1. Record annotations for TCH2XX errors
-            # 2. Avoid recording imports for TCH1XX errors, by returning early
+            # 1. Record annotations for TC2XX errors
+            # 2. Avoid recording imports for TC1XX errors, by returning early
             for name_node in node.names:
                 if hasattr(name_node, 'asname') and name_node.asname:
                     name = name_node.asname

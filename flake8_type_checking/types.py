@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import ast
-    from typing import TypedDict
+    from typing import Any, Generator, Tuple, TypedDict, Union
 
     class ErrorDict(TypedDict):
         error: str
@@ -17,3 +17,6 @@ if TYPE_CHECKING:
 
     class FunctionScopeImportsDict(TypedDict):
         imports: list[str]
+
+    Import = Union[ast.Import, ast.ImportFrom]
+    Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
