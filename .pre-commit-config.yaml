@@ -48,4 +48,9 @@ repos:
     rev: v0.931
     hooks:
       - id: mypy
-        additional_dependencies: [ pytest ]
+        args:
+          - --config-file=setup.cfg
+        additional_dependencies:
+          - pytest
+          - django
+          - flake8
