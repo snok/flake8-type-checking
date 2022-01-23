@@ -23,12 +23,15 @@ with suppress(ModuleNotFoundError):
 
 if TYPE_CHECKING:
     from argparse import Namespace
-    from typing import Any, Generator, Optional, Tuple, Union
+    from typing import Any, Optional, Union
 
-    from flake8_type_checking.types import ErrorDict, FunctionRangesDict, FunctionScopeImportsDict
-
-    ImportType = Union[ast.Import, ast.ImportFrom]
-    Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
+    from flake8_type_checking.types import (
+        ErrorDict,
+        Flake8Generator,
+        FunctionRangesDict,
+        FunctionScopeImportsDict,
+        Import,
+    )
 
 ATTRIBUTE_PROPERTY = 'flake8-type-checking_parent'
 
@@ -57,10 +60,10 @@ class ImportVisitor(ast.NodeTransformer):
         self.uses: dict[str, ast.AST] = {}
 
         # Tuple of (node, import name) for all import defined within a type-checking block
-        self.type_checking_block_imports: set[tuple[ImportType, str]] = set()
+        self.type_checking_block_imports: set[tuple[Import, str]] = set()
         self.class_names: set[str] = set()
 
-        self.unused_type_checking_block_imports: set[tuple[ImportType, str]] = set()
+        self.unused_type_checking_block_imports: set[tuple[Import, str]] = set()
 
         # All type annotations in the file, without quotes around them
         self.unwrapped_annotations: list[tuple[int, int, str]] = []

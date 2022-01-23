@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 
     from flake8.options.manager import OptionManager
 
-    from flake8_type_checking.checker import Flake8Generator
+    from flake8_type_checking.types import Flake8Generator
+
 
 if sys.version_info >= (3, 8):
     from importlib.metadata import version
