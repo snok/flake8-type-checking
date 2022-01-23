@@ -341,8 +341,8 @@ class ImportVisitor(ast.NodeTransformer):
     def _add_annotation(self, node: ast.AST) -> None:
         if isinstance(node, ast.Ellipsis):
             return
-        if py38 and isinstance(node, Index) and hasattr(node, 'value'):
-            return self._add_annotation(node.value)  # type: ignore[attr-defined]
+        if py38 and isinstance(node, Index):
+            return self._add_annotation(node.value)
         if isinstance(node, ast.Constant):
             if node.value is None:
                 return
