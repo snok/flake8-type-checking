@@ -363,22 +363,6 @@ toml = "*"
 testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "requests", "xmlschema"]
 
 [[package]]
-name = "pytest-cov"
-version = "2.12.1"
-description = "Pytest plugin for measuring coverage."
-category = "dev"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-
-[package.dependencies]
-coverage = ">=5.2.1"
-pytest = ">=4.6"
-toml = "*"
-
-[package.extras]
-testing = ["fields", "hunter", "process-tests", "six", "pytest-xdist", "virtualenv"]
-
-[[package]]
 name = "pytest-flake8dir"
 version = "2.6.1"
 description = "A pytest fixture for testing flake8 plugins."
@@ -454,7 +438,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = '^3.8'
-content-hash = "e4b05eb292269826898d07f198d08e95ef8685eaa9b8509f8a7d74293a0a92e5"
+content-hash = "56c3f17929d471db35e477ecc0181092b17e730f74a4c5e45f561e43798f9858"
 
 [metadata.files]
 appnope = [
@@ -638,10 +622,6 @@ pyparsing = [
 pytest = [
     {file = "pytest-6.2.5-py3-none-any.whl", hash = "sha256:7310f8d27bc79ced999e760ca304d69f6ba6c6649c0b60fb0e04a4a77cacc134"},
     {file = "pytest-6.2.5.tar.gz", hash = "sha256:131b36680866a76e6781d13f101efb86cf674ebb9762eb70d3082b6f29889e89"},
-]
-pytest-cov = [
-    {file = "pytest-cov-2.12.1.tar.gz", hash = "sha256:261ceeb8c227b726249b376b8526b600f38667ee314f910353fa318caa01f4d7"},
-    {file = "pytest_cov-2.12.1-py2.py3-none-any.whl", hash = "sha256:261bb9e47e65bd099c89c3edf92972865210c36813f80ede5277dceb77a4a62a"},
 ]
 pytest-flake8dir = [
     {file = "pytest-flake8dir-2.6.1.tar.gz", hash = "sha256:a368d1f9366b9f8084da24f324a65d312ca129d363f1a0cbdc7409376bb9e66f"},

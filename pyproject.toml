@@ -35,7 +35,6 @@ flake8 = '*'
 pytest = '^6.2.2'
 ipython = '^7.20.0'
 coverage = '^5.4'
-pytest-cov = '^2.11.1'
 pre-commit = "^2.11.1"
 pytest-flake8dir = "^2.3.1"
 
@@ -74,6 +73,3 @@ include_trailing_comma = true
 line_length = 120
 known_third_party = ['flake8']
 known_first_party = ['flake8_typing_imports']
-
-[tool.pytest.ini_options]
-addopts = ['--cov=flake8_type_checking','--cov-report', 'term-missing']
