@@ -142,6 +142,20 @@ This will treat any class variable annotation as being needed during runtime.
 [flake8]
 type-checking-pydantic-enabled: true  # default false
 ```
+### Pydantic support base-class passlist
+
+Disabling checks for all class annotations is a little aggressive.
+
+If you feel comfortable that all base classes named, e.g., `NamedTuple` are *not* Pydantic models,
+then you can pass the names of the base classes in this setting, to re-enable checking for classes
+which inherit from them.
+
+- **name**: `type-checking-pydantic-enabled-baseclass-passlist`
+- **type**: `list`
+```ini
+[flake8]
+'type-checking-pydantic-enabled-baseclass-passlist: NamedTuple, TypedDict  # default []
+```
 
 ### FastAPI support
 
