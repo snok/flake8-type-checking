@@ -10,13 +10,13 @@ from tests import REPO_ROOT
 
 
 def _get_remote_imports(example):
-    visitor = ImportVisitor(REPO_ROOT, False, False, False)
+    visitor = ImportVisitor(REPO_ROOT, False, False, False, [])
     visitor.visit(ast.parse(example.replace('; ', '\n')))
     return list(visitor.remote_imports.keys())
 
 
 def _get_local_imports(example):
-    visitor = ImportVisitor(REPO_ROOT, False, False, False)
+    visitor = ImportVisitor(REPO_ROOT, False, False, False, [])
     visitor.visit(ast.parse(example.replace('; ', '\n')))
     return list(visitor.local_imports.keys())
 
