@@ -1,29 +1,63 @@
-<a href="https://pypi.org/project/flake8-type-checking/">
-    <img src="https://img.shields.io/pypi/v/flake8-type-checking.svg" alt="Package version">
-</a>
-<a href="https://codecov.io/gh/sondrelg/flake8-type-checking">
-    <img src="https://codecov.io/gh/sondrelg/flake8-type-checking/branch/master/graph/badge.svg" alt="Code coverage">
-</a>
-<a href="https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml">
-    <img src="https://github.com/sondrelg/flake8-type-checking/actions/workflows/testing.yml/badge.svg" alt="Test status">
-</a>
-<a href="https://pypi.org/project/flake8-type-checking/">
-    <img src="https://img.shields.io/badge/python-3.8%2B-blue" alt="Supported Python versions">
-</a>
-<a href="http://mypy-lang.org/">
-    <img src="http://www.mypy-lang.org/static/mypy_badge.svg" alt="Checked with mypy">
-</a>
+[![Package version](https://img.shields.io/pypi/v/flake8-type-checking.svg)](https://pypi.org/project/flake8-type-checking/)
+[![Code coverage](https://codecov.io/gh/sondrelg/flake8-type-checking/branch/master/graph/badge.svg)](https://codecov.io/gh/sondrelg/flake8-type-checking)
+[![Test status](https://github.com/sondrelg/flake8-type-checking/actions/workflows/testing.yml/badge.svg)](https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml)
+[![Supported Python versions](https://img.shields.io/badge/python-3.8%2B-blue)](https://pypi.org/project/flake8-type-checking/)
+[![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
 # flake8-type-checking
 
-Lets you know which imports to put in [type-checking](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING) blocks.
+Lets you know which imports to move in or out of
+[type-checking](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING) blocks.
 
-For the imports you've already defined inside type-checking blocks, it can
-also help you manage [forward references](https://www.python.org/dev/peps/pep-0484/#forward-references)
-using [PEP 484](https://www.python.org/dev/peps/pep-0484) or [PEP 563](https://www.python.org/dev/peps/pep-0563/) style references.
+The plugin assumes that the imports you only use for type hinting
+*are not* required at runtime. When imports aren't strictly required at runtime, it means we can guard them.
 
-## Codes
+This provides 3 major benefits:
 
+- 🔧&nbsp;&nbsp;It reduces import circularity issues,
+- 🧹&nbsp;&nbsp;It organizes imports, and
+- 🚀&nbsp;&nbsp;It completely eliminates the overhead of type hint imports at runtime
+
+<br>
+
+Essentially, this code:
+
+```python
+import pandas  # 15mb library
+
+x: pandas.DataFrame
+```
+
+becomes this:
+
+```python
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas  # <-- no longer imported at runtime
+
+x: "pandas.DataFrame"
+```
+
+<br>
+
+If you're using [pydantic](https://pydantic-docs.helpmanual.io/) or [fastapi](https://fastapi.tiangolo.com/),
+see the [configuration](#configuration) for how to enable support.
+
+## Primary features
+
+The plugin will:
+
+- Tell you when an import should be moved into a type-checking block
+- Tell you when an import should be moved out again
+
+And depending on which error code range you've opted into, it will tell you
+
+- Whether you need to add a `from __future__ import annotations` import
+- Whether you need to quote an annotation
+- Whether you can unquote a quoted annotation
+
+## Error codes
 
 | Code   | Description                                         |
 |--------|-----------------------------------------------------|
@@ -33,10 +67,12 @@ using [PEP 484](https://www.python.org/dev/peps/pep-0484) or [PEP 563](https://w
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
 | TC005 | Empty type-checking block |
 
-### Forward reference codes
+## Choosing how to handle forward references
 
-These code ranges are opt-in. They represent two different ways of solving the same problem,
-so please only choose one.
+You need to choose whether to opt-into using the
+`TC100`- or the `TC200`-range of error codes.
+
+They represent two different ways of solving the same problem, so please only choose one.
 
 `TC100` and `TC101` manage forward references by taking advantage of
 [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
@@ -53,7 +89,9 @@ so please only choose one.
 | TC200 | Annotation needs to be made into a string literal |
 | TC201 | Annotation does not need to be a string literal |
 
-To select one of the ranges, just specify the code in your flake8 config:
+## Enabling error ranges
+
+Add `TC` and `TC1` or `TC2` to your flake8 config like this:
 
 ```ini
 [flake8]
@@ -63,14 +101,21 @@ max-complexity = 12
 ignore = E501
 # You can use 'select':
 select = C,E,F..., TC, TC2  # or TC1
-# or 'enable-extensions':
+# OR 'enable-extensions':
 enable-extensions = TC, TC2  # or TC1
+```
+
+If you are unsure which `TC` range to pick, see the [rationale](#rationale) for more info.
+
+## Installation
+
+```shell
+pip install flake8-type-checking
 ```
 
 ## Configuration
 
-These options are configurable,
-and can be set in your flake8 config.
+These options are configurable, and can be set in your flake8 config.
 
 ### Exempt modules
 
@@ -98,13 +143,39 @@ This will treat any class variable annotation as being needed during runtime.
 type-checking-pydantic-enabled: true  # default false
 ```
 
+### FastAPI support
+
+If you're using the plugin for a FastAPI project,
+you should enable support. This will treat the annotations
+of any decorated function as needed at runtime.
+
+Enabling FastAPI support also enabled Pydantic support.
+
+- **name**: `type-checking-fastapi-enabled`
+- **type**: `bool`
+```ini
+[flake8]
+type-checking-fastapi-enabled: true  # default false
+```
+
+One more thing to note for FastAPI users is that dependencies
+(functions used in `Depends`) will produce false positives.
+We cannot detect *which* functions are used as dependencies,
+and guarding type hint-imports for these functions *will*
+crash your app at runtime if you do so. It is therefore important
+to know about this ahead of time.
+
+If you have a good suggestion for how to resolve this issue,
+please feel free to submit an issue or a PR.
+
 ## Rationale
 
-Good type hinting requires a lot of imports, which can increase the risk of
-[import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?highlight=TYPE_CHECKING#import-cycles)
-in your project.
-The recommended way of preventing this problem is to use `typing.TYPE_CHECKING` blocks
-to guard these types of imports.
+Why did we create this plugin?
+
+Good type hinting requires a lot of imports, which can increase
+the risk of [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?#import-cycles)
+in your project. The recommended way of preventing this problem is
+to use `typing.TYPE_CHECKING` blocks to guard these types of imports.
 
 Both `TC001` and `TC002` help alleviate this problem; the reason there are two
 codes instead of one, is because the import cycles rarely occur from
@@ -121,13 +192,41 @@ You can either make your annotations string literals, or you can use a `__future
 See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer
 for a better explanation of the differences.
 
-## Installation
+## Examples
 
-```shell
-pip install flake8-type-checking
+### Performance
+
+Imports for type hinting can have a performance impact.
+
+```python
+import pandas
+
+
+def dataframe_length(df: pandas.DataFrame) -> int:
+    return len(df)
 ```
 
-## Examples
+In this example, we import a 15mb library, for a single type hint.
+
+We don't need to perform this operation at runtime, *at all*.
+If we know that the import will not otherwise be needed by surrounding code,
+we can simply guard it, like this:
+
+```python
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    import pandas  # <-- no longer imported at runtime
+
+
+def dataframe_length(df: pandas.DataFrame) -> int:
+    return len(df)
+```
+
+Now the import is no longer made at runtime. If you're unsure about how this works, see the [mypy docs](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?#typing-type-checking) for a basic introduction.
+
+### Import circularity
 
 **Bad code**
 
@@ -207,14 +306,19 @@ class B(Model):
     def bar(self, a: 'A'): ...
 ```
 
-## As a pre-commit hook
+## Running the plugin as a pre-commit hook
 
 You can run this flake8 plugin as a [pre-commit](https://github.com/pre-commit/pre-commit) hook:
 
 ```yaml
 - repo: https://github.com/pycqa/flake8
-  rev: 3.9.2
+  rev: 4.0.1
   hooks:
     - id: flake8
-      additional_dependencies: [ flake8-type-checking ]
+      additional_dependencies:
+        - flake8-type-checking
 ```
+
+## Contributing
+
+Please feel free to open an issue or a PR 👏
