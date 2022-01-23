@@ -28,7 +28,7 @@ jobs:
         id: pre-commit-cache
         with:
           path: ~/.cache/pre-commit
-          key: key-1
+          key: ${{ hashFiles('**/pre-commit-config.yaml') }}-1
       - run: |
           source .venv/bin/activate
           pre-commit run --all-files
