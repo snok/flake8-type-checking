@@ -61,6 +61,13 @@ class Plugin:
             default=True,
             help='Prevent flagging of annotations for decorated functions.',
         )
+        option_manager.add_option(
+            '--type-checking-fastapi-dependency-support-enabled',
+            action='store_true',
+            parse_from_config=True,
+            default=True,
+            help='Prevent flagging of annotations for any function.',
+        )
 
     def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""

@@ -47,10 +47,12 @@ class ImportVisitor(ast.NodeTransformer):
         cwd: Path,
         pydantic_enabled: bool,
         fastapi_enabled: bool,
+        fastapi_dependency_support_enabled: bool,
         exempt_modules: Optional[list[str]] = None,
     ) -> None:
         self.pydantic_enabled = pydantic_enabled
         self.fastapi_enabled = fastapi_enabled
+        self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         # Import patterns we want to avoid mapping
@@ -458,7 +460,7 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_FunctionDef(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
         """Remove and map function arguments and returns."""
-        if self.fastapi_enabled:
+        if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self._handle_fastapi_decorator(node)
 
         # Map annotations
@@ -468,7 +470,7 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        if self.fastapi_enabled:
+        if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self._handle_fastapi_decorator(node)
 
         # Map annotations
@@ -493,9 +495,15 @@ class TypingOnlyImportsChecker:
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
         fastapi_enabled = getattr(options, 'type_checking_fastapi_enabled', False)
+        fastapi_dependency_support_enabled = getattr(options, 'type_checking_fastapi_dependency_support_enabled', False)
 
         if fastapi_enabled and not pydantic_enabled:
             # FastAPI support must include Pydantic support.
+            pydantic_enabled = True
+
+        if fastapi_dependency_support_enabled and not pydantic_enabled or not fastapi_enabled:
+            # Dependency support is FastAPI support + a little bit extra
+            fastapi_enabled = True
             pydantic_enabled = True
 
         self.visitor = ImportVisitor(
@@ -503,6 +511,7 @@ class TypingOnlyImportsChecker:
             pydantic_enabled=pydantic_enabled,
             fastapi_enabled=fastapi_enabled,
             exempt_modules=exempt_modules,
+            fastapi_dependency_support_enabled=fastapi_dependency_support_enabled,
         )
         self.visitor.visit(node)
 

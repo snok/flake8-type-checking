@@ -159,14 +159,30 @@ type-checking-fastapi-enabled: true  # default false
 ```
 
 One more thing to note for FastAPI users is that dependencies
-(functions used in `Depends`) will produce false positives.
-We cannot detect *which* functions are used as dependencies,
-and guarding type hint-imports for these functions *will*
-crash your app at runtime if you do so. It is therefore important
-to know about this ahead of time.
+(functions used in `Depends`) will produce false positives, unless
+you enable dependency support as described below.
 
-If you have a good suggestion for how to resolve this issue,
-please feel free to submit an issue or a PR.
+### FastAPI dependency support
+
+In addition to preventing false positives for decorators,
+we *can* prevent false positives for dependencies. We are
+making a pretty bad trade-off however: by enabling this
+option we treat every annotation in every function definition
+across your entire project as a possible dependency annotation.
+In other words, we stop linting all function annotations completely,
+to avoid the possibility of false positives.
+If you prefer to be on the safe side, you should enable this - otherwise
+it might be enough to be aware that false positives can happen for functions
+used as dependencies.
+
+Enabling dependency support also enabled FastAPI and Pydantic support.
+
+- **name**: `type-checking-fastapi-dependency-support-enabled`
+- **type**: `bool`
+```ini
+[flake8]
+type-checking-fastapi-dependency-support-enabled: true  # default false
+```
 
 ## Rationale
 
