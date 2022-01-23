@@ -33,8 +33,10 @@ def test_api_router_decorated_function(fdef):
         '''
     )
     assert _get_error(example, error_code_filter='TC001,TC002', type_checking_fastapi_enabled=True) == {
-        "4:0 " + TC002.format(module='app.models.SomeModel'),
-        "6:0 " + TC002.format(module='app.types.CustomType')
+        '4:0 ' + TC002.format(module='app.models.SomeModel'),
+        '6:0 ' + TC002.format(module='app.types.CustomType'),
     }
-    assert _get_error(example, error_code_filter='TC001,TC002',
-                      type_checking_fastapi_dependency_support_enabled=True) == set()
+    assert (
+        _get_error(example, error_code_filter='TC001,TC002', type_checking_fastapi_dependency_support_enabled=True)
+        == set()
+    )
