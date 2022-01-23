@@ -48,11 +48,13 @@ class ImportVisitor(ast.NodeTransformer):
         pydantic_enabled: bool,
         fastapi_enabled: bool,
         fastapi_dependency_support_enabled: bool,
+        pydantic_enabled_baseclass_passlist: list[str],
         exempt_modules: Optional[list[str]] = None,
     ) -> None:
         self.pydantic_enabled = pydantic_enabled
         self.fastapi_enabled = fastapi_enabled
         self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
+        self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         # Import patterns we want to avoid mapping
@@ -282,7 +284,15 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Note down class names."""
-        if self.pydantic_enabled and node.bases:
+        if (
+            self.pydantic_enabled
+            and node.bases
+            and not (
+                len(node.bases) == 1
+                and isinstance(node.bases[0], ast.Name)
+                and node.bases[0].id in self.pydantic_enabled_baseclass_passlist
+            )
+        ):
             # When pydantic support is enabled, treat any class variable
             # annotation as being required during runtime.
             # We need to do this, or users run the risk of guarding imports
@@ -494,6 +504,7 @@ class TypingOnlyImportsChecker:
 
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
+        pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
         fastapi_enabled = getattr(options, 'type_checking_fastapi_enabled', False)
         fastapi_dependency_support_enabled = getattr(options, 'type_checking_fastapi_dependency_support_enabled', False)
 
@@ -512,6 +523,7 @@ class TypingOnlyImportsChecker:
             fastapi_enabled=fastapi_enabled,
             exempt_modules=exempt_modules,
             fastapi_dependency_support_enabled=fastapi_dependency_support_enabled,
+            pydantic_enabled_baseclass_passlist=pydantic_enabled_baseclass_passlist,
         )
         self.visitor.visit(node)
 

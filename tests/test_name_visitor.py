@@ -8,7 +8,7 @@ from flake8_type_checking.checker import ImportVisitor
 
 
 def _get_names(example: str) -> Set[str]:
-    visitor = ImportVisitor('fake cwd', False, False, False)  # type: ignore
+    visitor = ImportVisitor('fake cwd', False, False, False, [])  # type: ignore[arg-type]
     visitor.visit(ast.parse(example))
     return visitor.names
 

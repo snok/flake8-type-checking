@@ -55,6 +55,13 @@ class Plugin:
             help='Prevent flagging of annotations for class definitions.',
         )
         option_manager.add_option(
+            '--type-checking-pydantic-enabled-baseclass-passlist',
+            comma_separated_list=True,
+            parse_from_config=True,
+            default=[],
+            help='Names of base classes to not treat as pydantic models. For example `NamedTuple` or `TypedDict`.',
+        )
+        option_manager.add_option(
             '--type-checking-fastapi-enabled',
             action='store_true',
             parse_from_config=True,
