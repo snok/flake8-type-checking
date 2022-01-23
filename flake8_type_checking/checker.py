@@ -512,7 +512,7 @@ class TypingOnlyImportsChecker:
             # FastAPI support must include Pydantic support.
             pydantic_enabled = True
 
-        if fastapi_dependency_support_enabled and not pydantic_enabled or not fastapi_enabled:
+        if fastapi_dependency_support_enabled and (not pydantic_enabled or not fastapi_enabled):
             # Dependency support is FastAPI support + a little bit extra
             fastapi_enabled = True
             pydantic_enabled = True
