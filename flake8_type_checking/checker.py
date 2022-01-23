@@ -7,7 +7,7 @@ from ast import Index
 from contextlib import suppress
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
 
@@ -342,7 +342,7 @@ class ImportVisitor(ast.NodeTransformer):
         if isinstance(node, ast.Ellipsis):
             return
         if py38 and isinstance(node, Index):
-            return self._add_annotation(node.value)  # type: ignore[attr-defined]
+            return self._add_annotation(node.value)
         if isinstance(node, ast.Constant):
             if node.value is None:
                 return
@@ -452,8 +452,9 @@ class ImportVisitor(ast.NodeTransformer):
             delattr(node, 'returns')
 
         # Register function start and end
-        for i in range(node.lineno, node.end_lineno + 1):  # type: ignore[arg-type,union-attr,operator]
-            self.function_ranges[i] = {'start': node.lineno, 'end': node.end_lineno + 1}  # type: ignore[operator]
+        end_lineno = cast(int, node.end_lineno)
+        for i in range(node.lineno, end_lineno + 1):
+            self.function_ranges[i] = {'start': node.lineno, 'end': end_lineno + 1}
 
     def visit_FunctionDef(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
         """Remove and map function arguments and returns."""
