@@ -22,6 +22,7 @@ with suppress(ModuleNotFoundError):
     possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)
 
 if TYPE_CHECKING:
+    from _ast import AsyncFunctionDef, FunctionDef
     from argparse import Namespace
     from typing import Any, Generator, Optional, Tuple, Union
 
@@ -38,8 +39,15 @@ py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 class ImportVisitor(ast.NodeTransformer):
     """Map all imports outside of type-checking blocks."""
 
-    def __init__(self, cwd: Path, pydantic_enabled: bool, exempt_modules: Optional[list[str]] = None) -> None:
+    def __init__(
+        self,
+        cwd: Path,
+        pydantic_enabled: bool,
+        fastapi_enabled: bool,
+        exempt_modules: Optional[list[str]] = None,
+    ) -> None:
         self.pydantic_enabled = pydantic_enabled
+        self.fastapi_enabled = fastapi_enabled
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         # Import patterns we want to avoid mapping
@@ -386,38 +394,83 @@ class ImportVisitor(ast.NodeTransformer):
         if getattr(node, 'value', None):
             self.generic_visit(node.value)  # type: ignore[arg-type]
 
-    def visit_FunctionDef(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
-        """Remove and map function arguments and returns."""
-        # Map annotations
+    def _handle_fastapi_decorator(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+        """
+        Adjust for FastAPI decorator setting.
+
+        When the FastAPI decorator setting is enabled, treat all annotations
+        from within a function definition (except for return annotations) as
+        needed at runtime. To achieve this, visit the annotations to register them as "uses".
+        """
+        for path in [node.args.args, node.args.kwonlyargs]:
+            for argument in path:
+                if hasattr(argument, 'annotation') and argument.annotation:
+                    self.visit(argument.annotation)
+        if (
+            hasattr(node.args, 'kwarg')
+            and node.args.kwarg
+            and hasattr(node.args.kwarg, 'annotation')
+            and node.args.kwarg.annotation
+        ):
+            self.visit(node.args.kwarg.annotation)
+        if (
+            hasattr(node.args, 'vararg')
+            and node.args.vararg
+            and hasattr(node.args.vararg, 'annotation')
+            and node.args.vararg.annotation
+        ):
+            self.visit(node.args.vararg.annotation)
+
+    def _register_function_annotations(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
         for path in [node.args.args, node.args.kwonlyargs]:
             argument: ast.arg
             for argument in path:
                 if hasattr(argument, 'annotation'):
                     self._add_annotation(argument.annotation)  # type: ignore[arg-type]
                     delattr(argument, 'annotation')
-        if hasattr(node.args, 'kwarg'):
-            kwarg = node.args.kwarg
-            if hasattr(kwarg, 'annotation'):
-                self._add_annotation(kwarg.annotation)  # type: ignore[arg-type,union-attr]
-                delattr(kwarg, 'annotation')
-        if hasattr(node.args, 'vararg'):
-            vararg = node.args.vararg
-            if hasattr(vararg, 'annotation'):
-                self._add_annotation(vararg.annotation)  # type: ignore[arg-type,union-attr]
-                delattr(vararg, 'annotation')
-        if hasattr(node, 'returns'):
-            self._add_annotation(node.returns)  # type: ignore[arg-type,union-attr]
+        if (
+            hasattr(node.args, 'kwarg')
+            and node.args.kwarg
+            and hasattr(node.args.kwarg, 'annotation')
+            and node.args.kwarg.annotation
+        ):
+            self._add_annotation(node.args.kwarg.annotation)
+            delattr(node.args.kwarg, 'annotation')
+        if (
+            hasattr(node.args, 'vararg')
+            and node.args.vararg
+            and hasattr(node.args.vararg, 'annotation')
+            and node.args.vararg.annotation
+        ):
+            self._add_annotation(node.args.vararg.annotation)
+            delattr(node.args.vararg, 'annotation')
+        if hasattr(node, 'returns') and node.returns:
+            self._add_annotation(node.returns)
             delattr(node, 'returns')
 
         # Register function start and end
         for i in range(node.lineno, node.end_lineno + 1):  # type: ignore[arg-type,union-attr,operator]
             self.function_ranges[i] = {'start': node.lineno, 'end': node.end_lineno + 1}  # type: ignore[operator]
 
+    def visit_FunctionDef(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
+        """Remove and map function arguments and returns."""
+        if self.fastapi_enabled:
+            self._handle_fastapi_decorator(node)
+
+        # Map annotations
+        self._register_function_annotations(node)
+
         self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        self.visit_FunctionDef(node)
+        if self.fastapi_enabled:
+            self._handle_fastapi_decorator(node)
+
+        # Map annotations
+        self._register_function_annotations(node)
+
+        self.generic_visit(node)
 
 
 class TypingOnlyImportsChecker:
@@ -435,8 +488,18 @@ class TypingOnlyImportsChecker:
 
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
+        fastapi_enabled = getattr(options, 'type_checking_fastapi_enabled', False)
 
-        self.visitor = ImportVisitor(self.cwd, pydantic_enabled=pydantic_enabled, exempt_modules=exempt_modules)
+        if fastapi_enabled and not pydantic_enabled:
+            # FastAPI support must include Pydantic support.
+            pydantic_enabled = True
+
+        self.visitor = ImportVisitor(
+            self.cwd,
+            pydantic_enabled=pydantic_enabled,
+            fastapi_enabled=fastapi_enabled,
+            exempt_modules=exempt_modules,
+        )
         self.visitor.visit(node)
 
         self.generators = [

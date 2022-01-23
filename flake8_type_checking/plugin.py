@@ -51,7 +51,14 @@ class Plugin:
             action='store_true',
             parse_from_config=True,
             default=False,
-            help='Add compatibility for Pydantic models.',
+            help='Prevent flagging of annotations for class definitions.',
+        )
+        option_manager.add_option(
+            '--type-checking-fastapi-enabled',
+            action='store_true',
+            parse_from_config=True,
+            default=True,
+            help='Prevent flagging of annotations for decorated functions.',
         )
 
     def run(self) -> Flake8Generator:
