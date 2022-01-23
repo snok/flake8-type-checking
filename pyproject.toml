@@ -25,7 +25,7 @@ classifiers = [
 ]
 
 [tool.poetry.urls]
-"Changelog" = "https://github.com/sondrelg/flake8-type-checking/blob/master/CHANGELOG.md"
+"Releases" = "https://github.com/snok/flake8-type-checking/releases"
 
 [tool.poetry.dependencies]
 python = '^3.8'
