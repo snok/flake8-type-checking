@@ -199,7 +199,7 @@ class ImportVisitor(ast.NodeTransformer):
         origin = Path(spec.origin)
         return self.cwd in origin.parents
 
-    def _add_import(self, node: ImportType) -> None:
+    def _add_import(self, node: Import) -> None:
         """
         Add relevant ast objects to import lists.
 
@@ -207,8 +207,8 @@ class ImportVisitor(ast.NodeTransformer):
         """
         if self._in_type_checking_block(node):
             # For type checking blocks we want to
-            # 1. Record annotations for TCH2XX errors
-            # 2. Avoid recording imports for TCH1XX errors, by returning early
+            # 1. Record annotations for TC2XX errors
+            # 2. Avoid recording imports for TC1XX errors, by returning early
             for name_node in node.names:
                 if hasattr(name_node, 'asname') and name_node.asname:
                     name = name_node.asname

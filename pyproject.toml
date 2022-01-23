@@ -41,7 +41,7 @@ pytest-flake8dir = "^2.3.1"
 
 [tool.poetry.plugins]
 [tool.poetry.plugins.'flake8.extension']
-TCH = 'flake8_type_checking.plugin:Plugin'
+TC = 'flake8_type_checking.plugin:Plugin'
 
 [build-system]
 requires = ['poetry-core>=1.0.0']
