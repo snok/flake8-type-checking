@@ -5,9 +5,10 @@ import os
 import sys
 from ast import Index
 from contextlib import suppress
-from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from aspy.refactor_imports.classify import ImportType, classify_import
 
 from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
 
@@ -171,42 +172,6 @@ class ImportVisitor(ast.NodeTransformer):
 
     # -- Map imports -------------------------------
 
-    def _import_is_local(self, import_name: str) -> bool:
-        """
-        Guess at whether an import is remote or a part of the local repo.
-
-        Not sure if there is a best-practice way of asserting whether an import is made from the current project.
-        The assumptions made below are:
-
-            1. It's definitely not a local imports if we can't import it
-            2. If we can import it, but 'venv' is in the path, it's not a local import
-            3. If the current working directory (where flake8 is called from) is not present in the parent
-            directories (excluding venv) it's probably a remote import (probably stdlib)
-
-        The second and third assumptions are not iron clad, and could
-        generate false positives, but should work for a first iteration.
-        """
-        try:
-            if '.' in import_name:
-                spec = find_spec('.'.join(import_name.split('.')[:-1]), import_name.split('.')[-1])
-            else:
-                spec = find_spec(import_name)
-        except ModuleNotFoundError:
-            return False
-        except possible_local_errors:
-            return True
-        except ValueError:
-            return False
-
-        if not spec:
-            return False
-
-        if not spec.origin or 'venv' in spec.origin:
-            return False
-
-        origin = Path(spec.origin)
-        return self.cwd in origin.parents
-
     def _add_import(self, node: Import) -> None:
         """
         Add relevant ast objects to import lists.
@@ -246,7 +211,6 @@ class ImportVisitor(ast.NodeTransformer):
                     # in a file, so we should only need to check this once
                     self.futures_annotation = False
 
-            # Map imports as belonging to the current module, or belonging to a third-party mod
             if name_node.name not in self.exempt_imports:
                 module = f'{node.module}.' if isinstance(node, ast.ImportFrom) else ''
                 if hasattr(name_node, 'asname') and name_node.asname:
@@ -255,12 +219,15 @@ class ImportVisitor(ast.NodeTransformer):
                 else:
                     name = name_node.name
                     import_name = module + name_node.name
-                is_local = self._import_is_local(f'{module}{name_node.name}')
-                if is_local:
+
+                import_class = classify_import(f'{module}{name_node.name}')
+
+                if import_class == ImportType.FUTURE:
+                    pass
+                elif import_class == ImportType.APPLICATION:
                     self.local_imports[import_name] = {'error': TC001, 'node': node}
                     self.import_names[name] = import_name, True
-
-                else:
+                elif import_class in [ImportType.BUILTIN, ImportType.THIRD_PARTY]:
                     self.remote_imports[import_name] = {'error': TC002, 'node': node}
                     self.import_names[name] = import_name, False
 

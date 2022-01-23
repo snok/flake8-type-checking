@@ -148,19 +148,3 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == {"7:4 TC002 Move third-party import 'x' into a type-checking block"}
-
-
-def test_import_is_local():
-    """
-    Check that if ValueErrors are raised in _import_is_local, we bump it into the TC002 bucket.
-    """
-
-    def raise_value_error(*args, **kwargs):
-        raise ValueError('test')
-
-    visitor = ImportVisitor(REPO_ROOT, False, False)
-    assert visitor._import_is_local(mod) is True
-
-    patch('flake8_type_checking.checker.find_spec', raise_value_error).start()
-    assert visitor._import_is_local(mod) is False
-    patch.stopall()
