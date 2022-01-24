@@ -130,7 +130,7 @@ modules to ignore.
 
 ```ini
 [flake8]
-type-checking-exempt-modules: typing, typing_extensions  # default []
+type-checking-exempt-modules = typing, typing_extensions  # default []
 ```
 
 ### Pydantic support
@@ -142,7 +142,7 @@ This will treat any class variable annotation as being needed during runtime.
 - **type**: `bool`
 ```ini
 [flake8]
-type-checking-pydantic-enabled: true  # default false
+type-checking-pydantic-enabled = true  # default false
 ```
 ### Pydantic support base-class passlist
 
@@ -156,7 +156,7 @@ which inherit from them.
 - **type**: `list`
 ```ini
 [flake8]
-type-checking-pydantic-enabled-baseclass-passlist: NamedTuple, TypedDict  # default []
+type-checking-pydantic-enabled-baseclass-passlist = NamedTuple, TypedDict  # default []
 ```
 
 ### FastAPI support
@@ -171,7 +171,7 @@ Enabling FastAPI support will also enable Pydantic support.
 - **type**: `bool`
 ```ini
 [flake8]
-type-checking-fastapi-enabled: true  # default false
+type-checking-fastapi-enabled = true  # default false
 ```
 
 One more thing to note for FastAPI users is that dependencies
