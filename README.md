@@ -156,7 +156,7 @@ which inherit from them.
 - **type**: `list`
 ```ini
 [flake8]
-'type-checking-pydantic-enabled-baseclass-passlist: NamedTuple, TypedDict  # default []
+type-checking-pydantic-enabled-baseclass-passlist: NamedTuple, TypedDict  # default []
 ```
 
 ### FastAPI support
