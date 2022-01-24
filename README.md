@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 x: "pandas.DataFrame"
 ```
 
+More examples can be found in the [examples](#examples) section.
+
 <br>
 
 If you're using [pydantic](https://pydantic-docs.helpmanual.io/) or [fastapi](https://fastapi.tiangolo.com/),
@@ -163,7 +165,7 @@ If you're using the plugin for a FastAPI project,
 you should enable support. This will treat the annotations
 of any decorated function as needed at runtime.
 
-Enabling FastAPI support also enabled Pydantic support.
+Enabling FastAPI support will also enable Pydantic support.
 
 - **name**: `type-checking-fastapi-enabled`
 - **type**: `bool`
@@ -178,18 +180,17 @@ you enable dependency support as described below.
 
 ### FastAPI dependency support
 
-In addition to preventing false positives for decorators,
-we *can* prevent false positives for dependencies. We are
-making a pretty bad trade-off however: by enabling this
-option we treat every annotation in every function definition
-across your entire project as a possible dependency annotation.
-In other words, we stop linting all function annotations completely,
-to avoid the possibility of false positives.
+In addition to preventing false positives for decorators, we *can*
+prevent false positives for dependencies. We are making a pretty bad
+trade-off however: by enabling this option we treat every annotation
+in every function definition across your entire project as a possible
+dependency annotation. In other words, we stop linting all function
+annotations completely, to avoid the possibility of false positives.
 If you prefer to be on the safe side, you should enable this - otherwise
 it might be enough to be aware that false positives can happen for functions
 used as dependencies.
 
-Enabling dependency support also enabled FastAPI and Pydantic support.
+Enabling dependency support will also enable FastAPI and Pydantic support.
 
 - **name**: `type-checking-fastapi-dependency-support-enabled`
 - **type**: `bool`
@@ -202,29 +203,30 @@ type-checking-fastapi-dependency-support-enabled: true  # default false
 
 Why did we create this plugin?
 
-Good type hinting requires a lot of imports, which can increase
+Good type hinting typically requires a lot of project imports, which can increase
 the risk of [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?#import-cycles)
-in your project. The recommended way of preventing this problem is
-to use `typing.TYPE_CHECKING` blocks to guard these types of imports.
+in a project. The recommended way of preventing this problem is to use `typing.TYPE_CHECKING` blocks
+to guard these types of imports.
 
 Both `TC001` and `TC002` help alleviate this problem; the reason there are two
 codes instead of one, is because the import cycles rarely occur from
-library/third-party imports, so this artificial split provides a way to filter down
-the total pool of imports for users that want to guard against import cycles,
+library/third-party imports, so this classification split provides a way to filter down
+the total number of imports for users that want to guard against import cycles,
 but don't want to manage every import in their projects *this* strictly.
 
-Once imports are guarded, they will no longer be evaluated during runtime. The
+Once imports are guarded, they will no longer be evaluated/imported during runtime. The
 consequence of this is that these imports can no longer be treated as if they
 were imported outside the block. Instead we need to use [forward references](https://www.python.org/dev/peps/pep-0484/#forward-references).
 
 For Python version `>= 3.7`, there are actually two ways of solving this issue.
 You can either make your annotations string literals, or you can use a `__futures__` import to enable [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
 See [this](https://stackoverflow.com/a/55344418/8083459) excellent stackoverflow answer
-for a better explanation of the differences.
+for a great explanation of the differences.
 
 ## Examples
 
-### Performance
+<details>
+<summary><b>Performance example</b></summary>
 
 Imports for type hinting can have a performance impact.
 
@@ -255,8 +257,10 @@ def dataframe_length(df: pandas.DataFrame) -> int:
 ```
 
 Now the import is no longer made at runtime. If you're unsure about how this works, see the [mypy docs](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?#typing-type-checking) for a basic introduction.
+</details>
 
-### Import circularity
+<details>
+<summary><b>Import circularity example</b></summary>
 
 **Bad code**
 
@@ -335,6 +339,7 @@ if TYPE_CHECKING:
 class B(Model):
     def bar(self, a: 'A'): ...
 ```
+</details>
 
 ## Running the plugin as a pre-commit hook
 
