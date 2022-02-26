@@ -179,7 +179,15 @@ class TestFoundBugs:
 
             p: Path
             """
-        for example in [type_checking, typing_type_checking, alias]:
+        aliased_typing = """
+            import typing as T
+
+            if T.TYPE_CHECKING:
+                from pathlib import Path
+
+            p: Path
+            """
+        for example in [type_checking, typing_type_checking, alias, aliased_typing]:
             assert _get_error(textwrap.dedent(example)) == set()
 
 
