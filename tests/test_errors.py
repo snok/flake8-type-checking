@@ -149,6 +149,47 @@ class TestFoundBugs:
         )
         assert _get_error(example) == {"7:4 TC002 Move third-party import 'x' into a type-checking block"}
 
+    def test_type_checking_block_formats_detected(self):
+        """
+        We should detect type-checking blocks, no matter* the format.
+
+        https://github.com/snok/flake8-type-checking/issues/68
+        """
+        type_checking = """
+            from typing import TYPE_CHECKING
+
+            if TYPE_CHECKING:
+                from pathlib import Path
+
+            p: Path
+            """
+        typing_type_checking = """
+            import typing
+
+            if typing.TYPE_CHECKING:
+                from pathlib import Path
+
+            p: Path
+            """
+        alias = """
+            from typing import TYPE_CHECKING as test
+
+            if test:
+                from pathlib import Path
+
+            p: Path
+            """
+        aliased_typing = """
+            import typing as T
+
+            if T.TYPE_CHECKING:
+                from pathlib import Path
+
+            p: Path
+            """
+        for example in [type_checking, typing_type_checking, alias, aliased_typing]:
+            assert _get_error(textwrap.dedent(example)) == set()
+
 
 def test_import_is_local():
     """

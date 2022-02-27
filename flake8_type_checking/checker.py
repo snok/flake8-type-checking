@@ -101,6 +101,9 @@ class ImportVisitor(ast.NodeTransformer):
         # (a string) should be ignored or counted
         self.__all___assignments: list[tuple[int, int]] = []
 
+        self.type_checking_alias: Optional[str] = None
+        self.typing_alias: Optional[str] = None
+
     @property
     def names(self) -> set[str]:
         """Return unique names."""
@@ -148,7 +151,36 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
-        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore[attr-defined]
+        # True for `if typing.TYPE_CHECKING:` or `if T.TYPE_CHECKING:`
+        typing_type_checking = (
+            hasattr(node.test, 'attr') and node.test.attr == 'TYPE_CHECKING'  # type: ignore[attr-defined]
+        )
+
+        if typing_type_checking:
+            # By default, TYPE_CHECKING is exempt from being noted as
+            # an import which can be moved into a type-checking block.
+            # When a user does `import typing\nif typing.TYPE_CHECKING`,
+            # we also add typing to exempt imports and remove any already
+            # found errors.
+            # We could have just added typing as a blanket ignored module,
+            # but that's a breaking change, so this will do for now.
+            typing_module_name = self.typing_alias or 'typing'
+            self.exempt_imports.append(typing_module_name)
+            if typing_module_name in self.remote_imports:
+                del self.remote_imports[typing_module_name]
+            if typing_module_name in self.import_names:
+                del self.import_names[typing_module_name]
+
+        # True if `if TYPE_CHECKING:`
+        type_checking = hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING'  # type: ignore[attr-defined]
+
+        type_checking_alias = (
+            self.type_checking_alias
+            and hasattr(node.test, 'id')
+            and node.test.id == self.type_checking_alias  # type: ignore[attr-defined]
+        )
+
+        if type_checking or typing_type_checking or type_checking_alias:  # type: ignore[attr-defined]
             # Here we want to define the line-number-range where the type-checking block exists
             # Initially I just set the node.lineno and node.end_lineno, but it turns out that else blocks are
             # included in this span. Because of this, we now first look for else block to help us limit the range
@@ -249,6 +281,14 @@ class ImportVisitor(ast.NodeTransformer):
                     # futures imports should always be the first line
                     # in a file, so we should only need to check this once
                     self.futures_annotation = False
+
+            # Look for a TYPE_CHECKING import
+            if name_node.name == 'TYPE_CHECKING' and name_node.asname is not None:
+                self.type_checking_alias = name_node.asname
+
+            # Look for typing import
+            if name_node.name == 'typing' and name_node.asname is not None:
+                self.typing_alias = name_node.asname
 
             # Map imports as belonging to the current module, or belonging to a third-party mod
             if name_node.name not in self.exempt_imports:
