@@ -34,7 +34,7 @@ if TYPE_CHECKING:
         Import,
     )
 
-ATTRIBUTE_PROPERTY = 'flake8-type-checking_parent'
+ATTRIBUTE_PROPERTY = '_flake8-type-checking_parent'
 
 py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 
@@ -422,7 +422,7 @@ class ImportVisitor(ast.NodeTransformer):
     def _set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
         # Set the parent attribute on the current node children
         for key, value in node.__dict__.items():
-            if type(value) not in [int, str, list, bool] and value is not None:
+            if type(value) not in [int, str, list, bool] and value is not None and not key.startswith('_'):
                 setattr(node.__dict__[key], attr, val)
         return node
 
