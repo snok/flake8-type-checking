@@ -34,7 +34,7 @@ if TYPE_CHECKING:
         Import,
     )
 
-ATTRIBUTE_PROPERTY = 'flake8-type-checking_parent'
+ATTRIBUTE_PROPERTY = '_flake8-type-checking_parent'
 
 py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 
