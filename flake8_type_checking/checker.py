@@ -324,6 +324,7 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Note down class names."""
+        _attrs_imports = self._attrs_imports()
         if (
             self.pydantic_enabled
             and node.bases
@@ -332,7 +333,7 @@ class ImportVisitor(ast.NodeTransformer):
                 and isinstance(node.bases[0], ast.Name)
                 and node.bases[0].id in self.pydantic_enabled_baseclass_passlist
             )
-        ):
+        ) or (_attrs_imports and self._is_attrs_class(node, _attrs_imports)):
             # When pydantic support is enabled, treat any class variable
             # annotation as being required during runtime.
             # We need to do this, or users run the risk of guarding imports
@@ -346,6 +347,52 @@ class ImportVisitor(ast.NodeTransformer):
         self.class_names.add(node.name)
         self.generic_visit(node)
         return node
+
+    def _attrs_imports(self) -> dict[str, str]:
+        rv = {}
+        for imp in self.remote_imports.values():
+            node = imp["node"]
+            module = getattr(node, "module", "")
+            if module == "attrs" or module == "attr":
+                module = module + "."
+                for submodule in getattr(node, "names", []):
+                    if submodule.asname is None:
+                        alias = submodule.name
+                    else:
+                        alias = submodule.asname
+                    rv[alias] = module + submodule.name
+            else:
+                for name in getattr(node, "names", []):
+                    module = name.name.split(".")[0]
+                    if module == "attr" or module == "attrs":
+                        rv[name.asname] = name.name
+        return rv
+
+    def _is_attrs_class(self, node: ast.ClassDef, attrs_imports: dict[str, str]) -> bool:
+        for decorator in node.decorator_list:
+            if self._is_attrs_decorator(decorator, attrs_imports):
+                return True
+        return False
+
+    def _is_attrs_decorator(self, decorator: Any, attrs_imports: dict[str, str]) -> bool:
+        if isinstance(decorator, ast.Call):
+            return self._is_attrs_decorator(decorator.func, attrs_imports)
+        elif isinstance(decorator, ast.Attribute):
+            attribute = decorator
+        elif isinstance(decorator, ast.Name):
+            attribute = decorator.id
+        else:
+            return False
+        return self._is_attrs(attribute, attrs_imports)
+
+    @staticmethod
+    def _is_attrs(attribute: Union[ast.Attribute, str, ast.expr], attrs_imports: dict[str, str]) -> bool:
+        possible = ["attrs.define", "attr.s", "attr.define"]
+        s1 = f"attr.{getattr(attribute, 'attr', '')}"
+        s2 = f"attrs.{getattr(attribute, 'attrs', '')}"
+        s3 = attrs_imports.get(str(attribute), "")
+        actual = [s1, s2, s3]
+        return any([e for e in actual if e in possible])
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
