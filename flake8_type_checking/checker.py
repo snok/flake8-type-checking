@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
 ATTRIBUTE_PROPERTY = '_flake8-type-checking_parent'
 
+ATTRS_DECORATORS = ['attrs.define', 'attr.define', 'attr.s']
+
 py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 
 
@@ -324,6 +326,7 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Note down class names."""
+        _attrs_imports = self._attrs_imports()
         if (
             self.pydantic_enabled
             and node.bases
@@ -332,7 +335,7 @@ class ImportVisitor(ast.NodeTransformer):
                 and isinstance(node.bases[0], ast.Name)
                 and node.bases[0].id in self.pydantic_enabled_baseclass_passlist
             )
-        ):
+        ) or (_attrs_imports and self._is_attrs_class(node, _attrs_imports)):
             # When pydantic support is enabled, treat any class variable
             # annotation as being required during runtime.
             # We need to do this, or users run the risk of guarding imports
@@ -346,6 +349,53 @@ class ImportVisitor(ast.NodeTransformer):
         self.class_names.add(node.name)
         self.generic_visit(node)
         return node
+
+    def _attrs_imports(self) -> dict[str, str]:
+        rv = {}
+        for imp in self.remote_imports.values():
+            node = imp['node']
+            module = getattr(node, 'module', '')
+            if module == 'attrs' or module == 'attr':
+                module = module + '.'
+                for submodule in getattr(node, 'names', []):
+                    if submodule.asname is None:
+                        alias = submodule.name
+                    else:
+                        alias = submodule.asname
+                    rv[alias] = module + submodule.name
+            else:
+                for name in getattr(node, 'names', []):
+                    module = name.name.split('.')[0]
+                    if module == 'attr' or module == 'attrs':
+                        rv[name.asname] = name.name
+        return rv
+
+    def _is_attrs_class(self, node: ast.ClassDef, attrs_imports: dict[str, str]) -> bool:
+        for decorator in node.decorator_list:
+            if self._is_attrs_decorator(decorator, attrs_imports):
+                return True
+        return False
+
+    def _is_attrs_decorator(self, decorator: Any, attrs_imports: dict[str, str]) -> bool:
+        if isinstance(decorator, ast.Call):
+            return self._is_attrs_decorator(decorator.func, attrs_imports)
+        elif isinstance(decorator, ast.Attribute):
+            return self._is_attrs_attribute(decorator)
+        elif isinstance(decorator, ast.Name):
+            return self._is_attrs_str(decorator.id, attrs_imports)
+        return False
+
+    @staticmethod
+    def _is_attrs_attribute(attribute: ast.Attribute) -> bool:
+        s1 = f"attr.{getattr(attribute, 'attr', '')}"
+        s2 = f"attrs.{getattr(attribute, 'attrs', '')}"
+        actual = [s1, s2]
+        return any([e for e in actual if e in ATTRS_DECORATORS])
+
+    @staticmethod
+    def _is_attrs_str(attribute: Union[str, ast.expr], attrs_imports: dict[str, str]) -> bool:
+        actual = attrs_imports.get(str(attribute), '')
+        return actual in ATTRS_DECORATORS
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
