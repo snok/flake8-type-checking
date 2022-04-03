@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
 ATTRIBUTE_PROPERTY = '_flake8-type-checking_parent'
 
+ATTRS_DECORATORS = ['attrs.define', 'attr.define', 'attr.s']
+
 py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 
 
@@ -351,20 +353,20 @@ class ImportVisitor(ast.NodeTransformer):
     def _attrs_imports(self) -> dict[str, str]:
         rv = {}
         for imp in self.remote_imports.values():
-            node = imp["node"]
-            module = getattr(node, "module", "")
-            if module == "attrs" or module == "attr":
-                module = module + "."
-                for submodule in getattr(node, "names", []):
+            node = imp['node']
+            module = getattr(node, 'module', '')
+            if module == 'attrs' or module == 'attr':
+                module = module + '.'
+                for submodule in getattr(node, 'names', []):
                     if submodule.asname is None:
                         alias = submodule.name
                     else:
                         alias = submodule.asname
                     rv[alias] = module + submodule.name
             else:
-                for name in getattr(node, "names", []):
-                    module = name.name.split(".")[0]
-                    if module == "attr" or module == "attrs":
+                for name in getattr(node, 'names', []):
+                    module = name.name.split('.')[0]
+                    if module == 'attr' or module == 'attrs':
                         rv[name.asname] = name.name
         return rv
 
@@ -378,21 +380,22 @@ class ImportVisitor(ast.NodeTransformer):
         if isinstance(decorator, ast.Call):
             return self._is_attrs_decorator(decorator.func, attrs_imports)
         elif isinstance(decorator, ast.Attribute):
-            attribute = decorator
+            return self._is_attrs_attribute(decorator)
         elif isinstance(decorator, ast.Name):
-            attribute = decorator.id
-        else:
-            return False
-        return self._is_attrs(attribute, attrs_imports)
+            return self._is_attrs_str(decorator.id, attrs_imports)
+        return False
 
     @staticmethod
-    def _is_attrs(attribute: Union[ast.Attribute, str, ast.expr], attrs_imports: dict[str, str]) -> bool:
-        possible = ["attrs.define", "attr.s", "attr.define"]
+    def _is_attrs_attribute(attribute: ast.Attribute) -> bool:
         s1 = f"attr.{getattr(attribute, 'attr', '')}"
         s2 = f"attrs.{getattr(attribute, 'attrs', '')}"
-        s3 = attrs_imports.get(str(attribute), "")
-        actual = [s1, s2, s3]
-        return any([e for e in actual if e in possible])
+        actual = [s1, s2]
+        return any([e for e in actual if e in ATTRS_DECORATORS])
+
+    @staticmethod
+    def _is_attrs_str(attribute: Union[str, ast.expr], attrs_imports: dict[str, str]) -> bool:
+        actual = attrs_imports.get(str(attribute), '')
+        return actual in ATTRS_DECORATORS
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
