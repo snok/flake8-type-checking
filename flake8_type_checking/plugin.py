@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from copy import deepcopy
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
@@ -78,7 +79,7 @@ class Plugin:
 
     def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""
-        visitor = TypingOnlyImportsChecker(self._tree, self.options)
+        visitor = TypingOnlyImportsChecker(deepcopy(self._tree), self.options)
         for e in visitor.errors:
             if self.should_warn(e[2].split(':')[0]):
                 yield e
