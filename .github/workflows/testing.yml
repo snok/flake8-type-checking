@@ -50,7 +50,7 @@ jobs:
           path: ~/.local
           key: key-13
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@5a8d10ceffa1f45e2ddfac3d1a0096415d57d893
         with:
           virtualenvs-create: false
           version: 1.2.0a2
