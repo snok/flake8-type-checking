@@ -75,6 +75,13 @@ class Plugin:
             default=False,
             help='Prevent flagging of annotations for any function.',
         )
+        option_manager.add_option(
+            '--type-checking-cattrs-enabled',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Prevent flagging of annotations on attrs class definitions.',
+        )
 
     def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""

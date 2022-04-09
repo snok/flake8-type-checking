@@ -50,12 +50,14 @@ class ImportVisitor(ast.NodeTransformer):
         pydantic_enabled: bool,
         fastapi_enabled: bool,
         fastapi_dependency_support_enabled: bool,
+        cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
         exempt_modules: Optional[list[str]] = None,
     ) -> None:
         self.pydantic_enabled = pydantic_enabled
         self.fastapi_enabled = fastapi_enabled
         self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
+        self.cattrs_enabled = cattrs_enabled
         self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
@@ -326,7 +328,7 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Note down class names."""
-        _attrs_imports = self._attrs_imports()
+        _attrs_imports = self._attrs_imports() if self.cattrs_enabled else None
         if (
             self.pydantic_enabled
             and node.bases
@@ -597,6 +599,7 @@ class TypingOnlyImportsChecker:
         pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
         fastapi_enabled = getattr(options, 'type_checking_fastapi_enabled', False)
         fastapi_dependency_support_enabled = getattr(options, 'type_checking_fastapi_dependency_support_enabled', False)
+        cattrs_enabled = getattr(options, 'type_checking_cattrs_enabled', False)
 
         if fastapi_enabled and not pydantic_enabled:
             # FastAPI support must include Pydantic support.
@@ -611,6 +614,7 @@ class TypingOnlyImportsChecker:
             self.cwd,
             pydantic_enabled=pydantic_enabled,
             fastapi_enabled=fastapi_enabled,
+            cattrs_enabled=cattrs_enabled,
             exempt_modules=exempt_modules,
             fastapi_dependency_support_enabled=fastapi_dependency_support_enabled,
             pydantic_enabled_baseclass_passlist=pydantic_enabled_baseclass_passlist,

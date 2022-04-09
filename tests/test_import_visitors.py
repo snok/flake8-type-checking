@@ -10,13 +10,27 @@ from tests import REPO_ROOT
 
 
 def _get_remote_imports(example):
-    visitor = ImportVisitor(REPO_ROOT, False, False, False, [])
+    visitor = ImportVisitor(
+        cwd=REPO_ROOT,
+        pydantic_enabled=False,
+        fastapi_enabled=False,
+        fastapi_dependency_support_enabled=False,
+        cattrs_enabled=False,
+        pydantic_enabled_baseclass_passlist=[],
+    )
     visitor.visit(ast.parse(example.replace('; ', '\n')))
     return list(visitor.remote_imports.keys())
 
 
 def _get_local_imports(example):
-    visitor = ImportVisitor(REPO_ROOT, False, False, False, [])
+    visitor = ImportVisitor(
+        cwd=REPO_ROOT,
+        pydantic_enabled=False,
+        fastapi_enabled=False,
+        fastapi_dependency_support_enabled=False,
+        cattrs_enabled=False,
+        pydantic_enabled_baseclass_passlist=[],
+    )
     visitor.visit(ast.parse(example.replace('; ', '\n')))
     return list(visitor.local_imports.keys())
 
