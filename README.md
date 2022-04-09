@@ -43,7 +43,8 @@ More examples can be found in the [examples](#examples) section.
 
 <br>
 
-If you're using [pydantic](https://pydantic-docs.helpmanual.io/) or [fastapi](https://fastapi.tiangolo.com/),
+If you're using [pydantic](https://pydantic-docs.helpmanual.io/),
+[fastapi](https://fastapi.tiangolo.com/), or [cattrs](https://github.com/python-attrs/cattrs)
 see the [configuration](#configuration) for how to enable support.
 
 ## Primary features
@@ -198,6 +199,26 @@ Enabling dependency support will also enable FastAPI and Pydantic support.
 [flake8]
 type-checking-fastapi-dependency-support-enabled: true  # default false
 ```
+
+### Cattrs support
+
+If you're using the plugin in a project which uses `cattrs`,
+you can enable support. This will treat the annotations
+of any decorated `attrs` class as needed at runtime, since
+`cattrs.unstructure` calls will fail when loading
+classes where types are not available at runtime.
+
+Note: the cattrs support setting does not yet detect and
+ignore class var annotations on dataclasses or other non-attrs class types.
+This can be added in the future if needed.
+
+- **name**: `type-checking-cattrs-enabled`
+- **type**: `bool`
+```ini
+[flake8]
+type-checking-cattrs-enabled = true  # default false
+```
+
 
 ## Rationale
 
