@@ -706,7 +706,7 @@ class TypingOnlyImportsChecker:
         """TC101."""
         # If futures imports are present, any ast.Constant captured in _add_annotation should yield an error
         if self.visitor.futures_annotation:
-            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+            for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
                 yield lineno, col_offset, TC101.format(annotation=annotation), None
         else:
             """
@@ -731,7 +731,7 @@ class TypingOnlyImportsChecker:
 
             For anyone with more insight into how this might be tackled, contributions are very welcome.
             """
-            for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+            for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
                 for _, import_name in self.visitor.type_checking_block_imports:
                     if import_name in annotation:
                         break
@@ -745,14 +745,14 @@ class TypingOnlyImportsChecker:
 
     def missing_quotes(self) -> Flake8Generator:
         """TC200."""
-        for (lineno, col_offset, annotation) in self.visitor.unwrapped_annotations:
+        for lineno, col_offset, annotation in self.visitor.unwrapped_annotations:
             for _, name in self.visitor.type_checking_block_imports:
                 if annotation == name:
                     yield lineno, col_offset, TC200.format(annotation=annotation), None
 
     def excess_quotes(self) -> Flake8Generator:
         """TC201."""
-        for (lineno, col_offset, annotation) in self.visitor.wrapped_annotations:
+        for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
             # See comment in futures_excess_quotes
             for _, import_name in self.visitor.type_checking_block_imports:
                 if import_name in annotation:
