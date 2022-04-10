@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+import pickle
 import sys
-from copy import deepcopy
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from flake8.options.manager import OptionManager
 
     from flake8_type_checking.types import Flake8Generator
-
 
 if sys.version_info >= (3, 8):
     from importlib.metadata import version
@@ -79,7 +78,7 @@ class Plugin:
 
     def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""
-        visitor = TypingOnlyImportsChecker(deepcopy(self._tree), self.options)
+        visitor = TypingOnlyImportsChecker(pickle.loads(pickle.dumps(self._tree, -1)), self.options)
         for e in visitor.errors:
             if self.should_warn(e[2].split(':')[0]):
                 yield e
