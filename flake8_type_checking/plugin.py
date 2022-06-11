@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import pickle
-import sys
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
@@ -16,11 +15,7 @@ if TYPE_CHECKING:
 
     from flake8_type_checking.types import Flake8Generator
 
-if sys.version_info >= (3, 8):
-    from importlib.metadata import version
-else:
-    # noinspection PyUnresolvedReferences
-    from importlib_metadata import version
+from importlib.metadata import version
 
 logger = logging.getLogger('flake8.type_checking')
 
