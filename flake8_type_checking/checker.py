@@ -84,7 +84,72 @@ class AttrsMixin:
         return actual in ATTRS_DECORATORS
 
 
-class ImportVisitor(ast.NodeTransformer, AttrsMixin):
+class DunderAllMixin:
+    """
+    Contains the necessary logic for preventing __all__ false positives.
+
+    Python modules will typically export internals using syntax like this:
+
+    ```python
+    # app/__init__.py
+
+    from app.x import y
+
+    __all__ ('y',)
+    ```
+
+    Since there are no uses of the `do_something_important` we would typically raise
+    a TC001 error saying that this import can be moved into a type checking block, but
+    this is an exception to the general rule.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.__all___assignments: list[tuple[int, int]] = []
+
+    def in___all___declaration(self, node: ast.Constant) -> bool:
+        """
+        Indicate whether a node is a sub-node of an __all__ assignment node.
+
+        We want to avoid raising TC001 errors when imports are defined
+        as strings, like this:
+
+        This is a little tricky though. We can't just add string definitions
+        to our 'uses' map, since that will generate false positives elsewhere.
+        Instead we need this helper to tell us when *not* to ignore constants.
+        """
+        if not self.__all___assignments:
+            return False
+        if not isinstance(getattr(node, 'value', ''), str):
+            return False
+        return any(
+            (assignment[0] is not None and node.lineno is not None and assignment[1] is not None)
+            and (assignment[0] <= node.lineno <= assignment[1])
+            for assignment in self.__all___assignments
+        )
+
+    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+        """
+        Make sure we keep track of all __all__ assignments.
+
+        We would do this in visit_Name, except the name attribute for the assignment's
+        target's end_lineno only spans the assignment line, not the whole assignment:
+
+            ^^^^^^^^ this is all the ast.target for __all__ spans
+            __all__ = [  <
+                'one',   <
+                'two',   <
+                'three'  < \
+            ]            <-- This is the node.value
+
+        So we need to look at the assign element, and inspect both the target(s) and value.
+        """
+        if len(node.targets) == 1 and getattr(node.targets[0], 'id', '') == '__all__':
+            self.__all___assignments.append((node.targets[0].lineno, node.value.end_lineno or node.targets[0].lineno))
+
+        return node
+
+
+class ImportVisitor(ast.NodeTransformer, AttrsMixin, DunderAllMixin):
     """Map all imports outside of type-checking blocks."""
 
     def __init__(
@@ -97,6 +162,7 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin):
         pydantic_enabled_baseclass_passlist: list[str],
         exempt_modules: Optional[list[str]] = None,
     ) -> None:
+        super().__init__()
         self.pydantic_enabled = pydantic_enabled
         self.fastapi_enabled = fastapi_enabled
         self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
@@ -142,12 +208,6 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin):
         self.function_scope_imports: dict[int, FunctionScopeImportsDict] = {}
         self.function_ranges: dict[int, FunctionRangesDict] = {}
 
-        # __all__ assignments' strings are counted as uses
-        # to prevent TC001 "false" positives. We need a list
-        # of known assignments to check whether an ast.Constant node
-        # (a string) should be ignored or counted
-        self.__all___assignments: list[tuple[int, int]] = []
-
         self.type_checking_alias: Optional[str] = None
         self.typing_alias: Optional[str] = None
 
@@ -168,32 +228,6 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin):
         return any(
             type_checking_block[0] <= node.lineno <= type_checking_block[1]
             for type_checking_block in self.type_checking_blocks + self.empty_type_checking_blocks
-        )
-
-    def _in___all___declaration(self, node: ast.Constant) -> bool:
-        """
-        Indicate whether a node is a sub-node of an __all__ assignment node.
-
-        We want to avoid raising TC001 errors when imports are defined
-        as strings, like this:
-
-            # __init__.py
-            from x import y
-
-            __all__ = ('y',)
-
-        This is a little tricky though. We can't just add string definitions
-        to our 'uses' map, since that will generate false positives elsewhere.
-        Instead we need this helper to tell us when to *not* ignore constants.
-        """
-        if not self.__all___assignments:
-            return False
-        if not isinstance(getattr(node, 'value', ''), str):
-            return False
-        return any(
-            (assignment[0] is not None and node.lineno is not None and assignment[1] is not None)
-            and (assignment[0] <= node.lineno <= assignment[1])
-            for assignment in self.__all___assignments
         )
 
     def visit_If(self, node: ast.If) -> Any:
@@ -249,6 +283,12 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin):
                     (node.lineno, start_of_else_block or node.end_lineno or node.lineno, node.col_offset)
                 )
 
+        self.generic_visit(node)
+        return node
+
+    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+        """Call the DunderAllMixin visit_Assign before returning."""
+        super().visit_Assign(node)
         self.generic_visit(node)
         return node
 
@@ -367,34 +407,11 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin):
         self.uses[node.id] = node
         return node
 
-    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
-        """
-        Map __all__ assignments.
-
-        We would do this in visit_Name, except the name attribute for the assignment's
-        target's end_lineno only spans the assignment line, not the whole assignment:
-
-
-            ^^^^^^^^ this is all the ast.target for __all__ spans
-            __all__ = [  <
-                'one',   <
-                'two',   <
-                'three'  < \
-            ]            <-- This is the node.value
-
-        So we need to look at the assign element, and inspect both the target(s) and value.
-        """
-        if len(node.targets) == 1 and getattr(node.targets[0], 'id', '') == '__all__':
-            self.__all___assignments.append((node.targets[0].lineno, node.value.end_lineno or node.targets[0].lineno))
-
-        self.generic_visit(node)
-        return node
-
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
         """Map constants."""
         if self._in_type_checking_block(node):
             return node
-        elif self._in___all___declaration(node):
+        elif self.in___all___declaration(node):
             self.uses[node.value] = node
         return node
 
