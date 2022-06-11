@@ -8,7 +8,8 @@ from unittest.mock import Mock
 
 from flake8_type_checking.plugin import Plugin
 
-REPO_ROOT = Path(os.getcwd())
+REPO_ROOT = Path(__file__).parent.parent
+
 mod = 'flake8_type_checking'
 
 
