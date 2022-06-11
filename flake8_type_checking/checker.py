@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import os
-import sys
 from ast import Index
 from contextlib import suppress
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 from aspy.refactor_imports.classify import ImportType, classify_import
 
 from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
+from flake8_type_checking.constants import ATTRIBUTE_PROPERTY, ATTRS_DECORATORS, ATTRS_IMPORTS, py38
 
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
@@ -23,16 +23,68 @@ if TYPE_CHECKING:
         FunctionRangesDict,
         FunctionScopeImportsDict,
         Import,
+        Name,
     )
 
-ATTRIBUTE_PROPERTY = '_flake8-type-checking_parent'
 
-ATTRS_DECORATORS = ['attrs.define', 'attr.define', 'attr.s']
+class AttrsMixin:
+    """
+    Contains necessary logic for cattrs + attrs support.
 
-py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
+    When the cattrs_enabled option is specified as True,
+    we treat type hints on attrs classes as needed at runtime.
+    """
+
+    remote_imports: dict[str, ErrorDict]
+
+    def get_all_attrs_imports(self) -> dict[Optional[str], str]:
+        """Return a map of all attrs/attr imports."""
+        attrs_imports: dict[Optional[str], str] = {}  # map of alias to full import name
+
+        for error_dict in self.remote_imports.values():
+            module = getattr(error_dict['node'], 'module', '')
+            names: list[Name] = getattr(error_dict['node'], 'names', [])
+
+            for name in names:
+                if module in ATTRS_IMPORTS:
+                    alias = name.name if name.asname is None else name.asname
+                    attrs_imports[alias] = f'{module}.{name.name}'
+                elif name.name.split('.')[0] in ATTRS_IMPORTS:
+                    attrs_imports[name.asname] = name.name
+
+        return attrs_imports
+
+    def is_attrs_class(self, class_node: ast.ClassDef) -> bool:
+        """Check whether an ast.ClassDef is an attrs class or not."""
+        attrs_imports = self.get_all_attrs_imports()
+        return any(self.is_attrs_decorator(decorator, attrs_imports) for decorator in class_node.decorator_list)
+
+    def is_attrs_decorator(self, decorator: Any, attrs_imports: dict[Optional[str], str]) -> bool:
+        """Check whether a class decorator is an attrs decorator or not."""
+        if isinstance(decorator, ast.Call):
+            return self.is_attrs_decorator(decorator.func, attrs_imports)
+        elif isinstance(decorator, ast.Attribute):
+            return self.is_attrs_attribute(decorator)
+        elif isinstance(decorator, ast.Name):
+            return self.is_attrs_str(decorator.id, attrs_imports)
+        return False
+
+    @staticmethod
+    def is_attrs_attribute(attribute: ast.Attribute) -> bool:
+        """Check whether an ast.Attribute is an attrs attribute or not."""
+        s1 = f"attr.{getattr(attribute, 'attr', '')}"
+        s2 = f"attrs.{getattr(attribute, 'attrs', '')}"
+        actual = [s1, s2]
+        return any(e for e in actual if e in ATTRS_DECORATORS)
+
+    @staticmethod
+    def is_attrs_str(attribute: Union[str, ast.expr], attrs_imports: dict[Optional[str], str]) -> bool:
+        """Check whether an ast.expr or string is an attrs string or not."""
+        actual = attrs_imports.get(str(attribute), '')
+        return actual in ATTRS_DECORATORS
 
 
-class ImportVisitor(ast.NodeTransformer):
+class ImportVisitor(ast.NodeTransformer, AttrsMixin):
     """Map all imports outside of type-checking blocks."""
 
     def __init__(
@@ -284,22 +336,19 @@ class ImportVisitor(ast.NodeTransformer):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Note down class names."""
-        _attrs_imports = self._attrs_imports() if self.cattrs_enabled else None
-        if (
-            self.pydantic_enabled
-            and node.bases
-            and not (
-                len(node.bases) == 1
-                and isinstance(node.bases[0], ast.Name)
-                and node.bases[0].id in self.pydantic_enabled_baseclass_passlist
-            )
-        ) or (_attrs_imports and self._is_attrs_class(node, _attrs_imports)):
-            # When pydantic support is enabled, treat any class variable
-            # annotation as being required during runtime.
-            # We need to do this, or users run the risk of guarding imports
-            # to resources that actually are required at runtime -- required
-            # because Pydantic unlike most libraries, evaluates annotations
-            # *at* runtime.
+        has_base_classes = node.bases
+        all_base_classes_ignored = all(
+            isinstance(base, ast.Name) and base.id in self.pydantic_enabled_baseclass_passlist for base in node.bases
+        )
+        affected_by_pydantic_support = self.pydantic_enabled and has_base_classes and not all_base_classes_ignored
+        affected_by_cattrs_support = self.cattrs_enabled and self.is_attrs_class(node)
+
+        if affected_by_pydantic_support or affected_by_cattrs_support:
+            # When pydantic or cattrs support is enabled, treat any class variable
+            # annotation as being required at runtime. We need to do this, or
+            # users run the risk of guarding imports to resources that actually are
+            # required at runtime. This can be pretty scary, since it will crashes
+            # the application at runtime.
             for element in node.body:
                 if isinstance(element, ast.AnnAssign):
                     self.visit(element.annotation)
@@ -307,53 +356,6 @@ class ImportVisitor(ast.NodeTransformer):
         self.class_names.add(node.name)
         self.generic_visit(node)
         return node
-
-    def _attrs_imports(self) -> dict[str, str]:
-        rv = {}
-        for imp in self.remote_imports.values():
-            node = imp['node']
-            module = getattr(node, 'module', '')
-            if module == 'attrs' or module == 'attr':
-                module = module + '.'
-                for submodule in getattr(node, 'names', []):
-                    if submodule.asname is None:
-                        alias = submodule.name
-                    else:
-                        alias = submodule.asname
-                    rv[alias] = module + submodule.name
-            else:
-                for name in getattr(node, 'names', []):
-                    module = name.name.split('.')[0]
-                    if module == 'attr' or module == 'attrs':
-                        rv[name.asname] = name.name
-        return rv
-
-    def _is_attrs_class(self, node: ast.ClassDef, attrs_imports: dict[str, str]) -> bool:
-        for decorator in node.decorator_list:
-            if self._is_attrs_decorator(decorator, attrs_imports):
-                return True
-        return False
-
-    def _is_attrs_decorator(self, decorator: Any, attrs_imports: dict[str, str]) -> bool:
-        if isinstance(decorator, ast.Call):
-            return self._is_attrs_decorator(decorator.func, attrs_imports)
-        elif isinstance(decorator, ast.Attribute):
-            return self._is_attrs_attribute(decorator)
-        elif isinstance(decorator, ast.Name):
-            return self._is_attrs_str(decorator.id, attrs_imports)
-        return False
-
-    @staticmethod
-    def _is_attrs_attribute(attribute: ast.Attribute) -> bool:
-        s1 = f"attr.{getattr(attribute, 'attr', '')}"
-        s2 = f"attrs.{getattr(attribute, 'attrs', '')}"
-        actual = [s1, s2]
-        return any([e for e in actual if e in ATTRS_DECORATORS])
-
-    @staticmethod
-    def _is_attrs_str(attribute: Union[str, ast.expr], attrs_imports: dict[str, str]) -> bool:
-        actual = attrs_imports.get(str(attribute), '')
-        return actual in ATTRS_DECORATORS
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""

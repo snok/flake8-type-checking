@@ -1,7 +1,7 @@
 # flake8: noqa: D101
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Protocol
 
 if TYPE_CHECKING:
     import ast
@@ -20,3 +20,7 @@ if TYPE_CHECKING:
 
     Import = Union[ast.Import, ast.ImportFrom]
     Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
+
+    class Name(Protocol):
+        asname: Optional[str]
+        name: str
