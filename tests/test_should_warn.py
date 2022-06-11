@@ -7,11 +7,7 @@ import os
 import re
 import sys
 import textwrap
-
-if sys.version_info >= (3, 8):
-    from importlib.metadata import version
-else:
-    from importlib_metadata import version
+from importlib.metadata import version
 
 
 def test_version(flake8dir):
