@@ -189,26 +189,3 @@ class TestFoundBugs:
             """
         for example in [type_checking, typing_type_checking, alias, aliased_typing]:
             assert _get_error(textwrap.dedent(example)) == set()
-
-
-def test_import_is_local():
-    """
-    Check that if ValueErrors are raised in _import_is_local, we bump it into the TC002 bucket.
-    """
-
-    def raise_value_error(*args, **kwargs):
-        raise ValueError('test')
-
-    visitor = ImportVisitor(
-        cwd=REPO_ROOT,
-        pydantic_enabled=False,
-        fastapi_enabled=False,
-        fastapi_dependency_support_enabled=False,
-        cattrs_enabled=False,
-        pydantic_enabled_baseclass_passlist=[],
-    )
-    assert visitor._import_is_local(mod) is True
-
-    patch('flake8_type_checking.checker.find_spec', raise_value_error).start()
-    assert visitor._import_is_local(mod) is False
-    patch.stopall()

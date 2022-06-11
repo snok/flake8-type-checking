@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import pickle
-import sys
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker

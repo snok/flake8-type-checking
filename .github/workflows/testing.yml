@@ -69,7 +69,8 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          coverage run -m pytest tests
+          cd flake8_type_checking
+          coverage run -m pytest ..
           coverage xml
           coverage report
       - uses: codecov/codecov-action@v2

@@ -30,6 +30,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = '^3.8'
 flake8 = '*'
+"aspy.refactor-imports" = "2 || 3"
 
 [tool.poetry.dev-dependencies]
 pytest = '^6.2.2'
