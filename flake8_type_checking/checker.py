@@ -26,6 +26,11 @@ if TYPE_CHECKING:
         Name,
     )
 
+    MixinBase = 'ImportVisitor'
+
+else:
+    MixinBase = object
+
 
 class AttrsMixin:
     """
@@ -84,7 +89,7 @@ class AttrsMixin:
         return actual in ATTRS_DECORATORS
 
 
-class DunderAllMixin:
+class DunderAllMixin(MixinBase):  # type: ignore
     """
     Contains the necessary logic for preventing __all__ false positives.
 
@@ -146,10 +151,68 @@ class DunderAllMixin:
         if len(node.targets) == 1 and getattr(node.targets[0], 'id', '') == '__all__':
             self.__all___assignments.append((node.targets[0].lineno, node.value.end_lineno or node.targets[0].lineno))
 
+        self.generic_visit(node)
+        return node
+
+    def visit_Constant(self, node: ast.Constant) -> ast.Constant:
+        """Map constant as use, if we're inside an __all__ declaration."""
+        if self.in___all___declaration(node):
+            self.uses[node.value] = node
+
         return node
 
 
-class ImportVisitor(ast.NodeTransformer, AttrsMixin, DunderAllMixin):
+class FastAPIMixin(MixinBase):  # type: ignore
+    """
+    Contains the necessary logic for FastAPI support.
+
+    For FastAPI app/route-decorated views, and for dependencies, we want
+    to treat annotations as needed at runtime.
+    """
+
+    fastapi_enabled: bool
+    fastapi_dependency_support_enabled: bool
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
+            self.handle_fastapi_decorator(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
+            self.handle_fastapi_decorator(node)
+
+    def handle_fastapi_decorator(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+        """
+        Adjust for FastAPI decorator setting.
+
+        When the FastAPI decorator setting is enabled, treat all annotations from within
+        a function definition (except for return annotations) as needed at runtime.
+
+        To achieve this, we just visit the annotations to register them as "uses".
+        """
+        for path in [node.args.args, node.args.kwonlyargs]:
+            for argument in path:
+                if hasattr(argument, 'annotation') and argument.annotation:
+                    self.visit(argument.annotation)
+        if (
+            hasattr(node.args, 'kwarg')
+            and node.args.kwarg
+            and hasattr(node.args.kwarg, 'annotation')
+            and node.args.kwarg.annotation
+        ):
+            self.visit(node.args.kwarg.annotation)
+        if (
+            hasattr(node.args, 'vararg')
+            and node.args.vararg
+            and hasattr(node.args.vararg, 'annotation')
+            and node.args.vararg.annotation
+        ):
+            self.visit(node.args.vararg.annotation)
+
+
+class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransformer):
     """Map all imports outside of type-checking blocks."""
 
     def __init__(
@@ -286,12 +349,6 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin, DunderAllMixin):
         self.generic_visit(node)
         return node
 
-    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
-        """Call the DunderAllMixin visit_Assign before returning."""
-        super().visit_Assign(node)
-        self.generic_visit(node)
-        return node
-
     # -- Map imports -------------------------------
 
     def _add_import(self, node: Import) -> None:
@@ -409,10 +466,11 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin, DunderAllMixin):
 
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
         """Map constants."""
+        super().visit_Constant(node)
+
         if self._in_type_checking_block(node):
             return node
-        elif self.in___all___declaration(node):
-            self.uses[node.value] = node
+
         return node
 
     # -- Map annotations ------------------------------
@@ -476,33 +534,6 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin, DunderAllMixin):
         if getattr(node, 'value', None):
             self.generic_visit(node.value)  # type: ignore[arg-type]
 
-    def _handle_fastapi_decorator(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
-        """
-        Adjust for FastAPI decorator setting.
-
-        When the FastAPI decorator setting is enabled, treat all annotations
-        from within a function definition (except for return annotations) as
-        needed at runtime. To achieve this, visit the annotations to register them as "uses".
-        """
-        for path in [node.args.args, node.args.kwonlyargs]:
-            for argument in path:
-                if hasattr(argument, 'annotation') and argument.annotation:
-                    self.visit(argument.annotation)
-        if (
-            hasattr(node.args, 'kwarg')
-            and node.args.kwarg
-            and hasattr(node.args.kwarg, 'annotation')
-            and node.args.kwarg.annotation
-        ):
-            self.visit(node.args.kwarg.annotation)
-        if (
-            hasattr(node.args, 'vararg')
-            and node.args.vararg
-            and hasattr(node.args.vararg, 'annotation')
-            and node.args.vararg.annotation
-        ):
-            self.visit(node.args.vararg.annotation)
-
     def _register_function_annotations(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
         for path in [node.args.args, node.args.kwonlyargs]:
             argument: ast.arg
@@ -535,24 +566,16 @@ class ImportVisitor(ast.NodeTransformer, AttrsMixin, DunderAllMixin):
         for i in range(node.lineno, end_lineno + 1):
             self.function_ranges[i] = {'start': node.lineno, 'end': end_lineno + 1}
 
-    def visit_FunctionDef(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
-            self._handle_fastapi_decorator(node)
-
-        # Map annotations
+        super().visit_FunctionDef(node)
         self._register_function_annotations(node)
-
         self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
-            self._handle_fastapi_decorator(node)
-
-        # Map annotations
+        super().visit_AsyncFunctionDef(node)
         self._register_function_annotations(node)
-
         self.generic_visit(node)
 
 
