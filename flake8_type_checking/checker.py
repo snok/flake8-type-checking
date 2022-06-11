@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import os
-import sys
 from ast import Index
 from contextlib import suppress
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 from aspy.refactor_imports.classify import ImportType, classify_import
 
 from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
+from flake8_type_checking.constants import ATTRIBUTE_PROPERTY, ATTRS_DECORATORS, py38
 
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
@@ -24,12 +24,6 @@ if TYPE_CHECKING:
         FunctionScopeImportsDict,
         Import,
     )
-
-ATTRIBUTE_PROPERTY = '_flake8-type-checking_parent'
-
-ATTRS_DECORATORS = ['attrs.define', 'attr.define', 'attr.s']
-
-py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 
 
 class ImportVisitor(ast.NodeTransformer):
