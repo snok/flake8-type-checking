@@ -12,16 +12,6 @@ from aspy.refactor_imports.classify import ImportType, classify_import
 
 from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
 
-possible_local_errors: tuple[Any, ...] = ()
-with suppress(ModuleNotFoundError):
-    from django.core.exceptions import AppRegistryNotReady, ImproperlyConfigured
-
-    # TODO: Find a better solution for this
-    # The problem is essentially that we're triggering these errors in Django projects
-    # when running the code in _import_is_local. Perhaps users could pass a map of which errors
-    # to handle and which values to return
-    possible_local_errors += (AppRegistryNotReady, ImproperlyConfigured)
-
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
     from argparse import Namespace
