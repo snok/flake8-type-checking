@@ -10,7 +10,7 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.codes import TC005
+from flake8_type_checking.constants import TC005
 from tests import _get_error
 
 examples = [

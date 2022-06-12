@@ -8,7 +8,7 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.codes import TC004
+from flake8_type_checking.constants import TC004
 from tests import _get_error
 
 examples = [

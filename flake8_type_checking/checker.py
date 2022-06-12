@@ -9,8 +9,22 @@ from typing import TYPE_CHECKING, cast
 
 from aspy.refactor_imports.classify import ImportType, classify_import
 
-from flake8_type_checking.codes import TC001, TC002, TC003, TC004, TC005, TC100, TC101, TC200, TC201
-from flake8_type_checking.constants import ATTRIBUTE_PROPERTY, ATTRS_DECORATORS, ATTRS_IMPORTS, py38
+from flake8_type_checking.constants import (
+    ATTRIBUTE_PROPERTY,
+    ATTRS_DECORATORS,
+    ATTRS_IMPORTS,
+    TC001,
+    TC002,
+    TC003,
+    TC004,
+    TC005,
+    TC100,
+    TC101,
+    TC200,
+    TC201,
+    py38,
+)
+from flake8_type_checking.types import ImportTypeValue
 
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef

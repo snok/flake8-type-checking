@@ -5,7 +5,7 @@ import textwrap
 from unittest.mock import patch
 
 from flake8_type_checking.checker import ImportVisitor
-from flake8_type_checking.codes import TC001, TC002
+from flake8_type_checking.constants import TC001, TC002
 from tests import REPO_ROOT, _get_error, mod
 
 

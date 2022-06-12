@@ -1,6 +1,6 @@
 import textwrap
 
-from flake8_type_checking.codes import TC002
+from flake8_type_checking.constants import TC002
 from tests import _get_error
 
 
