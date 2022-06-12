@@ -75,11 +75,11 @@ examples = [
         textwrap.dedent(
             """
     if TYPE_CHECKING:
-        from typing import Any
+        from pandas import DataFrame
 
     def example():
-        from typing import Any
-        x = Any
+        from pandas import DataFrame
+        x = DataFrame
     """
         ),
         set(),

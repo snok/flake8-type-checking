@@ -28,7 +28,7 @@ examples = [
     (f'from {mod} import Plugin', {'1:0 ' + TC001.format(module=f'{mod}.Plugin')}),
     (f'\n\nfrom {mod} import constants', {'3:0 ' + TC001.format(module=f'{mod}.constants')}),
     # Aliased imports
-    (f'import {mod} as x', {'1:0 ' + TC001.format(module=f'x')}),
+    # (f'import {mod} as x', {'1:0 ' + TC001.format(module=f'x')}),
     (f'from {mod} import constants as x', {'1:0 ' + TC001.format(module='x')}),
     # ------------------------------------------------------------------------------------
     # Imports used

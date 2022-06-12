@@ -290,6 +290,26 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         self.typing_alias: Optional[str] = None
 
     @property
+    def typing_module_name(self) -> str:
+        """
+        Return the appropriate module name for the typing import.
+
+        It's possible to do:
+
+            from typing import Set
+                    ^--> module name is `typing`
+
+        but you could also do:
+
+            from typing as t import Set
+                           ^--> module name is `t`
+
+        This property returns the correct module name, accounting
+        for possible aliases.
+        """
+        return self.typing_alias or 'typing'
+
+    @property
     def names(self) -> set[str]:
         """Return unique names."""
         return set(self.uses.keys())
@@ -310,46 +330,34 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
 
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
-        # True for `if typing.TYPE_CHECKING:` or `if T.TYPE_CHECKING:`
-        typing_type_checking = (
-            hasattr(node.test, 'attr') and node.test.attr == 'TYPE_CHECKING'  # type: ignore[attr-defined]
-        )
-
-        if typing_type_checking:
-            # By default, TYPE_CHECKING is exempt from being noted as
-            # an import which can be moved into a type-checking block.
-            # When a user does `import typing\nif typing.TYPE_CHECKING`,
-            # we also add typing to exempt imports and remove any already
-            # found errors.
-            # We could have just added typing as a blanket ignored module,
-            # but that's a breaking change, so this will do for now.
-            typing_module_name = self.typing_alias or 'typing'
-            self.exempt_imports.append(typing_module_name)
-            if typing_module_name in self.third_party_imports:
-                del self.third_party_imports[typing_module_name]
-            if typing_module_name in self.import_names:
-                del self.import_names[typing_module_name]
-
-        # True if `if TYPE_CHECKING:`
-        type_checking = hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING'  # type: ignore[attr-defined]
-
-        type_checking_alias = (
+        # Check if the if-statement is for a type-checking block
+        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore[attr-defined]
+            # True for `if TYPE_CHECKING:`
+            type_checking_condition = True
+        elif hasattr(node.test, 'attr') and node.test.attr == 'TYPE_CHECKING':  # type: ignore[attr-defined]
+            # True for `if typing.TYPE_CHECKING:` or `if T.TYPE_CHECKING:`
+            type_checking_condition = True
+        elif (
             self.type_checking_alias
             and hasattr(node.test, 'id')
             and node.test.id == self.type_checking_alias  # type: ignore[attr-defined]
-        )
+        ):
+            # True for `from typing import TYPE_CHECKING as TC\nif TC:`
+            type_checking_condition = True
+        else:
+            type_checking_condition = False
 
-        if type_checking or typing_type_checking or type_checking_alias:  # type: ignore[attr-defined]
-            # Here we want to define the line-number-range where the type-checking block exists
-            # Initially I just set the node.lineno and node.end_lineno, but it turns out that else blocks are
-            # included in this span. Because of this, we now first look for else block to help us limit the range
+        # If it is, note down the line-number-range where the type-checking block exists
+        # Initially we just set the node.lineno and node.end_lineno, but it turns out that else blocks are
+        # included in this span. We only want to know the range of the if-block.
+        if type_checking_condition:
             start_of_else_block = None
             if hasattr(node, 'orelse') and node.orelse:
-                # Just set the lineno of the first element in the else block - 1
+                # The start of the else block is the lineno of the
+                # first element in the else block - 1
                 start_of_else_block = node.orelse[0].lineno - 1
 
-            # Type checking blocks that only contain 'pass' are appended to an empty-type-checking-block list
-            # and flagged with TC005 errors.
+            # Check for TC005 errors.
             if ((node.end_lineno or node.lineno) - node.lineno == 1) and (
                 len(node.body) == 1 and isinstance(node.body[0], ast.Pass)
             ):
@@ -366,6 +374,27 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
 
     # -- Map imports -------------------------------
 
+    def get_import_names(self, node: Import, name_node: Name) -> tuple[str, str, str]:
+        """
+        Return different parts of an import.
+
+        From the example
+
+            from pandas import DataFrame as df
+
+        The name is `DataFrame` and the import name is `DataFrame`,
+        while the full name is `pandas.DataFrame`.
+        """
+        module = f'{node.module}.' if isinstance(node, ast.ImportFrom) else ''
+        if hasattr(name_node, 'asname') and name_node.asname:
+            name = name_node.asname
+            import_name = name_node.asname
+        else:
+            name = name_node.name
+            import_name = module + name_node.name
+        full_name = f'{module}{name_node.name}'
+        return name, import_name, full_name
+
     def add_import(self, node: Import) -> None:
         """Add relevant ast objects to import lists."""
         if self.in_type_checking_block(node):
@@ -380,26 +409,15 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
                 self.type_checking_block_imports.add((node, name))
             return None
 
-        # 1/2 Skip checking the import if the module is passlisted.
+        # Skip checking the import if the module is passlisted.
         if isinstance(node, ast.ImportFrom) and node.module in self.exempt_modules:
             return
 
         for name_node in node.names:
-            # 2/2 Skip checking the import if the module is passlisted
+
+            # Skip checking the import if the module is passlisted
             if isinstance(node, ast.Import) and name_node.name in self.exempt_modules:
                 return
-
-            # Check for `from __futures__ import annotations`
-            if self.futures_annotation is None:
-                if getattr(node, 'module', '') == '__future__' and any(
-                    name.name == 'annotations' for name in node.names
-                ):
-                    self.futures_annotation = True
-                    return
-                else:
-                    # futures imports should always be the first line
-                    # in a file, so we should only need to check this once
-                    self.futures_annotation = False
 
             # Look for a TYPE_CHECKING import
             if name_node.name == 'TYPE_CHECKING' and name_node.asname is not None:
@@ -408,28 +426,48 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
             # Look for typing import
             if name_node.name == 'typing' and name_node.asname is not None:
                 self.typing_alias = name_node.asname
+                return
 
-            # Map imports as belonging to the current module, or belonging to a third-party mod
+            elif (isinstance(node, ast.ImportFrom) and node.module == self.typing_module_name) or (
+                isinstance(node, ast.Import) and name_node.name == self.typing_module_name
+            ):
+                # Skip all remaining typing imports, since we already assume
+                # TYPE_CHECKING will be imported at runtime, and guarding the
+                # remaining imports probably won't have any tangible benefit
+                return
+
+            # Classify and map imports
             if name_node.name not in self.exempt_imports:
-                module = f'{node.module}.' if isinstance(node, ast.ImportFrom) else ''
-                if hasattr(name_node, 'asname') and name_node.asname:
-                    name = name_node.asname
-                    import_name = name_node.asname
-                else:
-                    name = name_node.name
-                    import_name = module + name_node.name
 
-                import_type = cast(ImportTypeValue, classify_import(f'{module}{name_node.name}'))
+                name, import_name, full_name = self.get_import_names(node, name_node)
+                import_type = cast(ImportTypeValue, classify_import(full_name))
+
                 if import_type == ImportType.APPLICATION:
                     self.application_imports[import_name] = {'node': node, 'error': TC001}
                 elif import_type == ImportType.THIRD_PARTY:
                     self.third_party_imports[import_name] = {'node': node, 'error': TC002}
                 else:
                     self.built_in_imports[import_name] = {'node': node, 'error': TC003}
+                    """
+                    Check for `from __futures__ import annotations` import.
+
+                    We need to know if this is present or not, to determine whether
+                    or not PEP563 is enabled: https://peps.python.org/pep-0563/
+                    """
+                    if self.futures_annotation is None and import_type == ImportType.FUTURE:
+                        if any(name.name == 'annotations' for name in node.names):
+                            self.futures_annotation = True
+                            return
+                        else:
+                            # futures imports should always be the first line
+                            # in a file, so we should only need to check this once
+                            self.futures_annotation = False
+
                 self.import_names[name] = import_name, import_type
 
                 if node.lineno not in self.function_scope_imports:
                     self.function_scope_imports[node.lineno] = {'imports': []}
+
                 self.function_scope_imports[node.lineno]['imports'].append(name)
 
     def visit_Import(self, node: ast.Import) -> None:
