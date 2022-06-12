@@ -35,7 +35,7 @@ def test_api_router_decorated_function(fdef):
             return None
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == set()
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
@@ -58,7 +58,7 @@ def test_api_router_decorated_function_return_type(fdef):
             return None
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == {
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == {
         '5:0 ' + TC002.format(module='app.types.CustomType')
     }
 
@@ -88,7 +88,7 @@ def test_api_router_decorated_nested_function(fdef):
 
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == set()
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
@@ -104,4 +104,4 @@ def test_app_decorated_function(fdef):
             return None
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == set()
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()

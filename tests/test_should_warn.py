@@ -5,7 +5,6 @@ The behavior of TC100 and TC200 errors should be opt-in.
 """
 import os
 import re
-import sys
 import textwrap
 from importlib.metadata import version
 
@@ -22,14 +21,14 @@ def test_tc_is_enabled_with_config(flake8dir):
     flake8dir.make_setup_cfg('[flake8]\nselect = TC')
     flake8dir.make_example_py(
         '''
-        from typing import Union
+        from x import Y
 
-        x: Union[str, int] = 1
+        x: Y[str, int] = 1
     '''
     )
     result = flake8dir.run_flake8()
     assert result.out_lines == [
-        f".{os.sep}example.py:1:1: TC002 Move third-party import 'typing.Union' into a type-checking block"
+        f".{os.sep}example.py:1:1: TC002 Move third-party import 'x.Y' into a type-checking block"
     ]
 
 

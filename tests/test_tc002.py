@@ -23,61 +23,61 @@ examples = [
     # ------------------------------------------------------------------------------------
     # No usage whatsoever
     # ast.Import
-    (f'import os', {'1:0 ' + TC002.format(module=f'os')}),
-    (f'\nimport os', {'2:0 ' + TC002.format(module=f'os')}),
+    (f'import pandas', {'1:0 ' + TC002.format(module=f'pandas')}),
+    (f'\nimport pandas', {'2:0 ' + TC002.format(module=f'pandas')}),
     # ast.ImportFrom
-    (f'from os import path', {'1:0 ' + TC002.format(module=f'os.path')}),
-    (f'\n\nfrom os import path', {'3:0 ' + TC002.format(module=f'os.path')}),
+    (f'from pandas import path', {'1:0 ' + TC002.format(module=f'pandas.path')}),
+    (f'\n\nfrom pandas import path', {'3:0 ' + TC002.format(module=f'pandas.path')}),
     # Aliased imports
-    (f'import os as x', {'1:0 ' + TC002.format(module=f'x')}),
-    (f'from os import path as x', {'1:0 ' + TC002.format(module='x')}),
+    (f'import pandas as x', {'1:0 ' + TC002.format(module=f'x')}),
+    (f'from pandas import path as x', {'1:0 ' + TC002.format(module='x')}),
     # ------------------------------------------------------------------------------------
     # Imports used
     # ast.Import
-    (f'import os\nprint(os)', set()),
-    (f'\nimport os\nx = os.path', set()),
+    (f'import pandas\nprint(pandas)', set()),
+    (f'\nimport pandas\nx = pandas.path', set()),
     # ast.ImportFrom
-    (f'from os import path\nx = path()', set()),
-    (f'\n\nfrom os import path\nx = path', set()),
+    (f'from pandas import path\nx = path()', set()),
+    (f'\n\nfrom pandas import path\nx = path', set()),
     # Aliased imports
-    (f'import os as x\ny = x', set()),
-    (f'from os import path as x\nprint(x)', set()),
+    (f'import pandas as x\ny = x', set()),
+    (f'from pandas import path as x\nprint(x)', set()),
     # ------------------------------------------------------------------------------------
     # Imports used for ast.AnnAssign
     # ast.Import
-    (f'import os\nx: os', {'1:0 ' + TC002.format(module=f'os')}),
-    (f'\nimport os\nx: os = 2', {'2:0 ' + TC002.format(module=f'os')}),
+    (f'import pandas\nx: pandas', {'1:0 ' + TC002.format(module=f'pandas')}),
+    (f'\nimport pandas\nx: pandas = 2', {'2:0 ' + TC002.format(module=f'pandas')}),
     # ast.ImportFrom
-    (f'from os import path\nx: path', {'1:0 ' + TC002.format(module=f'os.path')}),
-    (f'\n\nfrom os import path\nx: path = 2', {'3:0 ' + TC002.format(module=f'os.path')}),
+    (f'from pandas import path\nx: path', {'1:0 ' + TC002.format(module=f'pandas.path')}),
+    (f'\n\nfrom pandas import path\nx: path = 2', {'3:0 ' + TC002.format(module=f'pandas.path')}),
     # Aliased imports
-    (f'import os as x\ny: x', {'1:0 ' + TC002.format(module=f'x')}),
-    (f'from os import path as x\ny: x = 2', {'1:0 ' + TC002.format(module='x')}),
+    (f'import pandas as x\ny: x', {'1:0 ' + TC002.format(module=f'x')}),
+    (f'from pandas import path as x\ny: x = 2', {'1:0 ' + TC002.format(module='x')}),
     # ------------------------------------------------------------------------------------
     # Imports used for ast.arg annotation
     # ast.Import
-    (f'import os\ndef example(x: os):\n\tpass', {'1:0 ' + TC002.format(module=f'os')}),
-    (f'\nimport os\ndef example(x: os = 2):\n\tpass', {'2:0 ' + TC002.format(module=f'os')}),
+    (f'import pandas\ndef example(x: pandas):\n\tpass', {'1:0 ' + TC002.format(module=f'pandas')}),
+    (f'\nimport pandas\ndef example(x: pandas = 2):\n\tpass', {'2:0 ' + TC002.format(module=f'pandas')}),
     # ast.ImportFrom
-    (f'from os import path\ndef example(x: path):\n\tpass', {'1:0 ' + TC002.format(module=f'os.path')}),
-    (f'\n\nfrom os import path\ndef example(x: path = 2):\n\tpass', {'3:0 ' + TC002.format(module=f'os.path')}),
+    (f'from pandas import path\ndef example(x: path):\n\tpass', {'1:0 ' + TC002.format(module=f'pandas.path')}),
+    (f'\n\nfrom pandas import path\ndef example(x: path = 2):\n\tpass', {'3:0 ' + TC002.format(module=f'pandas.path')}),
     # Aliased imports
-    (f'import os as x\ndef example(y: x):\n\tpass', {'1:0 ' + TC002.format(module=f'x')}),
-    (f'from os import path as x\ndef example(y: x = 2):\n\tpass', {'1:0 ' + TC002.format(module='x')}),
+    (f'import pandas as x\ndef example(y: x):\n\tpass', {'1:0 ' + TC002.format(module=f'x')}),
+    (f'from pandas import path as x\ndef example(y: x = 2):\n\tpass', {'1:0 ' + TC002.format(module='x')}),
     # ------------------------------------------------------------------------------------
     # Imports used for returns annotation
     # ast.Import
-    (f'import os\ndef example() -> os:\n\tpass', {'1:0 ' + TC002.format(module=f'os')}),
+    (f'import pandas\ndef example() -> pandas:\n\tpass', {'1:0 ' + TC002.format(module=f'pandas')}),
     # ast.ImportFrom
-    (f'from os import path\ndef example() -> path:\n\tpass', {'1:0 ' + TC002.format(module=f'os.path')}),
+    (f'from pandas import path\ndef example() -> path:\n\tpass', {'1:0 ' + TC002.format(module=f'pandas.path')}),
     # Aliased imports
-    (f'import os as x\ndef example() -> x:\n\tpass', {'1:0 ' + TC002.format(module=f'x')}),
+    (f'import pandas as x\ndef example() -> x:\n\tpass', {'1:0 ' + TC002.format(module=f'x')}),
     # ------------------------------------------------------------------------------------
     # Other useful test cases
     (
         textwrap.dedent(
             '''
-            from typing import Dict, Any
+            from x import Dict, Any
 
             def example() -> Any:
                 return 1
@@ -85,7 +85,7 @@ examples = [
             x: Dict[int] = 20
             '''
         ),
-        {'2:0 ' + TC002.format(module='typing.Dict'), '2:0 ' + TC002.format(module='typing.Any')},
+        {'2:0 ' + TC002.format(module='x.Dict'), '2:0 ' + TC002.format(module='x.Any')},
     ),
     (
         textwrap.dedent(
@@ -114,7 +114,7 @@ examples = [
             class ExampleClass:
 
                 def __init__(self):
-                    self.cwd = Path(os.getcwd())
+                    self.cwd = Path(pandas.getcwd())
             '''
         ),
         set(),
@@ -146,7 +146,7 @@ examples = [
     (
         textwrap.dedent(
             '''
-            from typing import Any, Generator, Union
+            from x import Any, Generator, Union
 
             if TYPE_CHECKING:
                 ImportType = Union[ast.Import, ast.ImportFrom]
@@ -154,9 +154,9 @@ examples = [
             '''
         ),
         {
-            '2:0 ' + TC002.format(module='typing.Any'),
-            '2:0 ' + TC002.format(module='typing.Generator'),
-            '2:0 ' + TC002.format(module='typing.Union'),
+            '2:0 ' + TC002.format(module='x.Any'),
+            '2:0 ' + TC002.format(module='x.Generator'),
+            '2:0 ' + TC002.format(module='x.Union'),
         },
     ),
     (

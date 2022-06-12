@@ -54,13 +54,13 @@ class AttrsMixin:
     we treat type hints on attrs classes as needed at runtime.
     """
 
-    remote_imports: dict[str, ErrorDict]
+    third_party_imports: dict[str, ErrorDict]
 
     def get_all_attrs_imports(self) -> dict[Optional[str], str]:
         """Return a map of all attrs/attr imports."""
         attrs_imports: dict[Optional[str], str] = {}  # map of alias to full import name
 
-        for error_dict in self.remote_imports.values():
+        for error_dict in self.third_party_imports.values():
             module = getattr(error_dict['node'], 'module', '')
             names: list[Name] = getattr(error_dict['node'], 'names', [])
 
@@ -252,11 +252,12 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         self.exempt_modules: list[str] = exempt_modules or []
 
         # All imports in each bucket
-        self.local_imports: dict[str, ErrorDict] = {}
-        self.remote_imports: dict[str, ErrorDict] = {}
+        self.application_imports: dict[str, ErrorDict] = {}
+        self.third_party_imports: dict[str, ErrorDict] = {}
+        self.built_in_imports: dict[str, ErrorDict] = {}
 
         # Map of import name to verbose import name and bool indicating whether it's a local or remote import
-        self.import_names: dict[str, tuple[str, bool]] = {}
+        self.import_names: dict[str, tuple[str, ImportTypeValue]] = {}
 
         # List of all names and ids, except type declarations - used to find otherwise unused imports
         self.uses: dict[str, ast.AST] = {}
@@ -324,8 +325,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
             # but that's a breaking change, so this will do for now.
             typing_module_name = self.typing_alias or 'typing'
             self.exempt_imports.append(typing_module_name)
-            if typing_module_name in self.remote_imports:
-                del self.remote_imports[typing_module_name]
+            if typing_module_name in self.third_party_imports:
+                del self.third_party_imports[typing_module_name]
             if typing_module_name in self.import_names:
                 del self.import_names[typing_module_name]
 
@@ -418,14 +419,14 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
                     name = name_node.name
                     import_name = module + name_node.name
 
-                import_type = classify_import(f'{module}{name_node.name}')
-
+                import_type = cast(ImportTypeValue, classify_import(f'{module}{name_node.name}'))
                 if import_type == ImportType.APPLICATION:
-                    self.local_imports[import_name] = {'error': TC001, 'node': node}
-                    self.import_names[name] = import_name, True
+                    self.application_imports[import_name] = {'node': node, 'error': TC001}
+                elif import_type == ImportType.THIRD_PARTY:
+                    self.third_party_imports[import_name] = {'node': node, 'error': TC002}
                 else:
-                    self.remote_imports[import_name] = {'error': TC002, 'node': node}
-                    self.import_names[name] = import_name, False
+                    self.built_in_imports[import_name] = {'node': node, 'error': TC003}
+                self.import_names[name] = import_name, import_type
 
                 if node.lineno not in self.function_scope_imports:
                     self.function_scope_imports[node.lineno] = {'imports': []}
@@ -646,7 +647,7 @@ class TypingOnlyImportsChecker:
             # TC002
             self.unused_third_party_import,
             # TC003
-            self.multiple_type_checking_blocks,
+            self.unused_built_in_import,
             # TC004
             self.used_type_checking_imports,
             # TC005
@@ -664,25 +665,35 @@ class TypingOnlyImportsChecker:
     def unused_import(self) -> Flake8Generator:
         """TC001."""
         for name in set(self.visitor.import_names) - self.visitor.names:
-            unused_import, local_import = self.visitor.import_names[name]
-            if local_import and all(unused_import not in str(use) for use in self.visitor.uses):
-                obj = self.visitor.local_imports.pop(unused_import)
+            unused_import, import_type = self.visitor.import_names[name]
+            if import_type == ImportType.APPLICATION and all(
+                unused_import not in str(use) for use in self.visitor.uses
+            ):
+                obj = self.visitor.application_imports.pop(unused_import)
                 error_message, node = obj['error'], obj['node']
                 yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def unused_third_party_import(self) -> Flake8Generator:
         """TC002."""
         for name in set(self.visitor.import_names) - self.visitor.names:
-            unused_import, local_import = self.visitor.import_names[name]
-            if not local_import and all(unused_import not in str(use) for use in self.visitor.uses):
-                obj = self.visitor.remote_imports.pop(unused_import)
+            unused_import, import_type = self.visitor.import_names[name]
+            if import_type == ImportType.THIRD_PARTY and all(
+                unused_import not in str(use) for use in self.visitor.uses
+            ):
+                obj = self.visitor.third_party_imports.pop(unused_import)
                 error_message, node = obj['error'], obj['node']
                 yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
-    def multiple_type_checking_blocks(self) -> Flake8Generator:
+    def unused_built_in_import(self) -> Flake8Generator:
         """TC003."""
-        if len([i for i in self.visitor.type_checking_blocks if i[2] == 0]) > 1:
-            yield self.visitor.type_checking_blocks[-1][0], 0, TC003, None
+        for name in set(self.visitor.import_names) - self.visitor.names:
+            unused_import, import_type = self.visitor.import_names[name]
+            if import_type in {ImportType.BUILTIN, ImportType.FUTURE} and all(
+                unused_import not in str(use) for use in self.visitor.uses
+            ):
+                obj = self.visitor.built_in_imports.pop(unused_import)
+                error_message, node = obj['error'], obj['node']
+                yield node.lineno, node.col_offset, error_message.format(module=unused_import), None
 
     def used_type_checking_imports(self) -> Flake8Generator:
         """TC004."""

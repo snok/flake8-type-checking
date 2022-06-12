@@ -9,7 +9,7 @@ from flake8_type_checking.checker import ImportVisitor
 from tests import REPO_ROOT
 
 
-def _get_remote_imports(example):
+def _visit(example: str) -> ImportVisitor:
     visitor = ImportVisitor(
         cwd=REPO_ROOT,
         pydantic_enabled=False,
@@ -19,25 +19,28 @@ def _get_remote_imports(example):
         pydantic_enabled_baseclass_passlist=[],
     )
     visitor.visit(ast.parse(example.replace('; ', '\n')))
-    return list(visitor.remote_imports.keys())
+    return visitor
 
 
-def _get_local_imports(example):
-    visitor = ImportVisitor(
-        cwd=REPO_ROOT,
-        pydantic_enabled=False,
-        fastapi_enabled=False,
-        fastapi_dependency_support_enabled=False,
-        cattrs_enabled=False,
-        pydantic_enabled_baseclass_passlist=[],
-    )
-    visitor.visit(ast.parse(example.replace('; ', '\n')))
-    return list(visitor.local_imports.keys())
+def _get_third_party_imports(example: str) -> list[str]:
+    visitor = _visit(example)
+    return list(visitor.third_party_imports.keys())
+
+
+def _get_application_imports(example: str) -> list[str]:
+    visitor = _visit(example)
+    return list(visitor.application_imports.keys())
+
+
+def _get_built_in_imports(example: str) -> list[str]:
+    visitor = _visit(example)
+    return list(visitor.built_in_imports.keys())
 
 
 mod = 'flake8_type_checking'
-f = _get_local_imports
-local_imports = [
+
+f = _get_application_imports
+application_imports = [
     # ast.Import
     (f'import {mod}', [f'{mod}'], f),
     (f'import {mod}.codes', [f'{mod}.codes'], f),
@@ -47,18 +50,19 @@ local_imports = [
     (f'\nfrom {mod}.codes import TC001', [f'{mod}.codes.TC001'], f),
 ]
 
-f = _get_remote_imports
+f = _get_built_in_imports
 stdlib_imports = [
     # ast.Import
     ('import os', ['os'], f),
     ('import os.path', ['os.path'], f),
     ('import os.path.join', ['os.path.join'], f),
     # ast.ImportFrom
-    ('from _ import x', ['_.x'], f),
     ('from os import path', ['os.path'], f),
     ('from os.path import join', ['os.path.join'], f),
     ('\nfrom os.path import join', ['os.path.join'], f),
 ]
+
+f = _get_third_party_imports
 venv_imports = [
     # ast.Import
     ('import pytest', ['pytest'], f),
@@ -76,7 +80,7 @@ typing_block_imports: List[Tuple[str, list[str], Callable[[str], list[str]]]] = 
     for example, expected, f in _list[:-1]
 ]
 
-test_data = [*local_imports, *stdlib_imports, *venv_imports, *typing_block_imports]
+test_data = [*application_imports, *stdlib_imports, *venv_imports, *typing_block_imports]
 
 
 @pytest.mark.parametrize('example, result, loader', test_data)

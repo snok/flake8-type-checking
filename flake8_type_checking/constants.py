@@ -11,7 +11,7 @@ py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 # Error codes
 TC001 = "TC001 Move application import '{module}' into a type-checking block"
 TC002 = "TC002 Move third-party import '{module}' into a type-checking block"
-TC003 = 'TC003 Found multiple type checking blocks'
+TC003 = "TC003 Move built-in import '{module}' into a type-checking block"
 TC004 = "TC004 Move import '{module}' out of type-checking block. Import is used for more than type hinting."
 TC005 = 'TC005 Found empty type-checking block'
 TC100 = "TC100 Add 'from __future__ import annotations' import"
