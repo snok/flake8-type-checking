@@ -281,7 +281,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
 
     # -- Map type checking block ---------------
 
-    def _in_type_checking_block(self, node: ast.AST) -> bool:
+    def in_type_checking_block(self, node: ast.AST) -> bool:
         """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
         if node.col_offset == 0:
             return False
@@ -351,13 +351,9 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
 
     # -- Map imports -------------------------------
 
-    def _add_import(self, node: Import) -> None:
-        """
-        Add relevant ast objects to import lists.
-
-        :param node: ast.Import or ast.ImportFrom object
-        """
-        if self._in_type_checking_block(node):
+    def add_import(self, node: Import) -> None:
+        """Add relevant ast objects to import lists."""
+        if self.in_type_checking_block(node):
             # For type checking blocks we want to
             # 1. Record annotations for TC2XX errors
             # 2. Avoid recording imports for TC1XX errors, by returning early
@@ -423,13 +419,11 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
-        self._add_import(node)
+        self.add_import(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Append objects to our import map."""
-        self._add_import(node)
-
-    # -- Map uses in a file ---------------------------
+        self.add_import(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Note down class names."""
@@ -456,7 +450,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
-        if self._in_type_checking_block(node):
+        if self.in_type_checking_block(node):
             return node
         if hasattr(node, ATTRIBUTE_PROPERTY):
             self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node
@@ -468,44 +462,48 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         """Map constants."""
         super().visit_Constant(node)
 
-        if self._in_type_checking_block(node):
+        if self.in_type_checking_block(node):
             return node
 
         return node
 
-    # -- Map annotations ------------------------------
+    def add_annotation(self, node: ast.AST) -> None:
+        """
+        Map all annotations on a generic ast node.
 
-    def _add_annotation(self, node: ast.AST) -> None:
+        This is a bit of a catch-all method.
+        """
         if isinstance(node, ast.Ellipsis):
             return
         if py38 and isinstance(node, Index):
-            return self._add_annotation(node.value)  # type: ignore[attr-defined]
+            return self.add_annotation(node.value)
         if isinstance(node, ast.Constant):
             if node.value is None:
                 return
             self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
         elif isinstance(node, ast.Subscript):
-            if hasattr(node.value, 'id') and node.value.id == 'Literal':  # type: ignore[attr-defined]
+            value = cast(ast.Name, node.value)
+            if hasattr(value, 'id') and value.id == 'Literal':
                 # Type hinting like `x: Literal['one', 'two', 'three']`
                 # creates false positives unless excluded
                 return
-            self._add_annotation(node.value)
-            self._add_annotation(node.slice)
+            self.add_annotation(node.value)
+            self.add_annotation(node.slice)
         elif isinstance(node, ast.Name):
             self.unwrapped_annotations.append((node.lineno, node.col_offset, node.id))
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
-                self._add_annotation(n)
+                self.add_annotation(n)
         elif node is None:  # noqa: SIM114
             return
         elif isinstance(node, ast.Attribute):
-            self._add_annotation(node.value)
+            self.add_annotation(node.value)
         elif isinstance(node, ast.BinOp):
             return
 
     @staticmethod
-    def _set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
-        # Set the parent attribute on the current node children
+    def set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
+        """Set the parent attribute on the current node children."""
         for key, value in node.__dict__.items():
             if type(value) not in [int, str, list, bool] and value is not None and not key.startswith('_'):
                 setattr(node.__dict__[key], attr, val)
@@ -513,52 +511,61 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
         """
-        Alter attributes slightly so they're more comparable to imports.
+        Set a custom attribute on the current node.
 
-        Specifically, we set a property on child attributes so that attributes with the
-        property can have their names altered.
+        The custom attribute lets us read attribute names for `a.b.c` as `a.b.c`
+        when we're handling the `c` node, which is important to match attributes to imports
         """
-        # Set the attribute of the current node
-        # This lets us read attribute names for `a.b.c` as `a.b.c` when we're treating the
-        # `c` node, which is important to match attributes to imports
         with suppress(Exception):
             parent = getattr(node, ATTRIBUTE_PROPERTY)
             node.attr = f'{node.attr}.{parent}'
-        node = self._set_child_node_attribute(node, ATTRIBUTE_PROPERTY, node.attr)
+        node = self.set_child_node_attribute(node, ATTRIBUTE_PROPERTY, node.attr)
         self.generic_visit(node)
         return node
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotation assignments."""
-        self._add_annotation(node.annotation)
+        self.add_annotation(node.annotation)
         if getattr(node, 'value', None):
             self.generic_visit(node.value)  # type: ignore[arg-type]
 
-    def _register_function_annotations(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+    def register_function_annotations(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
+        """
+        Map all annotations in a function signature.
+
+        Annotations include:
+            - Argument annotations
+            - Keyword argument annotations
+            - Return annotations
+
+        And we also note down the start and end line number for the function.
+        """
         for path in [node.args.args, node.args.kwonlyargs]:
-            argument: ast.arg
             for argument in path:
-                if hasattr(argument, 'annotation'):
-                    self._add_annotation(argument.annotation)  # type: ignore[arg-type]
+                if hasattr(argument, 'annotation') and argument.annotation:
+                    self.add_annotation(argument.annotation)
                     delattr(argument, 'annotation')
+
         if (
             hasattr(node.args, 'kwarg')
             and node.args.kwarg
             and hasattr(node.args.kwarg, 'annotation')
             and node.args.kwarg.annotation
         ):
-            self._add_annotation(node.args.kwarg.annotation)
+            self.add_annotation(node.args.kwarg.annotation)
             delattr(node.args.kwarg, 'annotation')
+
         if (
             hasattr(node.args, 'vararg')
             and node.args.vararg
             and hasattr(node.args.vararg, 'annotation')
             and node.args.vararg.annotation
         ):
-            self._add_annotation(node.args.vararg.annotation)
+            self.add_annotation(node.args.vararg.annotation)
             delattr(node.args.vararg, 'annotation')
+
         if hasattr(node, 'returns') and node.returns:
-            self._add_annotation(node.returns)
+            self.add_annotation(node.returns)
             delattr(node, 'returns')
 
         # Register function start and end
@@ -569,13 +576,13 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Remove and map function arguments and returns."""
         super().visit_FunctionDef(node)
-        self._register_function_annotations(node)
+        self.register_function_annotations(node)
         self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
         super().visit_AsyncFunctionDef(node)
-        self._register_function_annotations(node)
+        self.register_function_annotations(node)
         self.generic_visit(node)
 
 
@@ -702,7 +709,7 @@ class TypingOnlyImportsChecker:
 
     def futures_excess_quotes(self) -> Flake8Generator:
         """TC101."""
-        # If futures imports are present, any ast.Constant captured in _add_annotation should yield an error
+        # If futures imports are present, any ast.Constant captured in add_annotation should yield an error
         if self.visitor.futures_annotation:
             for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
                 yield lineno, col_offset, TC101.format(annotation=annotation), None
