@@ -172,7 +172,6 @@ class DunderAllMixin(MixinBase):  # type: ignore
         """Map constant as use, if we're inside an __all__ declaration."""
         if self.in___all___declaration(node):
             self.uses[node.value] = node
-
         return node
 
 
@@ -240,6 +239,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         exempt_modules: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
+        #: Plugin settings
         self.pydantic_enabled = pydantic_enabled
         self.fastapi_enabled = fastapi_enabled
         self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
@@ -247,46 +247,55 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
-        # Import patterns we want to avoid mapping
+        #: Import patterns we want to avoid mapping
         self.exempt_imports: list[str] = ['*', 'TYPE_CHECKING']
         self.exempt_modules: list[str] = exempt_modules or []
 
-        # All imports in each bucket
+        #: All imports, in each category
         self.application_imports: dict[str, ErrorDict] = {}
         self.third_party_imports: dict[str, ErrorDict] = {}
         self.built_in_imports: dict[str, ErrorDict] = {}
 
-        # Map of import name to verbose import name and bool indicating whether it's a local or remote import
+        #: Map of import name to verbose import name and import type
+        # We compare the key of the dict to the uses of a file to figure out
+        # which imports are unused (after ignoring all annotation uses),
+        # then use the import type to yield the error with the appropriate type
         self.import_names: dict[str, tuple[str, ImportTypeValue]] = {}
 
-        # List of all names and ids, except type declarations - used to find otherwise unused imports
+        #: List of all names and ids, except type declarations
         self.uses: dict[str, ast.AST] = {}
 
-        # Tuple of (node, import name) for all import defined within a type-checking block
+        #: Tuple of (node, import name) for all import defined within a type-checking block
+        # This lets us identify imports that *are* needed at runtime, for TC004 errors.
         self.type_checking_block_imports: set[tuple[Import, str]] = set()
         self.class_names: set[str] = set()
 
-        self.unused_type_checking_block_imports: set[tuple[Import, str]] = set()
-
-        # All type annotations in the file, without quotes around them
+        #: All type annotations in the file, without quotes around them
         self.unwrapped_annotations: list[tuple[int, int, str]] = []
 
-        # All type annotations in the file, with quotes around them
+        #: All type annotations in the file, with quotes around them
         self.wrapped_annotations: list[tuple[int, int, str]] = []
 
-        # Whether there is a `from __futures__ import annotations` is present
+        #: Whether there is a `from __futures__ import annotations` is present in the file
         self.futures_annotation: Optional[bool] = None
 
-        # Where the type checking block exists (line_start, line_end, col_offset)
+        #: Where the type checking block exists (line_start, line_end, col_offset)
+        # Empty type checking blocks are used for TC005 errors, while the type
+        # checking blocks list is used for several things. Among other things,
+        # to build the type_checking_block_imports list.
         self.empty_type_checking_blocks: list[tuple[int, int, int]] = []
         self.type_checking_blocks: list[tuple[int, int, int]] = []
 
+        #: Function imports and ranges
         # Function scopes can tell us if imports that appear in type-checking blocks
         # are repeated inside a function. This prevents false TC004 positives.
         self.function_scope_imports: dict[int, FunctionScopeImportsDict] = {}
         self.function_ranges: dict[int, FunctionRangesDict] = {}
 
+        #: Set to the alias of TYPE_CHECKING if one is found
         self.type_checking_alias: Optional[str] = None
+
+        #: Set to the alias of typing if one is found
         self.typing_alias: Optional[str] = None
 
     @property
@@ -446,8 +455,9 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
                     self.application_imports[import_name] = {'node': node, 'error': TC001}
                 elif import_type == ImportType.THIRD_PARTY:
                     self.third_party_imports[import_name] = {'node': node, 'error': TC002}
-                else:
+                elif import_type == ImportType.BUILTIN:
                     self.built_in_imports[import_name] = {'node': node, 'error': TC003}
+                else:
                     """
                     Check for `from __futures__ import annotations` import.
 
@@ -463,12 +473,15 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
                             # in a file, so we should only need to check this once
                             self.futures_annotation = False
 
+                # Add to import names map. This is what we use to match imports to uses
                 self.import_names[name] = import_name, import_type
 
+                # Add to an additional function_scope_imports, which help us catch false positive
+                # TC004 errors. This is probably not the most efficient way of doing this.
                 if node.lineno not in self.function_scope_imports:
-                    self.function_scope_imports[node.lineno] = {'imports': []}
-
-                self.function_scope_imports[node.lineno]['imports'].append(name)
+                    self.function_scope_imports[node.lineno] = {'imports': [name]}
+                else:
+                    self.function_scope_imports[node.lineno]['imports'].append(name)
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
@@ -505,6 +518,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         """Map names."""
         if self.in_type_checking_block(node):
             return node
+
         if hasattr(node, ATTRIBUTE_PROPERTY):
             self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node
 
@@ -514,18 +528,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
         """Map constants."""
         super().visit_Constant(node)
-
-        if self.in_type_checking_block(node):
-            return node
-
         return node
 
     def add_annotation(self, node: ast.AST) -> None:
-        """
-        Map all annotations on a generic ast node.
-
-        This is a bit of a catch-all method.
-        """
+        """Map all annotations on an AST node."""
         if isinstance(node, ast.Ellipsis):
             return
         if py38 and isinstance(node, Index):
@@ -547,7 +553,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
                 self.add_annotation(n)
-        elif node is None:  # noqa: SIM114
+        elif node is None:
             return
         elif isinstance(node, ast.Attribute):
             self.add_annotation(node.value)
@@ -581,6 +587,33 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
         self.add_annotation(node.annotation)
         if getattr(node, 'value', None):
             self.generic_visit(node.value)  # type: ignore[arg-type]
+
+    def register_function_ranges(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
+        """
+        Note down the start and end line number of a function.
+
+        We use the start and end line numbers to prevent raising false TC004
+        positives in examples like this:
+
+            from typing import TYPE_CHECKING
+
+            if TYPE_CHECKING:
+                from pandas import DataFrame
+
+                MyType = DataFrame | str
+
+            x: MyType
+
+            def some_unrelated_function():
+                from pandas import DataFrame
+                return DataFrame()
+
+        where it could seem like the first pandas import is actually used
+        at runtime, but in fact, it's not.
+        """
+        end_lineno = cast(int, node.end_lineno)
+        for i in range(node.lineno, end_lineno + 1):
+            self.function_ranges[i] = {'start': node.lineno, 'end': end_lineno + 1}
 
     def register_function_annotations(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
         """
@@ -621,19 +654,16 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
             self.add_annotation(node.returns)
             delattr(node, 'returns')
 
-        # Register function start and end
-        end_lineno = cast(int, node.end_lineno)
-        for i in range(node.lineno, end_lineno + 1):
-            self.function_ranges[i] = {'start': node.lineno, 'end': end_lineno + 1}
+        self.register_function_ranges(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        """Remove and map function arguments and returns."""
+        """Remove and map function argument- and return annotations."""
         super().visit_FunctionDef(node)
         self.register_function_annotations(node)
         self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        """Remove and map function arguments and returns."""
+        """Remove and map function argument- and return annotations."""
         super().visit_AsyncFunctionDef(node)
         self.register_function_annotations(node)
         self.generic_visit(node)
