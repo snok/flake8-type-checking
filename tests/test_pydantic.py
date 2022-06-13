@@ -9,16 +9,16 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.codes import TC002
-from tests import _get_error
+from flake8_type_checking.constants import TC002
+from tests.conftest import _get_error
 
 
 @pytest.mark.parametrize(
-    'enabled, expected',
-    (
-        [True, {'2:0 ' + TC002.format(module='decimal.Decimal')}],
-        [False, {'2:0 ' + TC002.format(module='decimal.Decimal')}],
-    ),
+    ('enabled', 'expected'),
+    [
+        (True, {'2:0 ' + TC002.format(module='pandas.DataFrame')}),
+        (False, {'2:0 ' + TC002.format(module='pandas.DataFrame')}),
+    ],
 )
 def test_non_pydantic_model(enabled, expected):
     """
@@ -27,13 +27,13 @@ def test_non_pydantic_model(enabled, expected):
     """
     example = textwrap.dedent(
         '''
-        from decimal import Decimal
+        from pandas import DataFrame
 
         class X:
-            x: Decimal
+            x: DataFrame
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', type_checking_pydantic_enabled=enabled) == expected
+    assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=enabled) == expected
 
 
 def test_class_with_base_class():
@@ -44,25 +44,23 @@ def test_class_with_base_class():
     """
     example = textwrap.dedent(
         '''
-        from decimal import Decimal
+        from pandas import DataFrame
 
         class X(Y):
-            x: Decimal
+            x: DataFrame
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', type_checking_pydantic_enabled=True) == set()
+    assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
 
 
 def test_complex_pydantic_model():
-    """
-    Test actual Pydantic models, with different annotation types.
-    """
+    """Test actual Pydantic models, with different annotation types."""
     example = textwrap.dedent(
         '''
         from __future__ import annotations
 
         from datetime import datetime
-        from decimal import Decimal
+        from pandas import DataFrame
         from typing import TYPE_CHECKING
 
         from pydantic import BaseModel, condecimal, validator
@@ -88,7 +86,7 @@ def test_complex_pydantic_model():
 
 
         class NestedModel(ModelBase):
-            z: Decimal
+            z: DataFrame
             x: int
             y: str
 
@@ -104,30 +102,28 @@ def test_complex_pydantic_model():
 
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', type_checking_pydantic_enabled=True) == set()
+    assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
 
 
 @pytest.mark.parametrize('c', ['NamedTuple', 'TypedDict'])
 def test_type_checking_pydantic_enabled_baseclass_passlist(c):
-    """
-    Test that named tuples are not ignored.
-    """
+    """Test that named tuples are not ignored."""
     example = textwrap.dedent(
         f'''
         from typing import {c}
-        from typing import List, Set
+        from x import Y, Z
 
         class ModelBase({c}):
-            a: Set[str]
-            b: List[int]
+            a: Y[str]
+            b: Z[int]
         '''
     )
     assert _get_error(
         example,
-        error_code_filter='TC001,TC002',
+        error_code_filter='TC002',
         type_checking_pydantic_enabled=True,
         type_checking_pydantic_enabled_baseclass_passlist=['NamedTuple', 'TypedDict'],
     ) == {
-        '3:0 ' + TC002.format(module='typing.Set'),
-        '3:0 ' + TC002.format(module='typing.List'),
+        '3:0 ' + TC002.format(module='x.Y'),
+        '3:0 ' + TC002.format(module='x.Z'),
     }

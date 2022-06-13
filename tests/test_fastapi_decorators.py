@@ -9,17 +9,15 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.codes import TC002
-from tests import _get_error
+from flake8_type_checking.constants import TC002
+from tests.conftest import _get_error
 
 defaults = {'type_checking_fastapi_enabled': True}
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
 def test_api_router_decorated_function(fdef):
-    """
-    Test sync and async function definition, with an arg and a kwarg.
-    """
+    """Test sync and async function definition, with an arg and a kwarg."""
     example = textwrap.dedent(
         f'''
         from fastapi import APIRouter
@@ -35,7 +33,7 @@ def test_api_router_decorated_function(fdef):
             return None
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == set()
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
@@ -58,7 +56,7 @@ def test_api_router_decorated_function_return_type(fdef):
             return None
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == {
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == {
         '5:0 ' + TC002.format(module='app.types.CustomType')
     }
 
@@ -88,7 +86,7 @@ def test_api_router_decorated_nested_function(fdef):
 
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == set()
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
@@ -104,4 +102,4 @@ def test_app_decorated_function(fdef):
             return None
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002', **defaults) == set()
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()

@@ -1,7 +1,7 @@
 # flake8: noqa: D101
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Protocol
+from typing import TYPE_CHECKING, Literal, Optional, Protocol
 
 if TYPE_CHECKING:
     import ast
@@ -24,3 +24,6 @@ if TYPE_CHECKING:
     class Name(Protocol):
         asname: Optional[str]
         name: str
+
+
+ImportTypeValue = Literal['APPLICATION', 'THIRD_PARTY', 'BUILTIN', 'FUTURE']

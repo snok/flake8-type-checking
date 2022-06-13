@@ -10,8 +10,8 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.codes import TC005
-from tests import _get_error
+from flake8_type_checking.constants import TC005
+from tests.conftest import _get_error
 
 examples = [
     # No error
@@ -83,6 +83,6 @@ examples = [
 ]
 
 
-@pytest.mark.parametrize('example, expected', examples)
+@pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC005_errors(example, expected):
     assert _get_error(example, error_code_filter='TC005') == expected

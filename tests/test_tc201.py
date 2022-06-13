@@ -6,8 +6,8 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.codes import TC201
-from tests import _get_error
+from flake8_type_checking.constants import TC201
+from tests.conftest import _get_error
 
 examples = [
     ('', set()),
@@ -26,7 +26,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
             from __future__ import annotations
 
             if TYPE_CHECKING:
@@ -39,7 +39,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
         from __future__ import annotations
 
         if TYPE_CHECKING:
@@ -53,7 +53,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
     class X:
         def foo(self) -> 'X':
             pass
@@ -63,7 +63,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
     from __future__ import annotations
     class X:
         def foo(self) -> 'X':
@@ -75,6 +75,6 @@ examples = [
 ]
 
 
-@pytest.mark.parametrize('example, expected', examples)
+@pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC201_errors(example, expected):
     assert _get_error(example, error_code_filter='TC201') == expected
