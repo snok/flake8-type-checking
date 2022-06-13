@@ -2,26 +2,22 @@
 This file tests the TC002 error:
 
     >> Third-party import should be moved to a type-checking block
-
-One thing to note: The third-party classification is a semi-arbitrary division and really just means
-
-    1. From outside the module our current working directory is in, or
-    2. Imported from a venv
-
 """
 
+from __future__ import annotations
+
 import textwrap
+from typing import List, Set, Tuple
 
 import pytest
 
 from flake8_type_checking.constants import TC002
 from tests.conftest import _get_error
 
-examples = [
-    # No error
-    ('', set()),
-    # ------------------------------------------------------------------------------------
-    # No usage whatsoever
+L = List[Tuple[str, Set[str]]]
+
+# No usage - these should all generate errors.
+no_use: L = [
     # ast.Import
     ('import pandas', {'1:0 ' + TC002.format(module='pandas')}),
     ('\nimport pandas', {'2:0 ' + TC002.format(module='pandas')}),
@@ -31,8 +27,10 @@ examples = [
     # Aliased imports
     ('import pandas as x', {'1:0 ' + TC002.format(module='x')}),
     ('from pandas import path as x', {'1:0 ' + TC002.format(module='x')}),
-    # ------------------------------------------------------------------------------------
-    # Imports used
+]
+
+# These imports are all used. None should generate errors.
+used: L = [
     # ast.Import
     ('import pandas\nprint(pandas)', set()),
     ('\nimport pandas\nx = pandas.path', set()),
@@ -42,8 +40,10 @@ examples = [
     # Aliased imports
     ('import pandas as x\ny = x', set()),
     ('from pandas import path as x\nprint(x)', set()),
-    # ------------------------------------------------------------------------------------
-    # Imports used for ast.AnnAssign
+]
+
+# Imports used for ast.AnnAssign. These should all generate errors, same as no use.
+used_for_annotations_only: L = [
     # ast.Import
     ('import pandas\nx: pandas', {'1:0 ' + TC002.format(module='pandas')}),
     ('\nimport pandas\nx: pandas = 2', {'2:0 ' + TC002.format(module='pandas')}),
@@ -53,8 +53,10 @@ examples = [
     # Aliased imports
     ('import pandas as x\ny: x', {'1:0 ' + TC002.format(module='x')}),
     ('from pandas import path as x\ny: x = 2', {'1:0 ' + TC002.format(module='x')}),
-    # ------------------------------------------------------------------------------------
-    # Imports used for ast.arg annotation
+]
+
+# Imports used for ast.arg annotation. These should all generate errors, same as no use.
+used_for_arg_annotations_only: L = [
     # ast.Import
     ('import pandas\ndef example(x: pandas):\n\tpass', {'1:0 ' + TC002.format(module='pandas')}),
     ('\nimport pandas\ndef example(x: pandas = 2):\n\tpass', {'2:0 ' + TC002.format(module='pandas')}),
@@ -64,15 +66,25 @@ examples = [
     # Aliased imports
     ('import pandas as x\ndef example(y: x):\n\tpass', {'1:0 ' + TC002.format(module='x')}),
     ('from pandas import path as x\ndef example(y: x = 2):\n\tpass', {'1:0 ' + TC002.format(module='x')}),
-    # ------------------------------------------------------------------------------------
-    # Imports used for returns annotation
+]
+
+# Imports used for returns annotation. These should all generate errors, same as no use.
+used_for_return_annotations_only: L = [
     # ast.Import
     ('import pandas\ndef example() -> pandas:\n\tpass', {'1:0 ' + TC002.format(module='pandas')}),
     # ast.ImportFrom
     ('from pandas import path\ndef example() -> path:\n\tpass', {'1:0 ' + TC002.format(module='pandas.path')}),
     # Aliased imports
     ('import pandas as x\ndef example() -> x:\n\tpass', {'1:0 ' + TC002.format(module='x')}),
-    # ------------------------------------------------------------------------------------
+]
+
+examples = [
+    ('', set()),  # No code -> no error
+    *no_use,
+    *used,
+    *used_for_annotations_only,
+    *used_for_arg_annotations_only,
+    *used_for_return_annotations_only,
     # Other useful test cases
     (
         textwrap.dedent(
