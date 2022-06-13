@@ -7,10 +7,6 @@ if TYPE_CHECKING:
     import ast
     from typing import Any, Generator, Tuple, TypedDict, Union
 
-    class ErrorDict(TypedDict):
-        error: str
-        node: ast.AST
-
     class FunctionRangesDict(TypedDict):
         start: int
         end: int
