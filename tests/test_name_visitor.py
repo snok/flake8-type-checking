@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import ast
 import textwrap
-from typing import Set
+from typing import TYPE_CHECKING
 
 import pytest
 
 from flake8_type_checking.checker import ImportVisitor
+
+if TYPE_CHECKING:
+    from typing import Set
 
 
 def _get_names(example: str) -> Set[str]:
@@ -89,15 +94,13 @@ examples = [
 ]
 
 
-@pytest.mark.parametrize('example, result', examples)
+@pytest.mark.parametrize(('example', 'result'), examples)
 def test_basic_annotations_are_removed(example, result):
     assert _get_names(example) == result
 
 
 def test_model_declarations_are_included_in_names():
-    """
-    Class definition arguments need to be included in our "names".
-    """
+    """Class definition arguments need to be included in our "names"."""
     example = textwrap.dedent(
         """
     from django.db import models
