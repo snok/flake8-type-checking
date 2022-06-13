@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import ast
-from typing import Callable, List, Tuple
+from typing import TYPE_CHECKING
 
 import pytest
 
 from flake8_type_checking.checker import ImportVisitor
-from tests import REPO_ROOT
+from tests.conftest import REPO_ROOT
+
+if TYPE_CHECKING:
+    from typing import Callable, List, Tuple
 
 
 def _visit(example: str) -> ImportVisitor:
@@ -83,6 +86,6 @@ typing_block_imports: List[Tuple[str, list[str], Callable[[str], list[str]]]] = 
 test_data = [*application_imports, *stdlib_imports, *venv_imports, *typing_block_imports]
 
 
-@pytest.mark.parametrize('example, result, loader', test_data)
+@pytest.mark.parametrize(('example', 'result', 'loader'), test_data)
 def test_find_imports(example: str, result: list[str], loader: Callable[[str], list[str]]) -> None:
     assert loader(example) == result, f'Failed for example: {example} and result: {result}'

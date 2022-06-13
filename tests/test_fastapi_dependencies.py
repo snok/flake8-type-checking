@@ -10,14 +10,12 @@ import textwrap
 import pytest
 
 from flake8_type_checking.constants import TC002
-from tests import _get_error
+from tests.conftest import _get_error
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
 def test_api_router_decorated_function(fdef):
-    """
-    Test sync and async function definition, with an arg and a kwarg.
-    """
+    """Test sync and async function definition, with an arg and a kwarg."""
     example = textwrap.dedent(
         f'''
         from fastapi import APIRouter

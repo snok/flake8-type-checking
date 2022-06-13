@@ -7,7 +7,7 @@ import textwrap
 import pytest
 
 from flake8_type_checking.constants import TC101
-from tests import _get_error
+from tests.conftest import _get_error
 
 examples = [
     # No error
@@ -34,7 +34,7 @@ examples = [
     # ast.AnnAssign from type checking block import with quotes
     (
         textwrap.dedent(
-            f'''
+            '''
             from __future__ import annotations
 
             if TYPE_CHECKING:
@@ -49,7 +49,7 @@ examples = [
     ("from typing import Dict\nx: 'Dict'", {'2:3 ' + TC101.format(annotation='Dict')}),
     (
         textwrap.dedent(
-            f'''
+            '''
         from __future__ import annotations
 
         if TYPE_CHECKING:
@@ -63,7 +63,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
         from __future__ import annotations
 
         if TYPE_CHECKING:
@@ -77,7 +77,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
         from __future__ import annotations
 
         def example(x: "something") -> "something":
@@ -88,7 +88,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
         if TYPE_CHECKING:
             import something
 
@@ -100,7 +100,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
         class X:
             def foo(self) -> 'X':
                 pass
@@ -110,7 +110,7 @@ examples = [
     ),
     (
         textwrap.dedent(
-            f'''
+            '''
         from __future__ import annotations
         class X:
             def foo(self) -> 'X':
@@ -122,6 +122,6 @@ examples = [
 ]
 
 
-@pytest.mark.parametrize('example, expected', examples)
+@pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC101_errors(example, expected):
     assert _get_error(example, error_code_filter='TC101') == expected

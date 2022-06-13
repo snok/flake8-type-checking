@@ -1,7 +1,7 @@
 import textwrap
 
 from flake8_type_checking.constants import TC002
-from tests import _get_error
+from tests.conftest import _get_error
 
 
 def test_exempt_modules_option():

@@ -9,12 +9,10 @@ One thing to note: The local/remote is a semi-arbitrary division and really just
     2. In the current working dir, but inside a venv
 
 """
-import textwrap
-
 import pytest
 
 from flake8_type_checking.constants import TC001
-from tests import _get_error, mod
+from tests.conftest import _get_error, mod
 
 examples = [
     # No error
@@ -50,7 +48,7 @@ examples = [
     (f'from {mod} import Plugin\nx: Plugin', {'1:0 ' + TC001.format(module=f'{mod}.Plugin')}),
     (f'\n\nfrom {mod} import constants\nx: Plugin = 2', {'3:0 ' + TC001.format(module=f'{mod}.constants')}),
     # Aliased imports
-    (f'import {mod} as x\ny: x', {'1:0 ' + TC001.format(module=f'x')}),
+    (f'import {mod} as x\ny: x', {'1:0 ' + TC001.format(module='x')}),
     (f'from {mod} import constants as x\ny: x = 2', {'1:0 ' + TC001.format(module='x')}),
     # ------------------------------------------------------------------------------------
     # Imports used for ast.arg annotation
@@ -64,7 +62,7 @@ examples = [
         {'3:0 ' + TC001.format(module=f'{mod}.constants')},
     ),
     # Aliased imports
-    (f'import {mod} as x\ndef example(y: x):\n\tpass', {'1:0 ' + TC001.format(module=f'x')}),
+    (f'import {mod} as x\ndef example(y: x):\n\tpass', {'1:0 ' + TC001.format(module='x')}),
     (f'from {mod} import constants as x\ndef example(y: x = 2):\n\tpass', {'1:0 ' + TC001.format(module='x')}),
     # ------------------------------------------------------------------------------------
     # Imports used for returns annotation
@@ -73,11 +71,11 @@ examples = [
     # ast.ImportFrom
     (f'from {mod} import Plugin\ndef example() -> Plugin:\n\tpass', {'1:0 ' + TC001.format(module=f'{mod}.Plugin')}),
     # Aliased imports
-    (f'import {mod} as x\ndef example() -> x:\n\tpass', {'1:0 ' + TC001.format(module=f'x')}),
-    (f'import {mod} as x\ndef example() -> x:\n\tpass', {'1:0 ' + TC001.format(module=f'x')}),
+    (f'import {mod} as x\ndef example() -> x:\n\tpass', {'1:0 ' + TC001.format(module='x')}),
+    (f'import {mod} as x\ndef example() -> x:\n\tpass', {'1:0 ' + TC001.format(module='x')}),
 ]
 
 
-@pytest.mark.parametrize('example, expected', examples)
+@pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC001_errors(example, expected):
     assert _get_error(example) == expected

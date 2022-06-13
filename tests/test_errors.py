@@ -1,12 +1,8 @@
-"""
-Contains special test cases that fall outside the scope of remaining test files.
-"""
+"""Contains special test cases that fall outside the scope of remaining test files."""
 import textwrap
-from unittest.mock import patch
 
-from flake8_type_checking.checker import ImportVisitor
 from flake8_type_checking.constants import TC001, TC002
-from tests import REPO_ROOT, _get_error, mod
+from tests.conftest import _get_error, mod
 
 
 class TestFoundBugs:
@@ -66,9 +62,7 @@ class TestFoundBugs:
         assert _get_error(example) == set()
 
     def test_all_list_declaration(self):
-        """
-        __all__ declarations originally generated false positives.
-        """
+        """__all__ declarations originally generated false positives."""
         example = textwrap.dedent(
             """
         from app.models import SomeModel
@@ -83,9 +77,7 @@ class TestFoundBugs:
         assert _get_error(example) == set()
 
     def test_all_tuple_declaration(self):
-        """
-        __all__ declarations originally generated false positives.
-        """
+        """__all__ declarations originally generated false positives."""
         example = textwrap.dedent(
             """
         from app.models import SomeModel
@@ -100,9 +92,7 @@ class TestFoundBugs:
         assert _get_error(example) == set()
 
     def test_callable_import(self):
-        """
-        __all__ declarations originally generated false positives.
-        """
+        """__all__ declarations originally generated false positives."""
         example = textwrap.dedent(
             """
         from x import y

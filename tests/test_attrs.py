@@ -9,17 +9,17 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.constants import TC002, TC003
-from tests import _get_error
+from flake8_type_checking.constants import TC003
+from tests.conftest import _get_error
 
 
 @pytest.mark.parametrize(
-    'imp, dec',
-    (
-        ['import attrs', '@attrs.define'],
-        ['import attr', '@attr.s(auto_attribs=True)'],
-        ['import attr', '@attr.define'],
-    ),
+    ('imp', 'dec'),
+    [
+        ('import attrs', '@attrs.define'),
+        ('import attr', '@attr.s(auto_attribs=True)'),
+        ('import attr', '@attr.define'),
+    ],
 )
 def test_attrs_model(imp, dec):
     """
@@ -47,12 +47,12 @@ def test_attrs_model(imp, dec):
 
 
 @pytest.mark.parametrize(
-    'imp, dec, expected',
-    (
-        ['import attrs', '@attrs.define', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        ['import attr', '@attr.s(auto_attribs=True)', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        ['import attr', '@attr.define', {'4:0 ' + TC003.format(module='decimal.Context')}],
-    ),
+    ('imp', 'dec', 'expected'),
+    [
+        ('import attrs', '@attrs.define', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        ('import attr', '@attr.s(auto_attribs=True)', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        ('import attr', '@attr.define', {'4:0 ' + TC003.format(module='decimal.Context')}),
+    ],
 )
 def test_complex_attrs_model(imp, dec, expected):
     """
@@ -81,12 +81,12 @@ def test_complex_attrs_model(imp, dec, expected):
 
 
 @pytest.mark.parametrize(
-    'imp, dec, expected',
-    (
-        ['from attrs import define', '@define', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        ['from attr import s', '@s(auto_attribs=True)', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        ['from attr import define', '@define', {'4:0 ' + TC003.format(module='decimal.Context')}],
-    ),
+    ('imp', 'dec', 'expected'),
+    [
+        ('from attrs import define', '@define', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        ('from attr import s', '@s(auto_attribs=True)', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        ('from attr import define', '@define', {'4:0 ' + TC003.format(module='decimal.Context')}),
+    ],
 )
 def test_complex_attrs_model_direct_import(imp, dec, expected):
     """
@@ -115,22 +115,24 @@ def test_complex_attrs_model_direct_import(imp, dec, expected):
 
 
 @pytest.mark.parametrize(
-    'imp, dec, expected',
-    (
-        ['from attrs import define as asdfg', '@asdfg', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        [
+    ('imp', 'dec', 'expected'),
+    [
+        ('from attrs import define as asdfg', '@asdfg', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        (
             'from attr import s as ghdjfg',
             '@ghdjfg(auto_attribs=True)',
             {'4:0 ' + TC003.format(module='decimal.Context')},
-        ],
-        ['import attr as ghdjfg', '@ghdjfg.define', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        ['import attr.define as adasdfg', '@adasdfg', {'4:0 ' + TC003.format(module='decimal.Context')}],
-    ),
+        ),
+        ('import attr as ghdjfg', '@ghdjfg.define', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        ('import attr.define as adasdfg', '@adasdfg', {'4:0 ' + TC003.format(module='decimal.Context')}),
+    ],
 )
 def test_complex_attrs_model_as_import(imp, dec, expected):
     """
     Test `attrs` classes together with a non-`attrs` class tha has a class var of another type.
-    `attrs` classes are instantiated using different dataclass decorators which are imported as submodules using an alias.
+
+    `attrs` classes are instantiated using different dataclass
+    decorators which are imported as submodules using an alias.
     """
     example = textwrap.dedent(
         f'''
@@ -154,17 +156,17 @@ def test_complex_attrs_model_as_import(imp, dec, expected):
 
 
 @pytest.mark.parametrize(
-    'imp, dec, expected',
-    (
-        ['from attr import define', '@define(slots=False)', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        ['from attr import define', '@define(frozen=True)', {'4:0 ' + TC003.format(module='decimal.Context')}],
-        [
+    ('imp', 'dec', 'expected'),
+    [
+        ('from attr import define', '@define(slots=False)', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        ('from attr import define', '@define(frozen=True)', {'4:0 ' + TC003.format(module='decimal.Context')}),
+        (
             'from attr import define',
             '@define(slots=False, frozen=True)',
             {'4:0 ' + TC003.format(module='decimal.Context')},
-        ],
-        ['import attr', '@attr.define(slots=False, frozen=True)', {'4:0 ' + TC003.format(module='decimal.Context')}],
-    ),
+        ),
+        ('import attr', '@attr.define(slots=False, frozen=True)', {'4:0 ' + TC003.format(module='decimal.Context')}),
+    ],
 )
 def test_complex_attrs_model_slots_frozen(imp, dec, expected):
     """

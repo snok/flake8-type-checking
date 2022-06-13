@@ -10,15 +10,15 @@ import textwrap
 import pytest
 
 from flake8_type_checking.constants import TC002
-from tests import _get_error
+from tests.conftest import _get_error
 
 
 @pytest.mark.parametrize(
-    'enabled, expected',
-    (
-        [True, {'2:0 ' + TC002.format(module='pandas.DataFrame')}],
-        [False, {'2:0 ' + TC002.format(module='pandas.DataFrame')}],
-    ),
+    ('enabled', 'expected'),
+    [
+        (True, {'2:0 ' + TC002.format(module='pandas.DataFrame')}),
+        (False, {'2:0 ' + TC002.format(module='pandas.DataFrame')}),
+    ],
 )
 def test_non_pydantic_model(enabled, expected):
     """
@@ -54,9 +54,7 @@ def test_class_with_base_class():
 
 
 def test_complex_pydantic_model():
-    """
-    Test actual Pydantic models, with different annotation types.
-    """
+    """Test actual Pydantic models, with different annotation types."""
     example = textwrap.dedent(
         '''
         from __future__ import annotations
@@ -109,9 +107,7 @@ def test_complex_pydantic_model():
 
 @pytest.mark.parametrize('c', ['NamedTuple', 'TypedDict'])
 def test_type_checking_pydantic_enabled_baseclass_passlist(c):
-    """
-    Test that named tuples are not ignored.
-    """
+    """Test that named tuples are not ignored."""
     example = textwrap.dedent(
         f'''
         from typing import {c}

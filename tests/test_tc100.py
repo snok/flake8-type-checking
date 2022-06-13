@@ -11,7 +11,7 @@ One thing to note: futures imports should always be at the top of a file, so we 
 import pytest
 
 from flake8_type_checking.constants import TC100
-from tests import _get_error, mod
+from tests.conftest import _get_error, mod
 
 examples = [
     # No errors
@@ -41,6 +41,6 @@ examples = [
 ]
 
 
-@pytest.mark.parametrize('example, expected', examples)
+@pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC100_errors(example, expected):
     assert _get_error(example, error_code_filter='TC100') == expected
