@@ -95,4 +95,4 @@ examples: L = [
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC001_errors(example: str, expected: set[str]) -> None:
-    assert _get_error(example) == expected
+    assert _get_error(example, error_code_filter='TC001') == expected
