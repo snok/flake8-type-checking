@@ -40,8 +40,10 @@ class Plugin:
             comma_separated_list=True,
             parse_from_config=True,
             default=[],
-            help='Skip TC001 and TC002 checks for specified modules or libraries.',
+            help='Skip TC001, TC002, and TC003 checks for specified modules or libraries.',
         )
+
+        # Third-party library options
         option_manager.add_option(
             '--type-checking-pydantic-enabled',
             action='store_true',
@@ -79,7 +81,13 @@ class Plugin:
         )
 
     def run(self) -> Flake8Generator:
-        """Run flake8 plugin and return any relevant errors."""
+        """
+        Run flake8 plugin and return any relevant errors.
+
+        We use pickle.loads/dumps here as a more performant alternative to deepcopy,
+        since we mutate the tree we receive and not copying it like this will lead
+        to errors in consequent plugins.
+        """
         visitor = TypingOnlyImportsChecker(pickle.loads(pickle.dumps(self._tree, -1)), self.options)
         for e in visitor.errors:
             if self.should_warn(e[2].split(':')[0]):

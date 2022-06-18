@@ -62,7 +62,7 @@ def test_complex_attrs_model(imp, dec, expected):
     example = textwrap.dedent(
         f'''
         {imp}
-        from decimal import Decimal
+        from decimals import Decimal
         from decimal import Context
 
         {dec}
@@ -96,7 +96,7 @@ def test_complex_attrs_model_direct_import(imp, dec, expected):
     example = textwrap.dedent(
         f'''
         {imp}
-        from decimal import Decimal
+        from decimals import Decimal
         from decimal import Context
 
         {dec}
@@ -137,7 +137,7 @@ def test_complex_attrs_model_as_import(imp, dec, expected):
     example = textwrap.dedent(
         f'''
         {imp}
-        from decimal import Decimal
+        from decimals import Decimal
         from decimal import Context
 
         {dec}
@@ -176,7 +176,7 @@ def test_complex_attrs_model_slots_frozen(imp, dec, expected):
     example = textwrap.dedent(
         f'''
         {imp}
-        from decimal import Decimal
+        from decimals import Decimal
         from decimal import Context
 
         {dec}

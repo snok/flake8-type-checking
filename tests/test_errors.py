@@ -179,3 +179,18 @@ class TestFoundBugs:
             """
         for example in [type_checking, typing_type_checking, alias, aliased_typing]:
             assert _get_error(textwrap.dedent(example)) == set()
+
+    def test_import_not_flagged_when_existing_import_present(self):
+        """
+        When an import is made to a module, we treat it as already used.
+
+        Guarding additional imports to the same module shouldn't present
+        a performance gain of note, so it's probably not worth the effort.
+        """
+        example = """
+            from os import x  # <-- would otherwise be flagged
+            from os import y  # <-- but this should prevent that
+
+            z = y
+            """
+        assert _get_error(textwrap.dedent(example)) == set()
