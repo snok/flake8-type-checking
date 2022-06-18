@@ -177,7 +177,6 @@ class FastAPIMixin(MixinBase):  # type: ignore
     For FastAPI app/route-decorated views, and for dependencies, we want
     to treat annotations as needed at runtime.
     """
-
     fastapi_enabled: bool
     fastapi_dependency_support_enabled: bool
 
@@ -769,12 +768,18 @@ class TypingOnlyImportsChecker:
             ImportType.THIRD_PARTY: (self.visitor.third_party_imports, TC002),
             ImportType.BUILTIN: (self.visitor.built_in_imports, TC003),
         }
-        for name in set(self.visitor.imports) - self.visitor.names:
-            imp: ImportName = self.visitor.imports[name]
-            if all(imp.import_name not in str(use) for use in self.visitor.uses):
-                imports, error = import_types[imp.import_type]
-                node = imports.pop(imp.import_name)
-                yield node.lineno, node.col_offset, error.format(module=imp.import_name), None
+
+        unused_imports = set(self.visitor.imports) - self.visitor.names
+        used_imports = set(self.visitor.imports) - unused_imports
+        already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
+
+        for name in unused_imports:
+            # Get the ImportName object for this import name
+            import_name: ImportName = self.visitor.imports[name]
+            if import_name.module not in already_imported_modules:
+                error_specific_imports, error = import_types[import_name.import_type]
+                node = error_specific_imports.pop(import_name.import_name)
+                yield node.lineno, node.col_offset, error.format(module=import_name.import_name), None
 
     def used_type_checking_imports(self) -> Flake8Generator:
         """TC004."""
