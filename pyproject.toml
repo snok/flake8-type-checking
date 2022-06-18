@@ -8,7 +8,6 @@ authors = ['Sondre Lillebø Gundersen <sondrelg@live.no>']
 license = 'BSD-3-Clause'
 readme = 'README.md'
 keywords = ['flake8', 'plugin', 'linting', 'type hint', 'typing', 'imports']
-include = ['CHANGELOG.md']
 packages = [{ include = 'flake8_type_checking' }]
 classifiers = [
     'Development Status :: 5 - Production/Stable',
