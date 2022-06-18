@@ -32,13 +32,7 @@ if TYPE_CHECKING:
     from argparse import Namespace
     from typing import Any, Optional, Union
 
-    from flake8_type_checking.types import (
-        Flake8Generator,
-        FunctionRangesDict,
-        FunctionScopeImportsDict,
-        Import,
-        Name,
-    )
+    from flake8_type_checking.types import Flake8Generator, FunctionRangesDict, FunctionScopeImportsDict, Import, Name
 
     MixinBase = 'ImportVisitor'
 
@@ -225,26 +219,62 @@ class FastAPIMixin(MixinBase):  # type: ignore
         ):
             self.visit(node.args.vararg.annotation)
 
+
 @dataclass
 class ImportName:
+    """DTO for representing an import in different string-formats."""
+
     _module: str
     _name: str
     _alias: Optional[str]
 
     @property
     def name(self) -> str:
+        """
+        Return the name of the import.
+
+        The name is
+
+            import pandas
+                     ^-- this
+
+            from pandas import DataFrame
+                                 ^--this
+
+            from pandas import DataFrame as df
+                                            ^-- or this
+
+        depending on the type of import.
+        """
         return self._alias or self._name
 
     @property
     def full_name(self) -> str:
+        """
+        Return the full name of the import.
+
+        The full name is
+
+            import pandas --> 'pandas'
+
+            from pandas import DataFrame --> 'pandas.DataFrame'
+
+            from pandas import DataFrame as df --> 'pandas.DataFrame'
+        """
         return f'{self._module}{self._name}'
 
     @property
     def import_name(self) -> str:
+        """
+        Return the import name.
+
+        The import name is a hybrid of the two above, and is what will match the entries in the self.uses dict.
+        """
         return self._alias or self.full_name
 
     @property
     def import_type(self) -> ImportTypeValue:
+        """Return the import type of the import."""
         return cast(ImportTypeValue, classify_import(self.full_name))
 
 
@@ -454,7 +484,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransforme
                 imp = ImportName(
                     _module=f'{node.module}.' if isinstance(node, ast.ImportFrom) else '',
                     _alias=name_node.asname,
-                    _name=name_node.name
+                    _name=name_node.name,
                 )
 
                 if imp.import_type == ImportType.APPLICATION:
@@ -732,7 +762,8 @@ class TypingOnlyImportsChecker:
             self.excess_quotes,
         ]
 
-    def unused_imports(self):
+    def unused_imports(self) -> Flake8Generator:
+        """Yield TC001, TC002, and TC003 errors."""
         import_types = {
             ImportType.APPLICATION: (self.visitor.application_imports, TC001),
             ImportType.THIRD_PARTY: (self.visitor.third_party_imports, TC002),
