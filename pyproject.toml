@@ -67,7 +67,4 @@ show_missing = true
 skip_covered = true
 exclude_lines = [
     'if TYPE_CHECKING:',
-    'mgr.extend_default_ignore',
-    'from importlib_metadata import version',
-    'except possible_local_errors:',
 ]
