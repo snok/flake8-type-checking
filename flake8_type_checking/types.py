@@ -1,11 +1,10 @@
-# flake8: noqa: D101
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Optional, Protocol
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     import ast
-    from typing import Any, Generator, Tuple, TypedDict, Union
+    from typing import Any, Generator, Optional, Protocol, Tuple, TypedDict, Union
 
     class FunctionRangesDict(TypedDict):
         start: int

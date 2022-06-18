@@ -177,6 +177,7 @@ class FastAPIMixin(MixinBase):  # type: ignore
     For FastAPI app/route-decorated views, and for dependencies, we want
     to treat annotations as needed at runtime.
     """
+
     fastapi_enabled: bool
     fastapi_dependency_support_enabled: bool
 
@@ -226,6 +227,15 @@ class ImportName:
     _module: str
     _name: str
     _alias: Optional[str]
+
+    @property
+    def module(self) -> str:
+        """
+        Return the import module.
+
+        The self._module value contains a trailing ".".
+        """
+        return self._module.rstrip('.')
 
     @property
     def name(self) -> str:
