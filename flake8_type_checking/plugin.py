@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import logging
 import pickle
+import sys
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
 
 if TYPE_CHECKING:
+    from types import TracebackType
+
     from argparse import Namespace
     from ast import Module
     from typing import Optional
@@ -18,6 +21,29 @@ if TYPE_CHECKING:
 from importlib.metadata import version
 
 logger = logging.getLogger('flake8.type_checking')
+
+
+class RecursionLimit:
+    """
+    Recursion limit context manager.
+
+    Copying ast trees can sometimes exceed the default recursion limit,
+    so this lets us temporarily increase it, just for that operation.
+    """
+
+    def __init__(self, n: int):
+        self.current_limit = sys.getrecursionlimit()
+        self.limit = n
+
+    def __enter__(self) -> None:
+        """Increase recursion limit."""
+        sys.setrecursionlimit(self.limit)
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> None:
+        """Reset recursion limit."""
+        sys.setrecursionlimit(self.current_limit)
 
 
 class Plugin:
@@ -88,7 +114,11 @@ class Plugin:
         since we mutate the tree we receive and not copying it like this will lead
         to errors in consequent plugins.
         """
-        visitor = TypingOnlyImportsChecker(pickle.loads(pickle.dumps(self._tree, -1)), self.options)
+        with RecursionLimit(10_000):
+            copied_tree = pickle.loads(pickle.dumps(self._tree, -1))
+
+        visitor = TypingOnlyImportsChecker(copied_tree, self.options)
+
         for e in visitor.errors:
             if self.should_warn(e[2].split(':')[0]):
                 yield e
