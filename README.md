@@ -66,7 +66,7 @@ And depending on which error code range you've opted into, it will tell you
 |--------|------------------------------------------------------------------------------------|
 | TC001 | Move application import into a type-checking block                                 |
 | TC002 | Move third-party import into a type-checking block                                 |
-| TC003 | Found multiple type checking blocks                                                |
+| TC002 | Move built-in import into a type-checking block                                    |
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
 | TC005 | Empty type-checking block                                                          |
 
@@ -131,7 +131,7 @@ modules to ignore.
 
 ```ini
 [flake8]
-type-checking-exempt-modules = typing, typing_extensions  # default []
+type-checking-exempt-modules = typing_extensions  # default []
 ```
 
 ### Pydantic support
@@ -219,7 +219,6 @@ This can be added in the future if needed.
 type-checking-cattrs-enabled = true  # default false
 ```
 
-
 ## Rationale
 
 Why did we create this plugin?
@@ -227,13 +226,7 @@ Why did we create this plugin?
 Good type hinting typically requires a lot of project imports, which can increase
 the risk of [import cycles](https://mypy.readthedocs.io/en/stable/runtime_troubles.html?#import-cycles)
 in a project. The recommended way of preventing this problem is to use `typing.TYPE_CHECKING` blocks
-to guard these types of imports.
-
-Both `TC001` and `TC002` help alleviate this problem; the reason there are two
-codes instead of one, is because the import cycles rarely occur from
-library/third-party imports, so this classification split provides a way to filter down
-the total number of imports for users that want to guard against import cycles,
-but don't want to manage every import in their projects *this* strictly.
+to guard these types of imports. In particular, `TC001` helps protect against this issue.
 
 Once imports are guarded, they will no longer be evaluated/imported during runtime. The
 consequence of this is that these imports can no longer be treated as if they
