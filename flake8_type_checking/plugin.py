@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-import pickle
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
 
 if TYPE_CHECKING:
+
     from argparse import Namespace
     from ast import Module
     from typing import Optional
@@ -81,14 +81,9 @@ class Plugin:
         )
 
     def run(self) -> Flake8Generator:
-        """
-        Run flake8 plugin and return any relevant errors.
+        """Run flake8 plugin and return any relevant errors."""
+        visitor = TypingOnlyImportsChecker(self._tree, self.options)
 
-        We use pickle.loads/dumps here as a more performant alternative to deepcopy,
-        since we mutate the tree we receive and not copying it like this will lead
-        to errors in consequent plugins.
-        """
-        visitor = TypingOnlyImportsChecker(pickle.loads(pickle.dumps(self._tree, -1)), self.options)
         for e in visitor.errors:
             if self.should_warn(e[2].split(':')[0]):
                 yield e
