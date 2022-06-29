@@ -287,7 +287,7 @@ class ImportName:
         return cast(ImportTypeValue, classify_import(self.full_name))
 
 
-class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeTransformer):
+class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
     """Map all imports outside of type-checking blocks."""
 
     def __init__(
