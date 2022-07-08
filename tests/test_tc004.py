@@ -70,6 +70,18 @@ examples = [
         ),
         set(),
     ),
+    (
+        textwrap.dedent(
+            """
+    if TYPE_CHECKING:
+        from typing import List, Sequence, Set
+
+    def example(a: List[int], /, b: Sequence[int], *, c: Set[int]):
+        return
+    """
+        ),
+        set(),
+    ),
     # Used different places, but where each function scope has it's own import
     (
         textwrap.dedent(

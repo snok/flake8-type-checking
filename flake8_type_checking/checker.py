@@ -671,7 +671,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
 
         And we also note down the start and end line number for the function.
         """
-        for path in [node.args.args, node.args.kwonlyargs]:
+        for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
             for argument in path:
                 if hasattr(argument, 'annotation') and argument.annotation:
                     self.add_annotation(argument.annotation)
