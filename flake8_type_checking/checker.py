@@ -34,11 +34,6 @@ if TYPE_CHECKING:
 
     from flake8_type_checking.types import Flake8Generator, FunctionRangesDict, FunctionScopeImportsDict, Import, Name
 
-    MixinBase = 'ImportVisitor'
-
-else:
-    MixinBase = object
-
 
 class AttrsMixin:
     """
@@ -48,7 +43,8 @@ class AttrsMixin:
     we treat type hints on attrs classes as needed at runtime.
     """
 
-    third_party_imports: dict[str, Import]
+    if TYPE_CHECKING:
+        third_party_imports: dict[str, Import]
 
     def get_all_attrs_imports(self) -> dict[Optional[str], str]:
         """Return a map of all attrs/attr imports."""
@@ -98,7 +94,7 @@ class AttrsMixin:
         return actual in ATTRS_DECORATORS
 
 
-class DunderAllMixin(MixinBase):  # type: ignore
+class DunderAllMixin:
     """
     Contains the necessary logic for preventing __all__ false positives.
 
@@ -116,6 +112,12 @@ class DunderAllMixin(MixinBase):  # type: ignore
     a TC001 error saying that this import can be moved into a type checking block, but
     this is an exception to the general rule.
     """
+
+    if TYPE_CHECKING:
+        uses: dict[str, ast.AST]
+
+        def generic_visit(self, node: ast.AST) -> None:  # noqa: D102
+            ...
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.__all___assignments: list[tuple[int, int]] = []
@@ -170,7 +172,7 @@ class DunderAllMixin(MixinBase):  # type: ignore
         return node
 
 
-class PydanticMixin(MixinBase):  # type: ignore
+class PydanticMixin:
     """
     Contains the necessary logic for Pydantic support.
 
@@ -178,7 +180,12 @@ class PydanticMixin(MixinBase):  # type: ignore
     Some pydantic stuff is still contained in the main class.
     """
 
-    pydantic_validate_arguments_import_name: Optional[str]
+    if TYPE_CHECKING:
+        pydantic_enabled: bool
+        pydantic_validate_arguments_import_name: Optional[str]
+
+        def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+            ...
 
     def _function_is_wrapped_by_validate_arguments(self, node: Union[FunctionDef, AsyncFunctionDef]) -> bool:
         if self.pydantic_enabled and node.decorator_list:
@@ -204,7 +211,7 @@ class PydanticMixin(MixinBase):  # type: ignore
                         self.visit(argument.annotation)
 
 
-class FastAPIMixin(MixinBase):  # type: ignore
+class FastAPIMixin:
     """
     Contains the necessary logic for FastAPI support.
 
@@ -212,18 +219,22 @@ class FastAPIMixin(MixinBase):  # type: ignore
     to treat annotations as needed at runtime.
     """
 
-    fastapi_enabled: bool
-    fastapi_dependency_support_enabled: bool
+    if TYPE_CHECKING:
+        fastapi_enabled: bool
+        fastapi_dependency_support_enabled: bool
+
+        def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+            ...
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        super().visit_FunctionDef(node)
+        super().visit_FunctionDef(node)  # type: ignore[misc]
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        super().visit_AsyncFunctionDef(node)
+        super().visit_AsyncFunctionDef(node)  # type: ignore[misc]
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
 
@@ -284,7 +295,7 @@ class ImportName:
                      ^-- this
 
             from pandas import DataFrame
-                                 ^--this
+                                  ^--this
 
             from pandas import DataFrame as df
                                             ^-- or this
@@ -483,7 +494,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     # -- Map imports -------------------------------
 
-    def add_import(self, node: Import) -> None:
+    def add_import(self, node: Import) -> None:  # noqa: C901
         """Add relevant ast objects to import lists."""
         if self.in_type_checking_block(node):
             # For type checking blocks we want to
