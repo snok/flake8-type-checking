@@ -127,3 +127,18 @@ def test_type_checking_pydantic_enabled_baseclass_passlist(c):
         '3:0 ' + TC002.format(module='x.Y'),
         '3:0 ' + TC002.format(module='x.Z'),
     }
+
+
+def test_type_checking_pydantic_enabled_validate_arguments_decorator():
+    """Test that @validate_argument-decorated functions have their annotations ignored."""
+    example = textwrap.dedent(
+        '''
+        from pydantic import validate_arguments
+        from x import Y, Z
+
+        @validate_arguments
+        def f(y: Y) -> Z:
+            pass
+        '''
+    )
+    assert _get_error(example, type_checking_pydantic_enabled=True) == set()
