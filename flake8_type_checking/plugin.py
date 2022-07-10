@@ -114,12 +114,15 @@ class Plugin:
             logger.info('Options not provided to flake8-type-checking, optional warning %s selected.', code)
             return False
 
+        selected_rules = tuple(
+            list(self.options.select or [])
+            + list(self.options.extended_default_select or [])
+            + list(self.options.extend_select or [])
+            + list(self.options.enable_extensions or []),
+        )
+
         for i in range(3, len(code) + 1):
-            if code[:i] in (
-                self.options.select
-                + list(self.options.extended_default_select)
-                + (self.options.enable_extensions or [])
-            ):
+            if code[:i] in selected_rules:
                 # Warn if opted-in
                 return True
 
@@ -127,6 +130,6 @@ class Plugin:
         logger.info(
             'Optional warning %s not present in selected warnings: %r. Not running it at all.',
             code,
-            self.options.select,
+            selected_rules,
         )
         return False
