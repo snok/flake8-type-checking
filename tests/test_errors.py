@@ -213,6 +213,16 @@ class TestFoundBugs:
             except botocore.exceptions.ClientError:
                 ...
            """,
+            """
+            import boto3.s3.transfer
+
+            print(f"hello there: {boto3.s3.transfer.TransferConfig()}")
+           """,
+            """
+            import boto3.s3.transfer
+
+            print(f"hello there: {boto3.s3.transfer()}")
+           """,
         ],
     )
     def test_double_namespace_import(self, example):
