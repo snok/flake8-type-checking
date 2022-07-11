@@ -194,3 +194,30 @@ class TestFoundBugs:
             z = y
             """
         assert _get_error(textwrap.dedent(example)) == set()
+
+    def test_import_not_flagged_by_tc004_when_shadowed(self):
+        """
+        TC004 tells users to move an import out of a guarded block.
+
+        It does this when the import is detected as used for something other
+        than purely annotations, since this would indicate that the import
+        is actually required at runtime.
+
+        This test covers an edge case where variables shadowing the namespace
+        of an import would make the plugin think the type hint-import was used
+        instead.
+        """
+        example = """
+            from typing import TYPE_CHECKING
+
+            if TYPE_CHECKING:
+                from typing import List as list_type
+
+            l: "list_type"
+
+
+            def example():
+                list_type = list  # <-- shadows import name
+                return list_type([42])
+            """
+        assert _get_error(textwrap.dedent(example)) == set()
