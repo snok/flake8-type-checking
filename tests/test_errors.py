@@ -1,6 +1,8 @@
 """Contains special test cases that fall outside the scope of remaining test files."""
 import textwrap
 
+import pytest
+
 from flake8_type_checking.constants import TC001, TC002
 from tests.conftest import _get_error, mod
 
@@ -193,4 +195,30 @@ class TestFoundBugs:
 
             z = y
             """
+        assert _get_error(textwrap.dedent(example)) == set()
+
+    @pytest.mark.parametrize(
+        'example',
+        [
+            """
+            import urllib.parse
+
+            urllib.parse.urlencode('')
+            """,
+            """
+            import botocore.exceptions
+
+            try:
+                ...
+            except botocore.exceptions.ClientError:
+                ...
+           """,
+        ],
+    )
+    def test_double_namespace_import(self, example):
+        """
+        Ensure double namespaced imports are handled correctly.
+
+        Re https://github.com/snok/flake8-type-checking/issues/101.
+        """
         assert _get_error(textwrap.dedent(example)) == set()
