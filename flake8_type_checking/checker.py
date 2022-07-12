@@ -170,6 +170,40 @@ class DunderAllMixin(MixinBase):  # type: ignore
         return node
 
 
+class PydanticMixin(MixinBase):  # type: ignore
+    """
+    Contains the necessary logic for Pydantic support.
+
+    At least the code that could be separated from the main visitor class.
+    Some pydantic stuff is still contained in the main class.
+    """
+
+    pydantic_validate_arguments_import_name: Optional[str]
+
+    def _function_is_wrapped_by_validate_arguments(self, node: Union[FunctionDef, AsyncFunctionDef]) -> bool:
+        if self.pydantic_enabled and node.decorator_list:
+            for decorator_node in node.decorator_list:
+                if getattr(decorator_node, 'id', '') == self.pydantic_validate_arguments_import_name:
+                    return True
+        return False
+
+    def visit_FunctionDef(self, node: FunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        if self._function_is_wrapped_by_validate_arguments(node):
+            for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
+                for argument in path:
+                    if hasattr(argument, 'annotation') and argument.annotation:
+                        self.visit(argument.annotation)
+
+    def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        if self._function_is_wrapped_by_validate_arguments(node):
+            for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
+                for argument in path:
+                    if hasattr(argument, 'annotation') and argument.annotation:
+                        self.visit(argument.annotation)
+
+
 class FastAPIMixin(MixinBase):  # type: ignore
     """
     Contains the necessary logic for FastAPI support.
@@ -183,11 +217,13 @@ class FastAPIMixin(MixinBase):  # type: ignore
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Remove and map function arguments and returns."""
+        super().visit_FunctionDef(node)
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
+        super().visit_AsyncFunctionDef(node)
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
 
@@ -287,7 +323,7 @@ class ImportName:
         return cast(ImportTypeValue, classify_import(self.full_name))
 
 
-class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
+class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
     """Map all imports outside of type-checking blocks."""
 
     def __init__(
@@ -308,6 +344,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
         self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
         self.cattrs_enabled = cattrs_enabled
         self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
+        self.pydantic_validate_arguments_import_name = None
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         #: Import patterns we want to avoid mapping
@@ -473,6 +510,13 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
             # Look for a TYPE_CHECKING import
             if name_node.name == 'TYPE_CHECKING' and name_node.asname is not None:
                 self.type_checking_alias = name_node.asname
+
+            # Look for pydantic.validate_arguments import
+            if name_node.name == 'validate_arguments':
+                if name_node.asname is not None:
+                    self.pydantic_validate_arguments_import_name = name_node.asname
+                else:
+                    self.pydantic_validate_arguments_import_name = name_node.name
 
             # Look for typing import
             if name_node.name == 'typing' and name_node.asname is not None:

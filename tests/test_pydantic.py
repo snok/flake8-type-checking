@@ -127,3 +127,50 @@ def test_type_checking_pydantic_enabled_baseclass_passlist(c):
         '3:0 ' + TC002.format(module='x.Y'),
         '3:0 ' + TC002.format(module='x.Z'),
     }
+
+
+@pytest.mark.parametrize('f', ['def', 'async def'])
+def test_type_checking_pydantic_enabled_validate_arguments_decorator(f):
+    """Test that @validate_argument-decorated functions have their annotations ignored."""
+    example = textwrap.dedent(
+        f'''
+        from pydantic import validate_arguments
+        from x import Y, Z
+
+        @validate_arguments
+        {f} f(y: Y) -> Z:
+            pass
+        '''
+    )
+    assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
+
+
+@pytest.mark.parametrize('f', ['def', 'async def'])
+def test_type_checking_pydantic_enabled_validate_arguments_decorator_alias(f):
+    example = textwrap.dedent(
+        f'''
+        from pydantic import validate_arguments as va
+        from x import Y, Z
+
+        @va
+        {f} f(y: Y) -> Z:
+            pass
+        '''
+    )
+    assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
+
+
+@pytest.mark.parametrize('f', ['def', 'async def'])
+def test_type_checking_pydantic_enabled_validate_arguments_decorator_method(f):
+    example = textwrap.dedent(
+        f'''
+        from pydantic import validate_arguments
+        from x import Y, Z
+
+        class Test:
+            @validate_arguments
+            {f} f(self, y: Y) -> Z:
+                pass
+        '''
+    )
+    assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
