@@ -1,6 +1,7 @@
 import sys
 
-ATTRIBUTE_PROPERTY = '_flake8-type-checking_parent'
+ATTRIBUTE_PROPERTY = '_flake8-type-checking__parent'
+ANNOTATION_PROPERTY = '_flake8-type-checking__is_annotation'
 
 ATTRS_DECORATORS = ['attrs.define', 'attr.define', 'attr.s']
 ATTRS_IMPORTS = {'attrs', 'attr'}

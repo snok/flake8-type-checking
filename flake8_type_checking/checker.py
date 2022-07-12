@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast
 from aspy.refactor_imports.classify import ImportType, classify_import
 
 from flake8_type_checking.constants import (
+    ANNOTATION_PROPERTY,
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
     ATTRS_IMPORTS,
@@ -181,12 +182,12 @@ class FastAPIMixin(MixinBase):  # type: ignore
     fastapi_enabled: bool
     fastapi_dependency_support_enabled: bool
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+    def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function arguments and returns."""
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+    def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
@@ -561,6 +562,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
+        if hasattr(node, ANNOTATION_PROPERTY):
+            # Skip handling of annotation objects
+            return node
+
         if self.in_type_checking_block(node):
             return node
 
@@ -577,33 +582,24 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
 
     def add_annotation(self, node: ast.AST) -> None:
         """Map all annotations on an AST node."""
-        if isinstance(node, ast.Ellipsis):
+        if isinstance(node, (ast.Ellipsis, ast.BinOp)) or node is None:
             return
-        if py38 and isinstance(node, Index):
-            return self.add_annotation(node.value)
-        if isinstance(node, ast.Constant):
-            if node.value is None:
-                return
-            self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
-        elif isinstance(node, ast.Subscript):
-            value = cast(ast.Name, node.value)
-            if hasattr(value, 'id') and value.id == 'Literal':
-                # Type hinting like `x: Literal['one', 'two', 'three']`
-                # creates false positives unless excluded
-                return
+        elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
+            self.add_annotation(node.value)
+        elif isinstance(node, ast.Subscript) and getattr(node.value, 'id', '') != 'Literal':
             self.add_annotation(node.value)
             self.add_annotation(node.slice)
-        elif isinstance(node, ast.Name):
-            self.unwrapped_annotations.append((node.lineno, node.col_offset, node.id))
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
                 self.add_annotation(n)
-        elif node is None:
-            return
-        elif isinstance(node, ast.Attribute):
-            self.add_annotation(node.value)
-        elif isinstance(node, ast.BinOp):
-            return
+        elif isinstance(node, ast.Constant) and node.value is not None:
+            # Register annotation value
+            setattr(node, ANNOTATION_PROPERTY, True)
+            self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
+        elif isinstance(node, ast.Name):
+            # Register annotation value
+            setattr(node, ANNOTATION_PROPERTY, True)
+            self.unwrapped_annotations.append((node.lineno, node.col_offset, node.id))
 
     @staticmethod
     def set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
@@ -675,39 +671,24 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, ast.NodeVisitor):
             for argument in path:
                 if hasattr(argument, 'annotation') and argument.annotation:
                     self.add_annotation(argument.annotation)
-                    delattr(argument, 'annotation')
 
-        if (
-            hasattr(node.args, 'kwarg')
-            and node.args.kwarg
-            and hasattr(node.args.kwarg, 'annotation')
-            and node.args.kwarg.annotation
-        ):
-            self.add_annotation(node.args.kwarg.annotation)
-            delattr(node.args.kwarg, 'annotation')
-
-        if (
-            hasattr(node.args, 'vararg')
-            and node.args.vararg
-            and hasattr(node.args.vararg, 'annotation')
-            and node.args.vararg.annotation
-        ):
-            self.add_annotation(node.args.vararg.annotation)
-            delattr(node.args.vararg, 'annotation')
+        path_: str
+        for path_ in ['kwarg', 'vararg']:
+            if (arg := getattr(node.args, path_, None)) and getattr(arg, 'annotation', None):
+                self.add_annotation(arg.annotation)
 
         if hasattr(node, 'returns') and node.returns:
             self.add_annotation(node.returns)
-            delattr(node, 'returns')
 
         self.register_function_ranges(node)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+    def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
         super().visit_FunctionDef(node)
         self.register_function_annotations(node)
         self.generic_visit(node)
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+    def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
         super().visit_AsyncFunctionDef(node)
         self.register_function_annotations(node)
