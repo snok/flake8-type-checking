@@ -250,6 +250,13 @@ class TestFoundBugs:
             def bar(self) -> date | None:
                 ...
             ''',
+            '''
+            if TYPE_CHECKING:
+               from typing import Literal
+
+            def bar(self, baz: Literal['installer'] | None):
+                ...
+            ''',
         ],
     )
     def test_tc004_false_positive(self, example):
