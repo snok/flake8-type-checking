@@ -30,6 +30,7 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
     if error_code_filter:
         mock_options = Mock()
         mock_options.select = [error_code_filter]
+        mock_options.extend_select = None
         # defaults
         mock_options.extended_default_select = []
         mock_options.enable_extensions = []
