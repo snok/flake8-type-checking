@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from flake8_type_checking.checker import TypingOnlyImportsChecker
 
 if TYPE_CHECKING:
-
     from argparse import Namespace
     from ast import Module
     from typing import Optional

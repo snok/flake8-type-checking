@@ -51,7 +51,6 @@ class AttrsMixin:
         attrs_imports: dict[Optional[str], str] = {}  # map of alias to full import name
 
         for node in self.third_party_imports.values():
-
             module = getattr(node, 'module', '')
             names: list[Name] = getattr(node, 'names', [])
 
@@ -513,7 +512,6 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             return
 
         for name_node in node.names:
-
             # Skip checking the import if the module is passlisted
             if isinstance(node, ast.Import) and name_node.name in self.exempt_modules:
                 return
@@ -544,7 +542,6 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
             # Classify and map imports
             if name_node.name not in self.exempt_imports:
-
                 imp = ImportName(
                     _module=f'{node.module}.' if isinstance(node, ast.ImportFrom) else '',
                     _alias=name_node.asname,
