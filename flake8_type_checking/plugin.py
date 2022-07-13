@@ -33,7 +33,7 @@ class Plugin:
         self.options = options
 
     @classmethod
-    def add_options(cls, option_manager: OptionManager) -> None:
+    def add_options(cls, option_manager: OptionManager) -> None:  # pragma: no cover
         """Parse plugin options."""
         option_manager.add_option(
             '--type-checking-exempt-modules',
