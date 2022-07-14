@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from importlib.metadata import version as v
+from typing import TYPE_CHECKING, ClassVar
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
+from flake8_type_checking.constants import flake_version_gt_v4
 
 if TYPE_CHECKING:
-
     from argparse import Namespace
     from ast import Module
     from typing import Optional
@@ -15,22 +17,19 @@ if TYPE_CHECKING:
 
     from flake8_type_checking.types import Flake8Generator
 
-from importlib.metadata import version
 
 logger = logging.getLogger('flake8.type_checking')
 
 
+@dataclass(frozen=True)
 class Plugin:
     """Flake8 plugin."""
 
-    name = 'flake8-type-checking'
-    version = version('flake8-type-checking')
+    tree: Module
+    options: Optional[Namespace] = None
 
-    __slots__ = ('_tree', 'options')
-
-    def __init__(self, tree: Module, options: Optional[Namespace] = None) -> None:
-        self._tree = tree
-        self.options = options
+    name: ClassVar[str] = 'flake8-type-checking'
+    version: ClassVar[str] = v('flake8-type-checking')
 
     @classmethod
     def add_options(cls, option_manager: OptionManager) -> None:  # pragma: no cover
@@ -82,7 +81,7 @@ class Plugin:
 
     def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""
-        visitor = TypingOnlyImportsChecker(self._tree, self.options)
+        visitor = TypingOnlyImportsChecker(self.tree, self.options)
 
         for e in visitor.errors:
             if self.should_warn(e[2].split(':')[0]):
@@ -117,9 +116,11 @@ class Plugin:
         selected_rules = tuple(
             list(self.options.select or [])
             + list(self.options.extended_default_select or [])
-            + list(self.options.extend_select or [])
             + list(self.options.enable_extensions or []),
         )
+
+        if flake_version_gt_v4:
+            selected_rules += tuple(self.options.extend_select or [])
 
         for i in range(3, len(code) + 1):
             if code[:i] in selected_rules:

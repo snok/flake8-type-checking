@@ -102,7 +102,9 @@ max-line-length = 80
 max-complexity = 12
 ...
 ignore = E501
-# You can use 'select':
+# You can use 'extend-select' (new in flake8 v4):
+extend-select = TC, TC2
+# OR 'select':
 select = C,E,F..., TC, TC2  # or TC1
 # OR 'enable-extensions':
 enable-extensions = TC, TC2  # or TC1
