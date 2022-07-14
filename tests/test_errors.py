@@ -232,3 +232,33 @@ class TestFoundBugs:
         Re https://github.com/snok/flake8-type-checking/issues/101.
         """
         assert _get_error(textwrap.dedent(example)) == set()
+
+    @pytest.mark.parametrize(
+        'example',
+        [
+            '''
+            if TYPE_CHECKING:
+               from datetime import date
+
+            def bar(self, *, baz: date | None):
+                ...
+            ''',
+            '''
+            if TYPE_CHECKING:
+               from datetime import date
+
+            def bar(self) -> date | None:
+                ...
+            ''',
+            '''
+            if TYPE_CHECKING:
+               from typing import Literal
+
+            def bar(self, baz: Literal['installer'] | None):
+                ...
+            ''',
+        ],
+    )
+    def test_tc004_false_positive(self, example):
+        """Re https://github.com/snok/flake8-type-checking/issues/106."""
+        assert _get_error(textwrap.dedent(example)) == set()

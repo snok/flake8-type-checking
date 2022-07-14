@@ -649,13 +649,21 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     def add_annotation(self, node: ast.AST) -> None:
         """Map all annotations on an AST node."""
-        if isinstance(node, (ast.Ellipsis, ast.BinOp)) or node is None:
+        if isinstance(node, ast.Ellipsis) or node is None:
             return
+        if isinstance(node, ast.BinOp):
+            if not isinstance(node.op, ast.BitOr):
+                return
+            self.add_annotation(node.left)
+            self.add_annotation(node.right)
         elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
             self.add_annotation(node.value)
-        elif isinstance(node, ast.Subscript) and getattr(node.value, 'id', '') != 'Literal':
-            self.add_annotation(node.value)
-            self.add_annotation(node.slice)
+        elif isinstance(node, ast.Subscript):
+            if getattr(node.value, 'id', '') != 'Literal':
+                self.add_annotation(node.value)
+                self.add_annotation(node.slice)
+            else:
+                self.add_annotation(node.value)
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
                 self.add_annotation(n)
