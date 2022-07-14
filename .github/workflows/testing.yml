@@ -59,7 +59,7 @@ jobs:
         id: cache-venv
         with:
           path: .venv
-          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-3
+          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-5
       - run: |
           python -m venv .venv
           source .venv/bin/activate
@@ -69,8 +69,10 @@ jobs:
       - run: source .venv/bin/activate && poetry install
       - name: Run tests
         run: |
-          source .venv/bin/activate
           pip install flake8==${{ matrix.flake-version }}
+          pip install -e .
+          flake8 .
+          source .venv/bin/activate
           coverage run -m pytest tests
           coverage xml
           coverage report
