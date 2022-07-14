@@ -1,5 +1,8 @@
 import sys
 
+import flake8
+from packaging.version import Version
+
 ATTRIBUTE_PROPERTY = '_flake8-type-checking__parent'
 ANNOTATION_PROPERTY = '_flake8-type-checking__is_annotation'
 
@@ -7,7 +10,7 @@ ATTRS_DECORATORS = ['attrs.define', 'attr.define', 'attr.s']
 ATTRS_IMPORTS = {'attrs', 'attr'}
 
 py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
-
+flake_version_gt_v4 = Version(flake8.__version__).major >= 4
 
 # Error codes
 TC001 = "TC001 Move application import '{module}' into a type-checking block"

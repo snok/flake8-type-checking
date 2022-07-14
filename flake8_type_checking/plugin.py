@@ -4,6 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
+from flake8_type_checking.constants import flake_version_gt_v4
 
 if TYPE_CHECKING:
 
@@ -117,9 +118,11 @@ class Plugin:
         selected_rules = tuple(
             list(self.options.select or [])
             + list(self.options.extended_default_select or [])
-            + list(self.options.extend_select or [])
             + list(self.options.enable_extensions or []),
         )
+
+        if flake_version_gt_v4:
+            selected_rules += tuple(self.options.extend_select or [])
 
         for i in range(3, len(code) + 1):
             if code[:i] in selected_rules:
