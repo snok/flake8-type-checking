@@ -68,7 +68,7 @@ And depending on which error code range you've opted into, it will tell you
 | TC002 | Move third-party import into a type-checking block                                 |
 | TC003 | Move built-in import into a type-checking block                                    |
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
-| TC005 | Empty type-checking block                                                          |
+| TC005 | Found empty type-checking block                                                    |
 
 ## Choosing how to handle forward references
 
