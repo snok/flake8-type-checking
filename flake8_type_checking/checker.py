@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from aspy.refactor_imports.classify import ImportType, classify_import
+from classify_imports import Classified, classify_base
 
 from flake8_type_checking.constants import (
     ANNOTATION_PROPERTY,
@@ -332,7 +332,7 @@ class ImportName:
     @property
     def import_type(self) -> ImportTypeValue:
         """Return the import type of the import."""
-        return cast(ImportTypeValue, classify_import(self.full_name))
+        return cast(ImportTypeValue, classify_base(self.full_name.partition('.')[0]))
 
 
 class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
@@ -552,11 +552,11 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                     _name=name_node.name,
                 )
 
-                if imp.import_type == ImportType.APPLICATION:
+                if imp.import_type == Classified.APPLICATION:
                     self.application_imports[imp.import_name] = node
-                elif imp.import_type == ImportType.THIRD_PARTY:
+                elif imp.import_type == Classified.THIRD_PARTY:
                     self.third_party_imports[imp.import_name] = node
-                elif imp.import_type == ImportType.BUILTIN:
+                elif imp.import_type == Classified.BUILTIN:
                     self.built_in_imports[imp.import_name] = node
                 else:
                     """
@@ -565,7 +565,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                     We need to know if this is present or not, to determine whether
                     or not PEP563 is enabled: https://peps.python.org/pep-0563/
                     """
-                    if self.futures_annotation is None and imp.import_type == ImportType.FUTURE:
+                    if self.futures_annotation is None and imp.import_type == Classified.FUTURE:
                         if any(name.name == 'annotations' for name in node.names):
                             self.futures_annotation = True
                             return
@@ -830,9 +830,9 @@ class TypingOnlyImportsChecker:
     def unused_imports(self) -> Flake8Generator:
         """Yield TC001, TC002, and TC003 errors."""
         import_types = {
-            ImportType.APPLICATION: (self.visitor.application_imports, TC001),
-            ImportType.THIRD_PARTY: (self.visitor.third_party_imports, TC002),
-            ImportType.BUILTIN: (self.visitor.built_in_imports, TC003),
+            Classified.APPLICATION: (self.visitor.application_imports, TC001),
+            Classified.THIRD_PARTY: (self.visitor.third_party_imports, TC002),
+            Classified.BUILTIN: (self.visitor.built_in_imports, TC003),
         }
 
         unused_imports = set(self.visitor.imports) - self.visitor.names

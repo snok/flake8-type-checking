@@ -30,14 +30,14 @@ classifiers = [
 [tool.poetry.dependencies]
 python = '^3.8'
 flake8 = '*'
-"aspy.refactor-imports" = "*"
+classify-imports = '*'
 
 [tool.poetry.dev-dependencies]
 pytest = '*'
 ipython = '*'
 coverage = '*'
-pre-commit = "*"
-pytest-flake8-path = "*"
+pre-commit = '*'
+pytest-flake8-path = '*'
 
 [tool.poetry.plugins]
 [tool.poetry.plugins.'flake8.extension']
