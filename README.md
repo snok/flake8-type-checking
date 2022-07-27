@@ -69,6 +69,7 @@ And depending on which error code range you've opted into, it will tell you
 | TC003 | Move built-in import into a type-checking block                                    |
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
 | TC005 | Found empty type-checking block                                                    |
+| TC006 | Annotation in typing.cast() should be a string literal                             |
 
 ## Choosing how to handle forward references
 

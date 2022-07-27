@@ -30,6 +30,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = '^3.8'
 flake8 = '*'
+astor = {python = "<3.9", version = "*"}
 classify-imports = '*'
 
 [tool.poetry.dev-dependencies]
