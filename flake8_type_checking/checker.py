@@ -20,20 +20,39 @@ from flake8_type_checking.constants import (
     TC003,
     TC004,
     TC005,
+    TC006,
     TC100,
     TC101,
     TC200,
     TC201,
     py38,
 )
-from flake8_type_checking.types import ImportTypeValue
+
+try:
+    ast_unparse = ast.unparse  # type: ignore[attr-defined]
+except AttributeError:  # pragma: no cover
+    # Python < 3.9
+
+    import astor
+
+    def ast_unparse(node: ast.AST) -> str:
+        """AST unparsing helper for Python < 3.9."""
+        return cast('str', astor.to_source(node)).strip()
+
 
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
     from argparse import Namespace
     from typing import Any, Optional, Union
 
-    from flake8_type_checking.types import Flake8Generator, FunctionRangesDict, FunctionScopeImportsDict, Import, Name
+    from flake8_type_checking.types import (
+        Flake8Generator,
+        FunctionRangesDict,
+        FunctionScopeImportsDict,
+        Import,
+        ImportTypeValue,
+        Name,
+    )
 
 
 class AttrsMixin:
@@ -331,7 +350,7 @@ class ImportName:
     @property
     def import_type(self) -> ImportTypeValue:
         """Return the import type of the import."""
-        return cast(ImportTypeValue, classify_base(self.full_name.partition('.')[0]))
+        return cast('ImportTypeValue', classify_base(self.full_name.partition('.')[0]))
 
 
 class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
@@ -408,6 +427,11 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
         #: Set to the alias of typing if one is found
         self.typing_alias: Optional[str] = None
+
+        #: Where typing.cast() is called with an unquoted type.
+        # Used for TC006 errors. Also tracks imported aliases of typing.cast().
+        self.typing_cast_aliases: set[str] = set()
+        self.unquoted_types_in_casts: list[tuple[int, int, str]] = []
 
     @property
     def typing_module_name(self) -> str:
@@ -533,13 +557,22 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                 self.typing_alias = name_node.asname
                 return
 
+            # Find aliases of typing.cast()
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.level == 0
+                and node.module == self.typing_module_name
+                and name_node.name == 'cast'
+            ):
+                self.typing_cast_aliases.add(name_node.asname or name_node.name)
+
             elif (isinstance(node, ast.ImportFrom) and node.module == self.typing_module_name) or (
                 isinstance(node, ast.Import) and name_node.name == self.typing_module_name
             ):
                 # Skip all remaining typing imports, since we already assume
                 # TYPE_CHECKING will be imported at runtime, and guarding the
                 # remaining imports probably won't have any tangible benefit
-                return
+                continue
 
             # Classify and map imports
             if name_node.name not in self.exempt_imports:
@@ -724,7 +757,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         where it could seem like the first pandas import is actually used
         at runtime, but in fact, it's not.
         """
-        end_lineno = cast(int, node.end_lineno)
+        end_lineno = cast('int', node.end_lineno)
         for i in range(node.lineno, end_lineno + 1):
             self.function_ranges[i] = {'start': node.lineno, 'end': end_lineno + 1}
 
@@ -764,6 +797,36 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         """Remove and map function argument- and return annotations."""
         super().visit_AsyncFunctionDef(node)
         self.register_function_annotations(node)
+        self.generic_visit(node)
+
+    def register_unquoted_type_in_typing_cast(self, node: ast.Call) -> None:
+        """Find typing.cast() calls with the type argument unquoted."""
+        func = node.func
+
+        # Determine whether this is a call to typing.cast() or an alias of it.
+        via_name = isinstance(func, ast.Name) and func.id in self.typing_cast_aliases
+        via_attr = (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == self.typing_module_name
+            and func.attr == 'cast'
+        )
+
+        if not via_name and not via_attr or len(node.args) != 2:
+            return  # Not typing.cast() (or an alias) or incorrect number of arguments.
+
+        arg = node.args[0]
+
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            return  # Type argument is already a string literal.
+
+        self.unquoted_types_in_casts.append((arg.lineno, arg.col_offset, ast_unparse(arg)))
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Check arguments of calls, e.g. typing.cast()."""
+        with suppress(AttributeError):
+            super().visit_Call(node)
+        self.register_unquoted_type_in_typing_cast(node)
         self.generic_visit(node)
 
 
@@ -814,6 +877,8 @@ class TypingOnlyImportsChecker:
             self.used_type_checking_imports,
             # TC005
             self.empty_type_checking_blocks,
+            # TC006
+            self.unquoted_type_in_cast,
             # TC100
             self.missing_futures_import,
             # TC101
@@ -872,6 +937,11 @@ class TypingOnlyImportsChecker:
         """TC005."""
         for empty_type_checking_block in self.visitor.empty_type_checking_blocks:
             yield empty_type_checking_block[0], 0, TC005, None
+
+    def unquoted_type_in_cast(self) -> Flake8Generator:
+        """TC006."""
+        for lineno, col_offset, annotation in self.visitor.unquoted_types_in_casts:
+            yield lineno, col_offset, TC006.format(annotation=annotation), None
 
     def missing_futures_import(self) -> Flake8Generator:
         """TC100."""

@@ -62,13 +62,14 @@ And depending on which error code range you've opted into, it will tell you
 
 ## Error codes
 
-| Code   | Description                                                                        |
-|--------|------------------------------------------------------------------------------------|
+| Code  | Description                                                                        |
+|-------|------------------------------------------------------------------------------------|
 | TC001 | Move application import into a type-checking block                                 |
 | TC002 | Move third-party import into a type-checking block                                 |
 | TC003 | Move built-in import into a type-checking block                                    |
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
-| TC005 | Empty type-checking block                                                          |
+| TC005 | Found empty type-checking block                                                    |
+| TC006 | Annotation in typing.cast() should be a string literal                             |
 
 ## Choosing how to handle forward references
 
@@ -80,17 +81,17 @@ They represent two different ways of solving the same problem, so please only ch
 `TC100` and `TC101` manage forward references by taking advantage of
 [postponed evaluation of annotations](https://www.python.org/dev/peps/pep-0563/).
 
-| Code   | Description                                         |
-|--------|-----------------------------------------------------|
+| Code  | Description                                         |
+|-------|-----------------------------------------------------|
 | TC100 | Add 'from \_\_future\_\_ import annotations' import |
-| TC101 | Annotation does not need to be a string literal |
+| TC101 | Annotation does not need to be a string literal     |
 
 `TC200` and `TC201` manage forward references using [string literals](https://www.python.org/dev/peps/pep-0484/#forward-references).
 
-| Code   | Description                                         |
-|--------|-----------------------------------------------------|
-| TC200 | Annotation needs to be made into a string literal |
-| TC201 | Annotation does not need to be a string literal |
+| Code  | Description                                         |
+|-------|-----------------------------------------------------|
+| TC200 | Annotation needs to be made into a string literal   |
+| TC201 | Annotation does not need to be a string literal     |
 
 ## Enabling error ranges
 
