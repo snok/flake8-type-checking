@@ -119,6 +119,16 @@ examples = [
         ),
         {'4:21 ' + TC101.format(annotation='X')},
     ),
+    (
+        textwrap.dedent(
+            '''
+        from typing import Annotated
+
+        x: Annotated[int, 42]
+        '''
+        ),
+        set(),
+    ),
 ]
 
 

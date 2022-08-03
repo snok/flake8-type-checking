@@ -697,7 +697,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
                 self.add_annotation(n)
-        elif isinstance(node, ast.Constant) and node.value is not None:
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             # Register annotation value
             setattr(node, ANNOTATION_PROPERTY, True)
             self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
