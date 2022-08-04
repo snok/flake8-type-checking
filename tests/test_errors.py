@@ -262,3 +262,18 @@ class TestFoundBugs:
     def test_tc004_false_positive(self, example):
         """Re https://github.com/snok/flake8-type-checking/issues/106."""
         assert _get_error(textwrap.dedent(example)) == set()
+
+    def test_tc002_false_positive(self):
+        """Re https://github.com/snok/flake8-type-checking/issues/120."""
+        example = textwrap.dedent(
+            """
+            from logging import INFO
+
+            from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
+
+            class C:
+                level: int = INFO
+                status: int = HTTP_500_INTERNAL_SERVER_ERROR
+        """
+        )
+        assert _get_error(example) == set()
