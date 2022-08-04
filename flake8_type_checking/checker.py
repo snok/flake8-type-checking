@@ -920,6 +920,7 @@ class TypingOnlyImportsChecker:
 
                 # .. or whether there is another duplicate import inside the function scope
                 # (if the use is in a function scope)
+                use_in_function = False
                 if use.lineno in self.visitor.function_ranges:
                     for i in range(
                         self.visitor.function_ranges[use.lineno]['start'],
@@ -929,9 +930,11 @@ class TypingOnlyImportsChecker:
                             i in self.visitor.function_scope_imports
                             and import_name in self.visitor.function_scope_imports[i]['imports']
                         ):
-                            return
+                            use_in_function = True
+                            break
 
-                yield _import.lineno, 0, TC004.format(module=import_name), None
+                if not use_in_function:
+                    yield _import.lineno, 0, TC004.format(module=import_name), None
 
     def empty_type_checking_blocks(self) -> Flake8Generator:
         """TC005."""
