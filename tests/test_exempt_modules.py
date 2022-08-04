@@ -28,7 +28,7 @@ def test_exempt_modules_option():
         from pandas import DataFrame
         from a import B
 
-        x: Callable[[], List]
+        x: Callable[[DataFrame, B], List]
         '''
     )
     assert _get_error(example2, error_code_filter='TC002') == {

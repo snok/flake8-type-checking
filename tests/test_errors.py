@@ -14,10 +14,12 @@ class TestFoundBugs:
         import {mod}
         import pytest
         from x import y
+
+        x: {mod} | pytest | y
         """
         )
         assert _get_error(example) == {
-            '2:0 ' + TC001.format(module=f'{mod}'),
+            f"2:0 {TC001.format(module=f'{mod}')}",
             '3:0 ' + TC002.format(module='pytest'),
             '4:0 ' + TC002.format(module='x.y'),
         }
@@ -35,7 +37,7 @@ class TestFoundBugs:
 
             from b import c
 
-        def test():
+        def test(foo: z, bar: x):
             pass
         """
         )

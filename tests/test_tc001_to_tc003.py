@@ -30,14 +30,14 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
     # No usage - these should all generate errors.
     no_use: L = [
         # ast.Import
-        (f'import {import_}', {f"1:0 {ERROR.format(module=f'{import_}')}"}),
-        (f'\nimport {import_}', {f"2:0 {ERROR.format(module=f'{import_}')}"}),
+        (f'import {import_}\nx:{import_}', {f"1:0 {ERROR.format(module=f'{import_}')}"}),
+        (f'\nimport {import_}\nx:{import_}', {f"2:0 {ERROR.format(module=f'{import_}')}"}),
         # ast.ImportFrom
-        (f'from {import_} import Plugin', {'1:0 ' + ERROR.format(module=f'{import_}.Plugin')}),
-        (f'\n\nfrom {import_} import constants', {'3:0 ' + ERROR.format(module=f'{import_}.constants')}),
+        (f'from {import_} import Plugin\nx:Plugin', {'1:0 ' + ERROR.format(module=f'{import_}.Plugin')}),
+        (f'\n\nfrom {import_} import constants\nx:constants', {'3:0 ' + ERROR.format(module=f'{import_}.constants')}),
         # Aliased imports
-        (f'import {import_} as x', {'1:0 ' + ERROR.format(module='x')}),
-        (f'from {import_} import constants as x', {'1:0 ' + ERROR.format(module='x')}),
+        (f'import {import_} as x\ny:x', {'1:0 ' + ERROR.format(module='x')}),
+        (f'from {import_} import constants as x\ny:x', {'1:0 ' + ERROR.format(module='x')}),
     ]
 
     # These imports are all used. None should generate errors.
@@ -60,7 +60,10 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
         (f'\nimport {import_}\nx: {import_} = 2', {f"2:0 {ERROR.format(module=f'{import_}')}"}),
         # ast.ImportFrom
         (f'from {import_} import Plugin\nx: Plugin', {'1:0 ' + ERROR.format(module=f'{import_}.Plugin')}),
-        (f'\n\nfrom {import_} import constants\nx: Plugin = 2', {'3:0 ' + ERROR.format(module=f'{import_}.constants')}),
+        (
+            f'\n\nfrom {import_} import constants\nx: constants = 2',
+            {'3:0 ' + ERROR.format(module=f'{import_}.constants')},
+        ),
         # Aliased imports
         (f'import {import_} as x\ny: x', {'1:0 ' + ERROR.format(module='x')}),
         (f'from {import_} import constants as x\ny: x = 2', {'1:0 ' + ERROR.format(module='x')}),
@@ -77,7 +80,7 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
             {'1:0 ' + ERROR.format(module=f'{import_}.Plugin')},
         ),
         (
-            f'\n\nfrom {import_} import constants\ndef example(x: Plugin = 2):\n\tpass',
+            f'\n\nfrom {import_} import constants\ndef example(x: constants = 2):\n\tpass',
             {'3:0 ' + ERROR.format(module=f'{import_}.constants')},
         ),
         # Aliased imports
@@ -168,22 +171,6 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                 '''
             ),
             set(),
-        ),
-        (
-            textwrap.dedent(
-                f'''
-                from {import_} import Any, Generator, Union
-
-                if TYPE_CHECKING:
-                    ImportType = Union[ast.Import, ast.ImportFrom]
-                    Flake8Generator = Generator[tuple[int, int, str, Any], None, None]
-                '''
-            ),
-            {
-                '2:0 ' + ERROR.format(module=f'{import_}.Any'),
-                '2:0 ' + ERROR.format(module=f'{import_}.Generator'),
-                '2:0 ' + ERROR.format(module=f'{import_}.Union'),
-            },
         ),
         (
             textwrap.dedent(

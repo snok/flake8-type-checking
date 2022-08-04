@@ -900,8 +900,16 @@ class TypingOnlyImportsChecker:
         unused_imports = set(self.visitor.imports) - self.visitor.names
         used_imports = set(self.visitor.imports) - unused_imports
         already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
+        annotation_names = [i[2] for i in self.visitor.wrapped_annotations] + [
+            i[2] for i in self.visitor.unwrapped_annotations
+        ]
 
         for name in unused_imports:
+            if name not in annotation_names:
+                # The import seems to be completely unused.
+                # Prevent flagging these, as they're already covered by F401
+                continue
+
             # Get the ImportName object for this import name
             import_name: ImportName = self.visitor.imports[name]
             if import_name.module not in already_imported_modules:
