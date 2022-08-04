@@ -277,3 +277,7 @@ class TestFoundBugs:
         """
         )
         assert _get_error(example) == set()
+
+    def test_tc001_false_positive(self):
+        """Re https://github.com/snok/flake8-type-checking/issues/116."""
+        assert _get_error('from x import y') == set()
