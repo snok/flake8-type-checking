@@ -26,6 +26,7 @@ class Plugin:
     """Flake8 plugin."""
 
     tree: Module
+    filename: str
     options: Optional[Namespace] = None
 
     name: ClassVar[str] = 'flake8-type-checking'
@@ -84,7 +85,12 @@ class Plugin:
         visitor = TypingOnlyImportsChecker(self.tree, self.options)
 
         for e in visitor.errors:
-            if self.should_warn(e[2].split(':')[0]):
+            code = e[2].split(':')[0]
+            if self.filename.endswith('.pyi') and code.startswith('TC100'):
+                # Stub files don't need futures imports
+                # context: https://github.com/snok/flake8-type-checking/issues/121
+                continue
+            if self.should_warn(code):
                 yield e
 
     def should_warn(self, code: str) -> bool:
