@@ -731,8 +731,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotation assignments."""
         self.add_annotation(node.annotation)
-        if getattr(node, 'value', None):
-            self.generic_visit(node.value)  # type: ignore[arg-type]
+        if node_value := getattr(node, 'value', None):
+            self.visit(node_value)
 
     def register_function_ranges(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
         """
