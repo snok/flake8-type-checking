@@ -804,7 +804,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         func = node.func
 
         # Determine whether this is a call to typing.cast() or an alias of it.
-        via_name = isinstance(func, ast.Name) and func.id in self.typing_cast_aliases
+        via_name = isinstance(func, ast.Name) and func.id in (self.typing_cast_aliases | {'cast'})
         via_attr = (
             isinstance(func, ast.Attribute)
             and isinstance(func.value, ast.Name)
@@ -818,7 +818,15 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         arg = node.args[0]
 
         if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-            return  # Type argument is already a string literal.
+            # Type argument is already a string literal.
+
+            # Before returning, note down string literal value
+            # https://github.com/snok/flake8-type-checking/issues/127
+            print(f'ADDING {arg.value}')
+            resolve_foward_refs
+            self.wrapped_annotations.append((arg.lineno, arg.col_offset, arg.value))
+
+            return
 
         self.unquoted_types_in_casts.append((arg.lineno, arg.col_offset, ast_unparse(arg)))
 

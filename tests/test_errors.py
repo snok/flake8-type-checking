@@ -283,3 +283,14 @@ class TestFoundBugs:
     def test_tc001_false_positive(self):
         """Re https://github.com/snok/flake8-type-checking/issues/116."""
         assert _get_error('from x import y') == set()
+
+    def test_tc00123_false_cast_positive(self):
+        """Re https://github.com/snok/flake8-type-checking/issues/127."""
+        example = textwrap.dedent("""
+        from __future__ import annotations
+        
+        from collections.abc import Callable
+        
+        a = cast('Callable[..., Any]', {})
+        """)
+        assert _get_error(example) == {'1:0 ' + TC001.format(module='x')}
