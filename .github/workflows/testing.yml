@@ -68,7 +68,7 @@ jobs:
       - run: source .venv/bin/activate && poetry install
       - name: Run tests
         run: |
-          pip install flake8==${{ matrix.flake-version }}
+          pip install flake8==5
           pip install -e .
           flake8 .
           source .venv/bin/activate
