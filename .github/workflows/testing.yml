@@ -53,7 +53,7 @@ jobs:
         uses: snok/install-poetry@v1
         with:
           virtualenvs-create: false
-          version: 1.2.0b2
+          version: latest
       - uses: actions/cache@v3
         id: cache-venv
         with:
