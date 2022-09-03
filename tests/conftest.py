@@ -42,9 +42,9 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         # kwarg overrides
         for k, v in kwargs.items():
             setattr(mock_options, k, v)
-        plugin = Plugin(ast.parse(example), options=mock_options)
+        plugin = Plugin(ast.parse(example), options=mock_options, filename='test.py')
     else:
-        plugin = Plugin(ast.parse(example))
+        plugin = Plugin(ast.parse(example), filename='test.py')
 
     errors = {f'{line}:{col} {msg}' for line, col, msg, _ in plugin.run()}
     if error_code_filter is None:
