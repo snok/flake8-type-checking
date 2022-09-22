@@ -28,7 +28,7 @@ classifiers = [
 "Releases" = "https://github.com/snok/flake8-type-checking/releases"
 
 [tool.poetry.dependencies]
-python = '^3.8'
+python = '>=3.8'
 flake8 = '*'
 astor = {python = "<3.9", version = "*"}
 classify-imports = '*'
