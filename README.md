@@ -12,7 +12,7 @@ Lets you know which imports to move in or out of
 The plugin assumes that the imports you only use for type hinting
 *are not* required at runtime. When imports aren't strictly required at runtime, it means we can guard them.
 
-This provides 3 major benefits:
+Guarding imports provides 3 major benefits:
 
 - 🔧&nbsp;&nbsp;It reduces import circularity issues,
 - 🧹&nbsp;&nbsp;It organizes imports, and
@@ -269,7 +269,7 @@ if TYPE_CHECKING:
     import pandas  # <-- no longer imported at runtime
 
 
-def dataframe_length(df: pandas.DataFrame) -> int:
+def dataframe_length(df: "pandas.DataFrame") -> int:
     return len(df)
 ```
 
@@ -322,6 +322,20 @@ or
 
 `models/a.py`
 ```python
+# TC1
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.b import B
+
+class A(Model):
+    def foo(self, b: B): ...
+```
+or
+```python
+# TC2
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -330,6 +344,7 @@ if TYPE_CHECKING:
 class A(Model):
     def foo(self, b: 'B'): ...
 ```
+
 `models/b.py`
 ```python
 # TC1
@@ -356,6 +371,16 @@ if TYPE_CHECKING:
 class B(Model):
     def bar(self, a: 'A'): ...
 ```
+</details>
+
+<details>
+<summary><b>Examples from the wild</b></summary>
+
+Here are a few examples of public projects that use `flake8-type-checking`:
+
+- [Example from the Poetry codebase](https://github.com/python-poetry/poetry/blob/714c09dd845c58079cff3f3cbedc114dff2194c9/src/poetry/factory.py#L1:L33)
+- [Example from the asgi-correlation-id codebase](https://github.com/snok/asgi-correlation-id/blob/main/asgi_correlation_id/middleware.py#L1:L12)
+
 </details>
 
 ## Running the plugin as a pre-commit hook
