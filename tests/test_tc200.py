@@ -26,8 +26,10 @@ examples = [
     ),
     ("if TYPE_CHECKING:\n\timport something\ndef example(x: 'something') -> 'something':\n\tpass", set()),
     (
-        'from typing import Dict, TYPE_CHECKING\nif TYPE_CHECKING:\n\timport something\ndef example(x:'
-        ' Dict[\'something\']) -> Dict[\'something\']:\n\tpass',
+        (
+            'from typing import Dict, TYPE_CHECKING\nif TYPE_CHECKING:\n\timport something\ndef example(x:'
+            ' Dict[\'something\']) -> Dict[\'something\']:\n\tpass'
+        ),
         set(),
     ),
     (
