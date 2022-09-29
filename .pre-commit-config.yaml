@@ -50,5 +50,4 @@ repos:
           - --config-file=setup.cfg
         additional_dependencies:
           - pytest
-          - django
           - flake8
