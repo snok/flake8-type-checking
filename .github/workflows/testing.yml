@@ -18,7 +18,7 @@ jobs:
         id: cache-venv
         with:
           path: .venv
-          key: venv-4  # increment to reset
+          key: venv-5  # increment to reset
       - run: |
           python -m venv .venv --upgrade-deps
           source .venv/bin/activate
@@ -28,7 +28,7 @@ jobs:
         id: pre-commit-cache
         with:
           path: ~/.cache/pre-commit
-          key: ${{ hashFiles('**/pre-commit-config.yaml') }}-3
+          key: ${{ hashFiles('**/pre-commit-config.yaml') }}-4
       - run: |
           source .venv/bin/activate
           pre-commit run --all-files
@@ -48,7 +48,7 @@ jobs:
         id: poetry-cache
         with:
           path: ~/.local
-          key: key-13
+          key: key-14
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
@@ -58,7 +58,7 @@ jobs:
         id: cache-venv
         with:
           path: .venv
-          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-6
+          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-7
       - run: |
           python -m venv .venv
           source .venv/bin/activate
@@ -80,4 +80,4 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
-        if: matrix.python-version == '3.10.5'
+        if: matrix.python-version == '3.10.7'
