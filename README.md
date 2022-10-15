@@ -137,6 +137,25 @@ modules to ignore.
 type-checking-exempt-modules = typing_extensions  # default []
 ```
 
+### Strict
+
+The plugin, by default, will report TC00[1-3] errors
+for imports if there aren't already other imports from the same module.
+When there are other imports from the same module,
+the import circularity and performance benefits no longer
+apply from guarding an import.
+
+When strict mode is enabled, the plugin will flag all
+imports that *can* be moved.
+
+- **setting name**: `type-checking-strict`
+- **type**: `bool`
+
+```ini
+[flake8]
+type-checking-strict = true  # default false
+```
+
 ### Pydantic support
 
 If you use Pydantic models in your code, you should enable Pydantic support.

@@ -835,6 +835,7 @@ class TypingOnlyImportsChecker:
 
     __slots__ = [
         'cwd',
+        'strict_mode',
         'visitor',
         'generators',
         'future_option_enabled',
@@ -842,6 +843,7 @@ class TypingOnlyImportsChecker:
 
     def __init__(self, node: ast.Module, options: Optional[Namespace]) -> None:
         self.cwd = Path(os.getcwd())
+        self.strict_mode = getattr(options, 'type_checking_strict', False)
 
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
@@ -912,7 +914,11 @@ class TypingOnlyImportsChecker:
 
             # Get the ImportName object for this import name
             import_name: ImportName = self.visitor.imports[name]
-            if import_name.module not in already_imported_modules:
+            # If strict mode is enabled, we want to flag each individual import
+            # that can be moved into a type-checking block. If not enabled,
+            # we only want to flag imports if there aren't other imports already
+            # made from the same module.
+            if self.strict_mode or import_name.module not in already_imported_modules:
                 error_specific_imports, error = import_types[import_name.import_type]
                 node = error_specific_imports.pop(import_name.import_name)
                 yield node.lineno, node.col_offset, error.format(module=import_name.import_name), None
