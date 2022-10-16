@@ -40,7 +40,6 @@ coverage = '*'
 pre-commit = '*'
 pytest-flake8-path = '*'
 
-[tool.poetry.plugins]
 [tool.poetry.plugins.'flake8.extension']
 TC = 'flake8_type_checking.plugin:Plugin'
 
