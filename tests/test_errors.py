@@ -283,3 +283,19 @@ class TestFoundBugs:
     def test_tc001_false_positive(self):
         """Re https://github.com/snok/flake8-type-checking/issues/116."""
         assert _get_error('from x import y') == set()
+
+    def test_works_with_other_plugins(self, flake8_path):
+        """Re https://github.com/snok/flake8-type-checking/issues/139."""
+        (flake8_path / 'example.py').write_text(
+            textwrap.dedent(
+                '''
+                import os
+
+                t = os.path.dirname(os.path.realpath(__file__))
+            '''
+            )
+        )
+        result = flake8_path.run_flake8()
+        assert result.out_lines == [
+            './example.py:4:5: PL120 os.path.dirname("foo/bar") should be replaced by bar_path.parent',
+        ]
