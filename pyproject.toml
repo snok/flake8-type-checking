@@ -43,7 +43,6 @@ pytest-flake8-path = '*'
 [tool.poetry.plugins.'flake8.extension']
 TC = 'flake8_type_checking.plugin:Plugin'
 
-
 [tool.poetry.group.dev.dependencies]
 flake8-use-pathlib = "^0.3.0"
 
