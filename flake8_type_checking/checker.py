@@ -721,9 +721,6 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         The custom attribute lets us read attribute names for `a.b.c` as `a.b.c`
         when we're handling the `c` node, which is important to match attributes to imports
         """
-        with suppress(Exception):
-            parent = getattr(node, ATTRIBUTE_PROPERTY)
-            node.attr = f'{node.attr}.{parent}'
         node = self.set_child_node_attribute(node, ATTRIBUTE_PROPERTY, node.attr)
         self.generic_visit(node)
         return node
