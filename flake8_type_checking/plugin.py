@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
     from flake8_type_checking.types import Flake8Generator
 
-
 logger = logging.getLogger('flake8.type_checking')
 
 
@@ -41,6 +40,13 @@ class Plugin:
             parse_from_config=True,
             default=[],
             help='Skip TC001, TC002, and TC003 checks for specified modules or libraries.',
+        )
+        option_manager.add_option(
+            '--type-checking-strict',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Flag individual imports rather than looking at the module.',
         )
 
         # Third-party library options
