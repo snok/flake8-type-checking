@@ -156,6 +156,36 @@ imports that *can* be moved.
 type-checking-strict = true  # default false
 ```
 
+### Customizing import classification
+
+The plugin categorizes imports into application, third-party, and builtin
+based on whether they can be found in the standard library or the application path.
+
+If your application treats directories other than the root directory as
+root-level import directories, specify them here to classify imports in
+those directories as application modules instead of third-party.
+
+If you still wish to include the root directory (`.`), you must also specify it.
+
+- **setting name**: `type-checking-application-directories`
+- **type**: `list`
+
+```ini
+[flake8]
+type-checking-application-directories = .,libs  # default "."
+```
+
+If you wish to further override the classification behavior by marking certain
+modules as application modules, regardless of where they reside, specify them here.
+
+- **setting name**: `type-checking-unclassifiable-application-modules`
+- **type**: `list`
+
+```ini
+[flake]
+type-checking-unclassifiable-application-modules = os,math  # default []
+```
+
 ### Pydantic support
 
 If you use Pydantic models in your code, you should enable Pydantic support.

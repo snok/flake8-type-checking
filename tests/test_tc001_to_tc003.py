@@ -216,6 +216,27 @@ def test_TC001_errors(example: str, expected: set[str]) -> None:
     assert _get_error(example, error_code_filter='TC001') == expected
 
 
+@pytest.mark.parametrize(('example', 'expected'), get_tc_001_to_003_tests(mod, TC003))
+def test_no_application_directories(example, expected):
+    """Without the current directory marked as an application directory, it will be seen as a builtin"""
+    assert _get_error(example, error_code_filter='TC003', type_checking_application_directories=[]) == expected
+
+
+@pytest.mark.parametrize(('example', 'expected'), get_tc_001_to_003_tests('conftest', TC001))
+def test_extra_application_directories(example, expected):
+    """Module should be seen as an application module if its directory is specified"""
+    assert _get_error(example, error_code_filter='TC001', type_checking_application_directories=['tests']) == expected
+
+
+@pytest.mark.parametrize(('example', 'expected'), get_tc_001_to_003_tests('pandas', TC001))
+def test_unclassifiable_application_modules_third_party(example, expected):
+    """Third-party application module should be seen as application module if specified"""
+    assert (
+        _get_error(example, error_code_filter='TC001', type_checking_unclassifiable_application_modules=['pandas'])
+        == expected
+    )
+
+
 @pytest.mark.parametrize(('example', 'expected'), get_tc_001_to_003_tests('pandas', TC002))
 def test_TC002_errors(example, expected):
     assert _get_error(example, error_code_filter='TC002') == expected
@@ -224,3 +245,12 @@ def test_TC002_errors(example, expected):
 @pytest.mark.parametrize(('example', 'expected'), get_tc_001_to_003_tests('os', TC003))
 def test_TC003_errors(example, expected):
     assert _get_error(example, error_code_filter='TC003') == expected
+
+
+@pytest.mark.parametrize(('example', 'expected'), get_tc_001_to_003_tests('os', TC001))
+def test_unclassifiable_application_modules_builtin(example, expected):
+    """Builtin application module should be seen as application module if specified"""
+    assert (
+        _get_error(example, error_code_filter='TC001', type_checking_unclassifiable_application_modules=['os'])
+        == expected
+    )

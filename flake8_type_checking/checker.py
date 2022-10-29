@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from classify_imports import Classified, classify_base
+from classify_imports import Classified, Settings, classify_base
 
 from flake8_type_checking.constants import (
     ANNOTATION_PROPERTY,
@@ -293,6 +293,7 @@ class ImportName:
     _module: str
     _name: str
     _alias: Optional[str]
+    _classifier_settings: Optional[Settings]
 
     @property
     def module(self) -> str:
@@ -350,7 +351,10 @@ class ImportName:
     @property
     def import_type(self) -> ImportTypeValue:
         """Return the import type of the import."""
-        return cast('ImportTypeValue', classify_base(self.full_name.partition('.')[0]))
+        module_name = self.full_name.partition('.')[0]
+        classify_kwargs = {'settings': self._classifier_settings} if self._classifier_settings is not None else {}
+        classification = classify_base(module_name, **classify_kwargs)
+        return cast('ImportTypeValue', classification)
 
 
 class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
@@ -365,6 +369,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
         exempt_modules: Optional[list[str]] = None,
+        application_directories: Optional[list[str]] = None,
+        unclassifiable_application_modules: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
 
@@ -380,6 +386,14 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         #: Import patterns we want to avoid mapping
         self.exempt_imports: list[str] = ['*', 'TYPE_CHECKING']
         self.exempt_modules: list[str] = exempt_modules or []
+
+        #: Import classifier settings
+        classifier_settings = {}
+        if application_directories is not None:
+            classifier_settings['application_directories'] = tuple(application_directories)
+        if unclassifiable_application_modules is not None:
+            classifier_settings['unclassifiable_application_modules'] = tuple(unclassifiable_application_modules)
+        self.classifier_settings = Settings(**classifier_settings)
 
         #: All imports, in each category
         self.application_imports: dict[str, Import] = {}
@@ -580,6 +594,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                     _module=f'{node.module}.' if isinstance(node, ast.ImportFrom) else '',
                     _alias=name_node.asname,
                     _name=name_node.name,
+                    _classifier_settings=self.classifier_settings,
                 )
 
                 if imp.import_type == Classified.APPLICATION:
@@ -843,6 +858,8 @@ class TypingOnlyImportsChecker:
         self.strict_mode = getattr(options, 'type_checking_strict', False)
 
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
+        application_directories = getattr(options, 'type_checking_application_directories', None)
+        unclassifiable_application_modules = getattr(options, 'type_checking_unclassifiable_application_modules', None)
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
         pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
         fastapi_enabled = getattr(options, 'type_checking_fastapi_enabled', False)
@@ -864,6 +881,8 @@ class TypingOnlyImportsChecker:
             fastapi_enabled=fastapi_enabled,
             cattrs_enabled=cattrs_enabled,
             exempt_modules=exempt_modules,
+            application_directories=application_directories,
+            unclassifiable_application_modules=unclassifiable_application_modules,
             fastapi_dependency_support_enabled=fastapi_dependency_support_enabled,
             pydantic_enabled_baseclass_passlist=pydantic_enabled_baseclass_passlist,
         )

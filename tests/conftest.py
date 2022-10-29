@@ -34,6 +34,8 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         # defaults
         mock_options.extended_default_select = []
         mock_options.enable_extensions = []
+        mock_options.type_checking_application_directories = None
+        mock_options.type_checking_unclassifiable_application_modules = None
         mock_options.type_checking_pydantic_enabled = False
         mock_options.type_checking_exempt_modules = []
         mock_options.type_checking_fastapi_enabled = False

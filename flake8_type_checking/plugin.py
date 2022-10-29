@@ -48,6 +48,20 @@ class Plugin:
             default=False,
             help='Flag individual imports rather than looking at the module.',
         )
+        option_manager.add_option(
+            '--type-checking-application-directories',
+            comma_separated_list=True,
+            parse_from_config=True,
+            default=None,
+            help='Directories relative to the current directory to be considered application source roots.',
+        )
+        option_manager.add_option(
+            '--type-checking-unclassifiable-application-modules',
+            comma_separated_list=True,
+            parse_from_config=True,
+            default=None,
+            help='Modules to always consider application modules.',
+        )
 
         # Third-party library options
         option_manager.add_option(
