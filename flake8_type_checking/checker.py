@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import ast
 import os
-from ast import Index
+from ast import Index, literal_eval
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from classify_imports import Classified, classify_base
 
@@ -472,20 +472,53 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             for type_checking_block in self.type_checking_blocks + self.empty_type_checking_blocks
         )
 
+    def is_type_checking(self, node: ast.AST) -> bool:
+        """Determine if the node is equivalent to TYPE_CHECKING."""
+        return (
+            # True for `TYPE_CHECKING`
+            hasattr(node, 'id')
+            and (node.id == 'TYPE_CHECKING')
+            # True for `typing.TYPE_CHECKING` or `T.TYPE_CHECKING`
+            or (hasattr(node, 'attr') and node.attr == 'TYPE_CHECKING')
+            # True for `from typing import TYPE_CHECKING as TC\nTC`
+            or (self.type_checking_alias is not None and hasattr(node, 'id') and (node.id == self.type_checking_alias))
+        )
+
+    def is_true_when_type_checking(self, node: ast.AST) -> bool | Literal['TYPE_CHECKING']:
+        """Determine if the node evaluates to True when TYPE_CHECKING is True.
+
+        This handles simple boolean logic where the values can be statically determined.
+        If a value is dynamic (e.g. a reference or a function call) we assume it may be False.
+
+        Returns True if the statement is always True,
+                False if the statement can ever be False when TYPE_CHECKING is True
+                'TYPE_CHECKING' if the statement is always True when TYPE_CHECKING is True
+
+        If the return value is 'TYPE_CHECKING', we can consider the statement to be equivalent
+        to the value of the `TYPE_CHECKING` symbol for the purposes of this linter.
+        """
+        if self.is_type_checking(node):
+            return 'TYPE_CHECKING'
+        if isinstance(node, ast.BoolOp):
+            non_type_checking = [v for v in node.values if not self.is_type_checking(v)]
+            has_type_checking = len(non_type_checking) < len(node.values)
+            num_true = sum(1 if self.is_true_when_type_checking(v) else 0 for v in non_type_checking)
+            all_others_true = num_true == len(non_type_checking)
+            any_others_true = num_true > 0
+            if isinstance(node.op, ast.Or):
+                # At least one of the conditions must be TYPE_CHECKING
+                return 'TYPE_CHECKING' if has_type_checking else any_others_true
+            elif isinstance(node.op, ast.And) and all_others_true:
+                # At least one of the conditions must be TYPE_CHECKING, and all others must be True
+                return 'TYPE_CHECKING' if has_type_checking else False
+        elif isinstance(node, ast.Constant):
+            with suppress(Exception):
+                return bool(literal_eval(node))
+        return False
+
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
-        # Check if the if-statement is for a type-checking block
-        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':
-            # True for `if TYPE_CHECKING:`
-            type_checking_condition = True
-        elif hasattr(node.test, 'attr') and node.test.attr == 'TYPE_CHECKING':
-            # True for `if typing.TYPE_CHECKING:` or `if T.TYPE_CHECKING:`
-            type_checking_condition = True
-        elif self.type_checking_alias and hasattr(node.test, 'id') and node.test.id == self.type_checking_alias:
-            # True for `from typing import TYPE_CHECKING as TC\nif TC:`
-            type_checking_condition = True
-        else:
-            type_checking_condition = False
+        type_checking_condition = self.is_true_when_type_checking(node.test) == 'TYPE_CHECKING'
 
         # If it is, note down the line-number-range where the type-checking block exists
         # Initially we just set the node.lineno and node.end_lineno, but it turns out that else blocks are

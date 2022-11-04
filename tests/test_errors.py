@@ -184,6 +184,57 @@ class TestFoundBugs:
         for example in [type_checking, typing_type_checking, alias, aliased_typing]:
             assert _get_error(textwrap.dedent(example)) == set()
 
+    def test_type_checking_block_with_other_conditions(self):
+        """
+        We should detect type-checking blocks that will always evaluate to True
+        if TYPE_CHECKING is True
+        """
+        for example in [
+            ['or', 'a_value'],
+            ['or', 'a_function()'],
+            ['and', 'True'],
+            ['and', '1'],
+            ['and', '"str"'],
+            ['and', '(True or a_value)'],
+            ['and', '(True or a_function())'],
+        ]:
+            for case in [f'TYPE_CHECKING {example[0]} {example[1]}', f'{example[1]} {example[0]} TYPE_CHECKING']:
+                body = f"""
+                    from typing import TYPE_CHECKING
+
+                    if {case}:
+                        from pathlib import Path
+
+                    p: Path
+                """
+                assert _get_error(textwrap.dedent(body)) == set()
+
+    def test_not_type_checking_block_with_other_conditions(self):
+        """We should ignore type-checking blocks that may have a different value than TYPE_CHECKING"""
+        for condition in [
+            'False',
+            '0',
+            '""',
+            'a_value',
+            'a_function()',
+            '(False or a_value)',
+            '(True and a_value)',
+            '("" or a_value)',
+            '(1 and a_value)',
+        ]:
+            for example in [f'{condition} and TYPE_CHECKING', f'TYPE_CHECKING and {condition}']:
+                body = f"""
+                    from typing import TYPE_CHECKING
+
+                    if {example}:
+                        from pathlib import Path
+
+                    p: Path
+                """
+                assert _get_error(textwrap.dedent(body)) == {
+                    "5:4 TC003 Move built-in import 'pathlib.Path' into a type-checking block"
+                }
+
     def test_import_not_flagged_when_existing_import_present(self):
         """
         When an import is made to a module, we treat it as already used.
