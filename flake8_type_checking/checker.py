@@ -475,17 +475,13 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
     def visit_If(self, node: ast.If) -> Any:
         """Look for a TYPE_CHECKING block."""
         # Check if the if-statement is for a type-checking block
-        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':  # type: ignore[attr-defined]
+        if hasattr(node.test, 'id') and node.test.id == 'TYPE_CHECKING':
             # True for `if TYPE_CHECKING:`
             type_checking_condition = True
-        elif hasattr(node.test, 'attr') and node.test.attr == 'TYPE_CHECKING':  # type: ignore[attr-defined]
+        elif hasattr(node.test, 'attr') and node.test.attr == 'TYPE_CHECKING':
             # True for `if typing.TYPE_CHECKING:` or `if T.TYPE_CHECKING:`
             type_checking_condition = True
-        elif (
-            self.type_checking_alias
-            and hasattr(node.test, 'id')
-            and node.test.id == self.type_checking_alias  # type: ignore[attr-defined]
-        ):
+        elif self.type_checking_alias and hasattr(node.test, 'id') and node.test.id == self.type_checking_alias:
             # True for `from typing import TYPE_CHECKING as TC\nif TC:`
             type_checking_condition = True
         else:
