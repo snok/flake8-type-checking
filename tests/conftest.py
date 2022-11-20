@@ -27,6 +27,7 @@ def _change_test_dir():
 
 def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwargs: Any) -> set[str]:
     os.chdir(REPO_ROOT)
+    filename = kwargs.get('filename', 'test.py')
     if error_code_filter:
         mock_options = Mock()
         mock_options.select = [error_code_filter]
@@ -43,9 +44,9 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         # kwarg overrides
         for k, v in kwargs.items():
             setattr(mock_options, k, v)
-        plugin = Plugin(ast.parse(example), options=mock_options, filename='test.py')
+        plugin = Plugin(ast.parse(example), options=mock_options, filename=filename)
     else:
-        plugin = Plugin(ast.parse(example), filename='test.py')
+        plugin = Plugin(ast.parse(example), filename=filename)
 
     errors = {f'{line}:{col} {msg}' for line, col, msg, _ in plugin.run()}
     if error_code_filter is None:
