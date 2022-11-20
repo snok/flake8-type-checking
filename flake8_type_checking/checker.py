@@ -651,19 +651,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             return node
 
         if hasattr(node, ATTRIBUTE_PROPERTY):
-            # When importing modules like 'import urllib.parse'
-            # and calling 'urllib.parse.urlencode(some_string)',
-            # we only receive 'urllib' here as the node.id, but can
-            # construct 'urllib.parse.urlencode' by using the attribute property.
-            # Alas, the import in this case would only match 'urllib.parse', so for
-            # this case, we add two uses in these cases where the link-length is gt 2
-            full_name = f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'
-            split_names = full_name.split('.')
-            if len(split_names) > 2:
-                self.uses[full_name] = node
-                self.uses['.'.join(split_names[:-1])] = node
-            else:
-                self.uses[full_name] = node
+            self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node
 
         self.uses[node.id] = node
         return node
