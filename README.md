@@ -219,7 +219,7 @@ Enabling dependency support will also enable FastAPI and Pydantic support.
 - **type**: `bool`
 ```ini
 [flake8]
-type-checking-fastapi-dependency-support-enabled: true  # default false
+type-checking-fastapi-dependency-support-enabled = true  # default false
 ```
 
 ### Cattrs support
