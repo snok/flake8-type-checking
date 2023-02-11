@@ -47,18 +47,15 @@ jobs:
       - uses: actions/cache@v3
         id: poetry-cache
         with:
-          path: ~/.local
-          key: key-14
+          path: |
+            ~/.local
+            .venv
+          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-8
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
           virtualenvs-create: false
           version: latest
-      - uses: actions/cache@v3
-        id: cache-venv
-        with:
-          path: .venv
-          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-7
       - run: |
           python -m venv .venv
           source .venv/bin/activate
