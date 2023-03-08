@@ -88,14 +88,15 @@ class Plugin:
 
     def run(self) -> Flake8Generator:
         """Run flake8 plugin and return any relevant errors."""
+        # disable plugin for stub files
+        # context: https://github.com/snok/flake8-type-checking/issues/152
+        if self.filename.endswith('.pyi'):
+            return
+
         visitor = TypingOnlyImportsChecker(self.tree, self.options)
 
         for e in visitor.errors:
             code = e[2].split(':')[0]
-            if self.filename.endswith('.pyi') and code.startswith('TC100'):
-                # Stub files don't need futures imports
-                # context: https://github.com/snok/flake8-type-checking/issues/121
-                continue
             if self.should_warn(code):
                 yield e
 
