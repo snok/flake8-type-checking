@@ -113,3 +113,16 @@ def test_tc2_works_when_opted_in(flake8_path):
     assert result.out_lines == [
         f".{os.sep}example.py:7:4: TC200 Annotation 'Union' needs to be made into a string literal"
     ]
+
+
+def test_pyi_ignored(flake8_path):
+    (flake8_path / 'example.pyi').write_text(
+        dedent(
+            '''
+        import pandas
+        x: pandas.DataFrame
+    '''
+        )
+    )
+    result = flake8_path.run_flake8()
+    assert result.out_lines == []
