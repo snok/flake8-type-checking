@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import fnmatch
 import os
 from ast import Index, literal_eval
 from contextlib import suppress
@@ -547,6 +548,12 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     # -- Map imports -------------------------------
 
+    def is_exempt_module(self, module_name: str) -> bool:
+        """Template module name check."""
+        return any(
+            {exempt_module for exempt_module in self.exempt_modules if fnmatch.fnmatch(module_name, exempt_module)}
+        )
+
     def add_import(self, node: Import) -> None:  # noqa: C901
         """Add relevant ast objects to import lists."""
         if self.in_type_checking_block(node):
@@ -562,12 +569,12 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             return None
 
         # Skip checking the import if the module is passlisted.
-        if isinstance(node, ast.ImportFrom) and node.module in self.exempt_modules:
+        if isinstance(node, ast.ImportFrom) and node.module and self.is_exempt_module(node.module):
             return
 
         for name_node in node.names:
             # Skip checking the import if the module is passlisted
-            if isinstance(node, ast.Import) and name_node.name in self.exempt_modules:
+            if isinstance(node, ast.Import) and self.is_exempt_module(name_node.name):
                 return
 
             # Look for a TYPE_CHECKING import
