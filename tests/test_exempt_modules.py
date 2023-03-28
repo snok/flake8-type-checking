@@ -49,3 +49,23 @@ def test_exempt_modules_option():
     )
     assert _get_error(example3, error_code_filter='TC002') == {'2:0 ' + TC002.format(module='pandas')}
     assert _get_error(example3, error_code_filter='TC002', type_checking_exempt_modules=['pandas']) == set()
+
+    # Check template Import
+    example4 = textwrap.dedent(
+        '''
+        from apps.app_1.choices import ExampleChoice
+        from apps.app_2.choices import Example2Choice
+
+        x: ExampleChoice
+        y: Example2Choice
+        '''
+    )
+    assert _get_error(example4, error_code_filter='TC002') == {
+        '2:0 ' + TC002.format(module='apps.app_1.choices.ExampleChoice'),
+        '3:0 ' + TC002.format(module='apps.app_2.choices.Example2Choice'),
+    }
+    assert _get_error(example4, error_code_filter='TC002', type_checking_exempt_modules=['apps.*.choices']) == set()
+    assert _get_error(example4, error_code_filter='TC002', type_checking_exempt_modules=['*.choices']) == set()
+    assert _get_error(example4, error_code_filter='TC002', type_checking_exempt_modules=['apps.app_1.*']) == {
+        '3:0 ' + TC002.format(module='apps.app_2.choices.Example2Choice'),
+    }
