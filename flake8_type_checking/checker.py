@@ -485,6 +485,41 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             or (self.type_checking_alias is not None and hasattr(node, 'id') and (node.id == self.type_checking_alias))
         )
 
+    def is_type_checking_true(self, node: ast.Compare) -> bool:
+        """Determine whether `if TYPE_CHECKING is True` statement is passed."""
+        # Check for `left` attribute in the node.
+        has_left_node = hasattr(node, 'left') is True
+
+        # Check for `node.id`
+        has_left_id = (
+            has_left_node
+            and hasattr(node.left, 'id') is True
+            and (
+                node.left.id == 'TYPE_CHECKING'
+                or (self.type_checking_alias is not None and node.left.id == self.type_checking_alias)
+            )
+        )
+
+        # Check for `node.attr`
+        has_left_attr = has_left_node and hasattr(node.left, 'attr') is True and node.left.attr == 'TYPE_CHECKING'
+
+        # Generate a final boolean value for the left side of expression.
+        type_checking_on_left = has_left_id or has_left_attr
+
+        # Operator should be `is`.
+        operator_is = hasattr(node, 'ops') is True and len(node.ops) == 1 and isinstance(node.ops[0], ast.Is) is True
+
+        # Right side of the operator should be a constant `True`.
+        right_value_true = (
+            hasattr(node, 'comparators') is True
+            and len(node.comparators) == 1
+            and isinstance(node.comparators[0], ast.Constant) is True
+            and hasattr(node.comparators[0], 'value') is True
+            and node.comparators[0].value is True
+        )
+
+        return type_checking_on_left and operator_is and right_value_true
+
     def is_true_when_type_checking(self, node: ast.AST) -> bool | Literal['TYPE_CHECKING']:
         """Determine if the node evaluates to True when TYPE_CHECKING is True.
 
@@ -515,6 +550,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         elif isinstance(node, ast.Constant):
             with suppress(Exception):
                 return bool(literal_eval(node))
+        elif isinstance(node, ast.Compare) is True and self.is_type_checking_true(node) is True:
+            return 'TYPE_CHECKING'
         return False
 
     def visit_If(self, node: ast.If) -> Any:
