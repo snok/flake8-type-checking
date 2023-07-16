@@ -486,7 +486,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         )
 
     def is_type_checking_true(self, node: ast.Compare) -> bool:
-        """An ast.Compare node has a `left`, `ops`, and `comparators` attribute.
+        """
+        Check whether the node matches `if TYPE_CHECKING is True`.
+
+        An ast.Compare node has a `left`, `ops`, and `comparators` attribute.
 
         Here we want to check whether our node corresponds to
 
@@ -495,20 +498,24 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         left _______|        ops   |____ comparators
         """
         # Left side should be a TYPE_CHECKING block
-        if (hasattr(node, 'left') and self.is_type_checking(node.left)) is False:
+        is_type_checking_block = hasattr(node, 'left') and self.is_type_checking(node.left)
+        if not is_type_checking_block:
             return False
 
         # Operator should be `is`
-        if (len(node.ops) == 1 and isinstance(node.ops[0], ast.Is)) is False:
+        operator_is_is = len(node.ops) == 1 and isinstance(node.ops[0], ast.Is)
+        if not operator_is_is:
             return False
 
         # Right side should be `True`
-        if (
+        right_side_is_true = (
             len(node.comparators) == 1
             and isinstance(node.comparators[0], ast.Constant)
             and node.comparators[0].value is True
-        ) is False:
+        )
+        if not right_side_is_true:
             return False
+
         return True
 
     def is_true_when_type_checking(self, node: ast.AST) -> bool | Literal['TYPE_CHECKING']:
@@ -541,7 +548,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         elif isinstance(node, ast.Constant):
             with suppress(Exception):
                 return bool(literal_eval(node))
-        elif isinstance(node, ast.Compare) is True and self.is_type_checking_true(node) is True:
+        elif isinstance(node, ast.Compare) and self.is_type_checking_true(node):
             return 'TYPE_CHECKING'
         return False
 
