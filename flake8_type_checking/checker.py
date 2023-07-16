@@ -485,6 +485,32 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             or (self.type_checking_alias is not None and hasattr(node, 'id') and (node.id == self.type_checking_alias))
         )
 
+    def is_type_checking_true(self, node: ast.Compare) -> bool:
+        """An ast.Compare node has a `left`, `ops`, and `comparators` attribute.
+
+        Here we want to check whether our node corresponds to
+
+            `if TYPE_CHECKING is True`
+                    ^         ^    ^
+        left _______|        ops   |____ comparators
+        """
+        # Left side should be a TYPE_CHECKING block
+        if (hasattr(node, 'left') and self.is_type_checking(node.left)) is False:
+            return False
+
+        # Operator should be `is`
+        if (len(node.ops) == 1 and isinstance(node.ops[0], ast.Is)) is False:
+            return False
+
+        # Right side should be `True`
+        if (
+            len(node.comparators) == 1
+            and isinstance(node.comparators[0], ast.Constant)
+            and node.comparators[0].value is True
+        ) is False:
+            return False
+        return True
+
     def is_true_when_type_checking(self, node: ast.AST) -> bool | Literal['TYPE_CHECKING']:
         """Determine if the node evaluates to True when TYPE_CHECKING is True.
 
@@ -515,6 +541,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         elif isinstance(node, ast.Constant):
             with suppress(Exception):
                 return bool(literal_eval(node))
+        elif isinstance(node, ast.Compare) is True and self.is_type_checking_true(node) is True:
+            return 'TYPE_CHECKING'
         return False
 
     def visit_If(self, node: ast.If) -> Any:
