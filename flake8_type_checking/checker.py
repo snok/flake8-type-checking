@@ -486,39 +486,30 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         )
 
     def is_type_checking_true(self, node: ast.Compare) -> bool:
-        """Determine whether `if TYPE_CHECKING is True` statement is passed."""
-        # Check for `left` attribute in the node.
-        has_left_node = hasattr(node, 'left') is True
+        """An ast.Compare node has a `left`, `ops`, and `comparators` attribute.
 
-        # Check for `node.id`
-        has_left_id = (
-            has_left_node
-            and hasattr(node.left, 'id') is True
-            and (
-                node.left.id == 'TYPE_CHECKING'
-                or (self.type_checking_alias is not None and node.left.id == self.type_checking_alias)
-            )
-        )
+        Here we want to check whether our node corresponds to
 
-        # Check for `node.attr`
-        has_left_attr = has_left_node and hasattr(node.left, 'attr') is True and node.left.attr == 'TYPE_CHECKING'
+            `if TYPE_CHECKING is True`
+                    ^         ^    ^
+        left _______|        ops   |____ comparators
+        """
+        # Left side should be a TYPE_CHECKING block
+        if (hasattr(node, 'left') and self.is_type_checking(node.left)) is False:
+            return False
 
-        # Generate a final boolean value for the left side of expression.
-        type_checking_on_left = has_left_id or has_left_attr
+        # Operator should be `is`
+        if (len(node.ops) == 1 and isinstance(node.ops[0], ast.Is)) is False:
+            return False
 
-        # Operator should be `is`.
-        operator_is = hasattr(node, 'ops') is True and len(node.ops) == 1 and isinstance(node.ops[0], ast.Is) is True
-
-        # Right side of the operator should be a constant `True`.
-        right_value_true = (
-            hasattr(node, 'comparators') is True
-            and len(node.comparators) == 1
-            and isinstance(node.comparators[0], ast.Constant) is True
-            and hasattr(node.comparators[0], 'value') is True
+        # Right side should be `True`
+        if (
+            len(node.comparators) == 1
+            and isinstance(node.comparators[0], ast.Constant)
             and node.comparators[0].value is True
-        )
-
-        return type_checking_on_left and operator_is and right_value_true
+        ) is False:
+            return False
+        return True
 
     def is_true_when_type_checking(self, node: ast.AST) -> bool | Literal['TYPE_CHECKING']:
         """Determine if the node evaluates to True when TYPE_CHECKING is True.
