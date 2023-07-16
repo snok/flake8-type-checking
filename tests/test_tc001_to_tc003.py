@@ -103,34 +103,29 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
 
     other_useful_test_cases: L = [
         (
-            textwrap.dedent(
-                f'''
+            textwrap.dedent(f'''
                 from {import_} import Dict, Any
 
                 def example() -> Any:
                     return 1
 
                 x: Dict[int] = 20
-                '''
-            ),
+                '''),
             {'2:0 ' + ERROR.format(module=f'{import_}.Dict'), '2:0 ' + ERROR.format(module=f'{import_}.Any')},
         ),
         (
-            textwrap.dedent(
-                '''
+            textwrap.dedent('''
                 from typing import TYPE_CHECKING
 
                 if TYPE_CHECKING:
                     from typing import Dict
 
                 x: Dict[int] = 20
-                '''
-            ),
+                '''),
             set(),
         ),
         (
-            textwrap.dedent(
-                '''
+            textwrap.dedent('''
                 from pathlib import Path
 
                 class ImportVisitor(ast.NodeTransformer):
@@ -144,58 +139,49 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
 
                     def __init__(self):
                         self.cwd = Path(pandas.getcwd())
-                '''
-            ),
+                '''),
             set(),
         ),
         (
-            textwrap.dedent(
-                f'''
+            textwrap.dedent(f'''
                 import {import_}
 
 
                 class Migration:
                     enum={import_}
-                '''
-            ),
+                '''),
             set(),
         ),
         (
-            textwrap.dedent(
-                f'''
+            textwrap.dedent(f'''
                 import {import_}
 
 
                 class Migration:
                     enum={import_}.EnumClass
-                '''
-            ),
+                '''),
             set(),
         ),
         (
-            textwrap.dedent(
-                f'''
+            textwrap.dedent(f'''
                 from {import_} import y
 
                 if TYPE_CHECKING:
                     _type = x
                 else:
                     _type = y
-                '''
-            ),
+                '''),
             set(),
         ),
         (
-            textwrap.dedent(
-                f'''
+            textwrap.dedent(f'''
                 from {import_} import y
 
                 if TYPE_CHECKING:
                     _type = x
                 elif True:
                     _type = y
-                '''
-            ),
+                '''),
             set(),
         ),
     ]

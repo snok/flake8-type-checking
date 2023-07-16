@@ -45,18 +45,15 @@ examples = [
     # Attribute
     ('x.y', {'x.y', 'x'}),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     def example(c):
         a = 2
         b = c * 2
-    """
-        ),
+    """),
         {'a', 'b', 'c'},
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     class Test:
         x = 13
 
@@ -65,30 +62,25 @@ examples = [
 
     a = Test()
     b = a.y
-    """
-        ),
+    """),
         {'self.y', 'z', 'Test', 'self', 'a', 'b', 'x', 'a.y'},
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     import ast
 
     ImportType = Union[Import, ImportFrom]
-    """
-        ),  # ast should not be a part of this
+    """),  # ast should not be a part of this
         {'Union', 'Import', 'ImportFrom', 'ImportType'},
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
         import ast
         def _get_usages(example):
             visitor = UnusedImportVisitor()
             visitor.visit(parse(example))
             return visitor.usage_names
-        """
-        ),
+        """),
         {'UnusedImportVisitor', 'example', 'parse', 'visitor', 'visitor.usage_names', 'visitor.visit'},
     ),
 ]
@@ -101,8 +93,7 @@ def test_basic_annotations_are_removed(example, result):
 
 def test_model_declarations_are_included_in_names():
     """Class definition arguments need to be included in our "names"."""
-    example = textwrap.dedent(
-        """
+    example = textwrap.dedent("""
     from django.db import models
     from app.models import SomeModel
 
@@ -111,6 +102,5 @@ def test_model_declarations_are_included_in_names():
             SomeModel,
             on_delete=models.CASCADE,
         )
-    """
-    )
+    """)
     assert _get_names(example) == {'SomeModel', 'fk', 'models', 'models.CASCADE', 'models.ForeignKey', 'models.Model'}

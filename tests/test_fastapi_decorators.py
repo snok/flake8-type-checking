@@ -18,8 +18,7 @@ defaults = {'type_checking_fastapi_enabled': True}
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
 def test_api_router_decorated_function(fdef):
     """Test sync and async function definition, with an arg and a kwarg."""
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         from fastapi import APIRouter
 
         from app.models import SomeModel
@@ -31,8 +30,7 @@ def test_api_router_decorated_function(fdef):
         @some_router.get('/{{resource_id}}')
         {fdef} list_something(resource_id: CustomType, some_model: SomeModel = Depends(some_function)):
             return None
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()
 
 
@@ -42,8 +40,7 @@ def test_api_router_decorated_function_return_type(fdef):
     We don't care about return types. To my knowledge,
     these are not evaluated by FastAPI/pydantic.
     """
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         from fastapi import APIRouter
         from fastapi import Request
 
@@ -54,8 +51,7 @@ def test_api_router_decorated_function_return_type(fdef):
         @some_router.get('/{{resource_id}}')
         {fdef} list_something(request: Request) -> CustomType:
             return None
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == {
         '5:0 ' + TC002.format(module='app.types.CustomType')
     }
@@ -63,8 +59,7 @@ def test_api_router_decorated_function_return_type(fdef):
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
 def test_api_router_decorated_nested_function(fdef):
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         import logging
 
         from typing import TYPE_CHECKING
@@ -84,15 +79,13 @@ def test_api_router_decorated_nested_function(fdef):
             {fdef} login(request: Request) -> "RedirectResponse":
                 ...
 
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
 def test_app_decorated_function(fdef):
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         from app.main import app
         from app.models import SomeModel
         from app.types import CustomType
@@ -100,6 +93,5 @@ def test_app_decorated_function(fdef):
         @app.get('/{{resource_id}}')
         {fdef} list_something(resource_id: CustomType, some_model: SomeModel = Depends(lambda: 1)):
             return None
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()

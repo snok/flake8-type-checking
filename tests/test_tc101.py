@@ -33,23 +33,20 @@ examples = [
     ),
     # ast.AnnAssign from type checking block import with quotes
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
             from __future__ import annotations
 
             if TYPE_CHECKING:
                 import something
 
             x: "something"
-            '''
-        ),
+            '''),
         {'7:3 ' + TC101.format(annotation='something')},
     ),
     # No futures import and no type checking block
     ("from typing import Dict\nx: 'Dict'", {'2:3 ' + TC101.format(annotation='Dict')}),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
 
         if TYPE_CHECKING:
@@ -57,13 +54,11 @@ examples = [
 
         def example(x: "something") -> something:
             pass
-        '''
-        ),
+        '''),
         {'7:15 ' + TC101.format(annotation='something')},
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
 
         if TYPE_CHECKING:
@@ -71,62 +66,51 @@ examples = [
 
         def example(x: "something") -> "something":
             pass
-        '''
-        ),
+        '''),
         {'7:15 ' + TC101.format(annotation='something'), '7:31 ' + TC101.format(annotation='something')},
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
 
         def example(x: "something") -> "something":
             pass
-        '''
-        ),
+        '''),
         {'4:15 ' + TC101.format(annotation='something'), '4:31 ' + TC101.format(annotation='something')},
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         if TYPE_CHECKING:
             import something
 
         def example(x: "something") -> "something":
             pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         class X:
             def foo(self) -> 'X':
                 pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
         class X:
             def foo(self) -> 'X':
                 pass
-        '''
-        ),
+        '''),
         {'4:21 ' + TC101.format(annotation='X')},
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from typing import Annotated
 
         x: Annotated[int, 42]
-        '''
-        ),
+        '''),
         set(),
     ),
 ]

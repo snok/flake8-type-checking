@@ -25,21 +25,18 @@ examples = [
         {'4:8 ' + TC201.format(annotation='int')},
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
             from __future__ import annotations
 
             if TYPE_CHECKING:
                 import something
 
             x: "something"
-            '''
-        ),
+            '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
 
         if TYPE_CHECKING:
@@ -47,29 +44,24 @@ examples = [
 
         def example(x: "something") -> something:
             pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
     class X:
         def foo(self) -> 'X':
             pass
-    '''
-        ),
+    '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
     from __future__ import annotations
     class X:
         def foo(self) -> 'X':
             pass
-    '''
-        ),
+    '''),
         set(),
     ),
 ]
