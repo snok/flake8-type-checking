@@ -16,22 +16,19 @@ examples = [
     ('', set()),
     # Used in file
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
         from datetime import datetime
 
     x = datetime
-    """
-        ),
+    """),
         {'5:0 ' + TC004.format(module='datetime')},
     ),
     # Used in function
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
@@ -39,26 +36,22 @@ examples = [
 
     def example():
         return date()
-    """
-        ),
+    """),
         {'5:0 ' + TC004.format(module='date')},
     ),
     # Used, but only used inside the type checking block
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     if TYPE_CHECKING:
         from typing import Any
 
         CustomType = Any
-    """
-        ),
+    """),
         set(),
     ),
     # Used for typing only
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     if TYPE_CHECKING:
         from typing import Any
 
@@ -66,39 +59,33 @@ examples = [
         return
 
     my_type: Type[Any] | Any
-    """
-        ),
+    """),
         set(),
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     if TYPE_CHECKING:
         from typing import List, Sequence, Set
 
     def example(a: List[int], /, b: Sequence[int], *, c: Set[int]):
         return
-    """
-        ),
+    """),
         set(),
     ),
     # Used different places, but where each function scope has it's own import
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     if TYPE_CHECKING:
         from pandas import DataFrame
 
     def example():
         from pandas import DataFrame
         x = DataFrame
-    """
-        ),
+    """),
         set(),
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from __future__ import annotations
 
     from typing import TYPE_CHECKING
@@ -111,13 +98,11 @@ examples = [
 
         async def example(self) -> AsyncIterator[List[str]]:
             yield 0
-    """
-        ),
+    """),
         set(),
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
     from weakref import WeakKeyDictionary
 
@@ -126,8 +111,7 @@ examples = [
 
 
     d = WeakKeyDictionary["Any", "Any"]()
-    """
-        ),
+    """),
         set(),
     ),
 ]

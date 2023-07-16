@@ -20,101 +20,83 @@ examples = [
     ('', set()),
     # Simple type unquoted
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import cast
 
     cast(int, 3.0)
-    """
-        ),
+    """),
         {'4:5 ' + TC006.format(annotation='int')},
     ),
     # Complex type unquoted
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import cast
 
     cast(list[tuple[bool | float | int | str]], 3.0)
-    """
-        ),
+    """),
         {'4:5 ' + TC006.format(annotation='list[tuple[bool | float | int | str]]')},
     ),
     # Complex type unquoted using Union
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import Union, cast
 
     cast(list[tuple[Union[bool, float, int, str]]], 3.0)
-    """
-        ),
+    """),
         {'4:5 ' + TC006.format(annotation='list[tuple[Union[bool, float, int, str]]]')},
     ),
     # Simple type quoted
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import cast
 
     cast("int", 3.0)
-    """
-        ),
+    """),
         set(),
     ),
     # Complex type quoted
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import cast
 
     cast("list[tuple[bool | float | int | str]]", 3.0)
-    """
-        ),
+    """),
         set(),
     ),
     # Complex type quoted using Union
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import Union, cast
 
     cast("list[tuple[Union[bool, float, int, str]]]", 3.0)
-    """
-        ),
+    """),
         set(),
     ),
     # Call aliased function
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import cast as typecast
 
     typecast(int, 3.0)
-    """
-        ),
+    """),
         {'4:9 ' + TC006.format(annotation='int')},
     ),
     # Call function from module
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     import typing
 
     typing.cast(int, 3.0)
-    """
-        ),
+    """),
         {'4:12 ' + TC006.format(annotation='int')},
     ),
     # Call function from aliased module
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     import typing as t
 
     t.cast(int, 3.0)
-    """
-        ),
+    """),
         {'4:7 ' + TC006.format(annotation='int')},
     ),
     # TODO: What about importing typing.cast() from another module, e.g. a compat module?

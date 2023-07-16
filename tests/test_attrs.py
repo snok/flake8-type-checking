@@ -28,8 +28,7 @@ def test_attrs_model(imp, dec):
     Test `attrs` classes together with a non-`attrs` class that has a class var of the same type.
     `attrs` classes are instantiated using different dataclass decorators. The `attrs` module is imported as whole.
     """
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         {imp}
         from decimal import Decimal
 
@@ -43,8 +42,7 @@ def test_attrs_model(imp, dec):
 
         class Z:
             x: Decimal
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003') == set()
 
 
@@ -65,8 +63,7 @@ def test_complex_attrs_model(imp, dec, expected):
     Test `attrs` classes together with a non-`attrs` class tha has a class var of another type.
     `attrs` classes are instantiated using different dataclass decorators. The `attrs` module is imported as whole.
     """
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         {imp}
         from decimals import Decimal
         from decimal import Context
@@ -81,8 +78,7 @@ def test_complex_attrs_model(imp, dec, expected):
 
         class Z:
             x: Context
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003') == expected
 
 
@@ -103,8 +99,7 @@ def test_complex_attrs_model_direct_import(imp, dec, expected):
     Test `attrs` classes together with a non-`attrs` class tha has a class var of another type.
     `attrs` classes are instantiated using different dataclass decorators which are imported as submodules.
     """
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         {imp}
         from decimals import Decimal
         from decimal import Context
@@ -119,8 +114,7 @@ def test_complex_attrs_model_direct_import(imp, dec, expected):
 
         class Z:
             x: Context
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003') == expected
 
 
@@ -150,8 +144,7 @@ def test_complex_attrs_model_as_import(imp, dec, expected):
     `attrs` classes are instantiated using different dataclass
     decorators which are imported as submodules using an alias.
     """
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         {imp}
         from decimals import Decimal
         from decimal import Context
@@ -166,8 +159,7 @@ def test_complex_attrs_model_as_import(imp, dec, expected):
 
         class Z:
             x: Context
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003') == expected
 
 
@@ -193,8 +185,7 @@ def test_complex_attrs_model_slots_frozen(imp, dec, expected):
     Test `attrs` classes together with a non-`attrs` class tha has a class var of another type.
     `attrs` classes are instantiated using different dataclass decorators and arguments.
     """
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         {imp}
         from decimals import Decimal
         from decimal import Context
@@ -209,6 +200,5 @@ def test_complex_attrs_model_slots_frozen(imp, dec, expected):
 
         class Z:
             x: Context
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC001,TC002,TC003') == expected

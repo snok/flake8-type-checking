@@ -33,8 +33,7 @@ examples = [
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from typing import Dict, TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -42,13 +41,11 @@ examples = [
 
         def example(x: Dict[something]) -> Dict["something"]:
             pass
-        '''
-        ),
+        '''),
         {'7:20 ' + TC200.format(annotation='something')},
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from typing import TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -56,8 +53,7 @@ examples = [
 
         def example(x: ast.If):
             pass
-        '''
-        ),
+        '''),
         {'7:15 ' + TC200.format(annotation='ast')},
     ),
 ]
