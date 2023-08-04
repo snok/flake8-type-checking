@@ -11,7 +11,7 @@ if TYPE_CHECKING:
         end: int
 
     class FunctionScopeImportsDict(TypedDict):
-        imports: list[str]
+        names: list[str]
 
     Import = Union[ast.Import, ast.ImportFrom]
     Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
