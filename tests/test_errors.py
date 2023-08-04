@@ -334,3 +334,17 @@ class TestFoundBugs:
         assert result.out_lines == [
             './example.py:4:5: PL120 os.path.dirname("foo/bar") should be replaced by bar_path.parent',
         ]
+
+    def test_shadowed_function_arg(self):
+        """Re https://github.com/snok/flake8-type-checking/issues/160."""
+        assert _get_error(textwrap.dedent('''
+            from __future__ import annotations
+
+            from typing import TYPE_CHECKING
+
+            if TYPE_CHECKING:
+                from rest_framework import request
+
+            def create(request: request.Request) -> None:
+                str(request)
+            ''')) == set()
