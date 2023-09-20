@@ -585,9 +585,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     def is_exempt_module(self, module_name: str) -> bool:
         """Template module name check."""
-        return any(
-            {exempt_module for exempt_module in self.exempt_modules if fnmatch.fnmatch(module_name, exempt_module)}
-        )
+        return any(fnmatch.fnmatch(module_name, exempt_module) for exempt_module in self.exempt_modules)
 
     def add_import(self, node: Import) -> None:  # noqa: C901
         """Add relevant ast objects to import lists."""
