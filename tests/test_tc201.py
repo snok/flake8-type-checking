@@ -12,7 +12,9 @@ from tests.conftest import _get_error
 examples = [
     ('', set()),
     ("x: 'int'", {'1:3 ' + TC201.format(annotation='int')}),
-    ("x: 'Dict[int]'", {'1:3 ' + TC201.format(annotation='Dict[int]')}),
+    # this used to emit an error before fixing #164 if we wanted to handle
+    # this case once again we could add a whitelist of subscriptable types
+    ("x: 'Dict[int]'", set()),
     ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TC201.format(annotation='int')}),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'", set()),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
@@ -26,13 +28,13 @@ examples = [
     ),
     (
         textwrap.dedent('''
-            from __future__ import annotations
+        from __future__ import annotations
 
-            if TYPE_CHECKING:
-                import something
+        if TYPE_CHECKING:
+            import something
 
-            x: "something"
-            '''),
+        x: "something"
+        '''),
         set(),
     ),
     (
@@ -49,19 +51,29 @@ examples = [
     ),
     (
         textwrap.dedent('''
-    class X:
-        def foo(self) -> 'X':
-            pass
-    '''),
+        class X:
+            def foo(self) -> 'X':
+                pass
+        '''),
         set(),
     ),
     (
         textwrap.dedent('''
-    from __future__ import annotations
-    class X:
-        def foo(self) -> 'X':
-            pass
-    '''),
+        from __future__ import annotations
+        class X:
+            def foo(self) -> 'X':
+                pass
+        '''),
+        set(),
+    ),
+    (
+        # Regression test for Issue #164
+        textwrap.dedent('''
+        from wtforms import Field
+        from wtforms.fields.core import UnboundField
+
+        foo: 'UnboundField[Field]'
+        '''),
         set(),
     ),
 ]

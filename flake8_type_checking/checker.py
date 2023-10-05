@@ -1124,6 +1124,15 @@ class TypingOnlyImportsChecker:
     def excess_quotes(self) -> Flake8Generator:
         """TC201."""
         for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
+            # False positives for TC201 can be harmful, since fixing them, rather than
+            # ignoring them will incur a runtime TypeError, so we should be even more
+            # careful than with TC101 and favor false negatives even more, as such we
+            # give up immediately if the annotation contains square brackets, because
+            # we can't know if subscripting the type at runtime is safe without inspecting
+            # the type's source code.
+            if '[' in annotation:
+                continue
+
             # See comment in futures_excess_quotes
             for _, import_name in self.visitor.type_checking_block_imports:
                 if import_name in annotation:
