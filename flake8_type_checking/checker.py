@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from flake8_type_checking.types import (
         Flake8Generator,
         FunctionRangesDict,
-        FunctionScopeImportsDict,
+        FunctionScopeNamesDict,
         Import,
         ImportTypeValue,
         Name,
@@ -420,7 +420,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         #: Function imports and ranges
         # Function scopes can tell us if imports that appear in type-checking blocks
         # are repeated inside a function. This prevents false TC004 positives.
-        self.function_scope_imports: dict[int, FunctionScopeImportsDict] = {}
+        self.function_scope_names: dict[int, FunctionScopeNamesDict] = {}
         self.function_ranges: dict[int, FunctionRangesDict] = {}
 
         #: Set to the alias of TYPE_CHECKING if one is found
@@ -676,12 +676,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                 # Add to import names map. This is what we use to match imports to uses
                 self.imports[imp.name] = imp
 
-                # Add to an additional function_scope_imports, which help us catch false positive
-                # TC004 errors. This is probably not the most efficient way of doing this.
-                if node.lineno not in self.function_scope_imports:
-                    self.function_scope_imports[node.lineno] = {'imports': [imp.name]}
-                else:
-                    self.function_scope_imports[node.lineno]['imports'].append(imp.name)
+                # Add to function scope names, to help catch false positive TC004 errors.
+                self._add_function_scope_names(lineno=node.lineno, name=imp.name)
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
@@ -815,6 +811,45 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         for i in range(node.lineno, end_lineno + 1):
             self.function_ranges[i] = {'start': node.lineno, 'end': end_lineno + 1}
 
+    def _add_function_scope_names(self, lineno: int, name: str) -> None:
+        """
+        Add function names to our function scope map.
+
+        Given this code:
+
+            from typing import TYPE_CHECKING
+
+            if TYPE_CHECKING:
+                import requests
+
+            ...
+
+        The `import requests` import will not be in scope at runtime and cannot be used.
+        To avoid this happening, this plugin ships the TC004 error which warns users if they
+        attempt to use it:
+
+            TC004: Move import out of type-checking block. Import is used for more than type hinting
+
+        The problem is that this is pretty prone to false positives. Some of the things that could happen are:
+
+            1. The user could import `requests` *again* within the scope of the function
+            2. The user could override the name of the import with a function argument name
+                Moreover, there are several classes of function arguments.
+                They could do it with:
+                    - an arg
+                    - a kwarg
+                    - a posonly arg
+                    - a kwonly args
+            3. The user could override the name with a variable assignment
+            4. ?
+
+        This function maps some of these sources of false positives to mitigate them.
+        """
+        if lineno not in self.function_scope_names:
+            self.function_scope_names[lineno] = {'names': [name]}
+        else:
+            self.function_scope_names[lineno]['names'].append(name)
+
     def register_function_annotations(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
         """
         Map all annotations in a function signature.
@@ -828,13 +863,23 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         """
         for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
             for argument in path:
+                # Map annotations
                 if hasattr(argument, 'annotation') and argument.annotation:
                     self.add_annotation(argument.annotation)
 
+                # Map argument names
+                self._add_function_scope_names(lineno=node.lineno, name=argument.arg)
+
         path_: str
         for path_ in ['kwarg', 'vararg']:
-            if (arg := getattr(node.args, path_, None)) and getattr(arg, 'annotation', None):
-                self.add_annotation(arg.annotation)
+            if arg := getattr(node.args, path_, None):
+                # Map annotations
+                if getattr(arg, 'annotation', None):
+                    self.add_annotation(arg.annotation)
+
+                # Map argument names
+                if name := getattr(arg, 'arg', None):
+                    self._add_function_scope_names(lineno=node.lineno, name=name)
 
         if hasattr(node, 'returns') and node.returns:
             self.add_annotation(node.returns)
@@ -995,8 +1040,8 @@ class TypingOnlyImportsChecker:
                         self.visitor.function_ranges[use.lineno]['end'],
                     ):
                         if (
-                            i in self.visitor.function_scope_imports
-                            and import_name in self.visitor.function_scope_imports[i]['imports']
+                            i in self.visitor.function_scope_names
+                            and import_name in self.visitor.function_scope_names[i]['names']
                         ):
                             use_in_function = True
                             break

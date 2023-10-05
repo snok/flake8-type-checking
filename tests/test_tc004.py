@@ -114,6 +114,19 @@ examples = [
     """),
         set(),
     ),
+    (
+        textwrap.dedent("""
+    if TYPE_CHECKING:
+        import a
+        import b
+        import c
+        import d
+
+    def test_function(a, /, b, *, c, **d):
+        print(a, b, c, d)
+    """),
+        set(),
+    ),
 ]
 
 
