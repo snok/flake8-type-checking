@@ -461,15 +461,15 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     # -- Map type checking block ---------------
 
-    def in_type_checking_block(self, node: ast.AST) -> bool:
+    def in_type_checking_block(self, lineno: int, col_offset: int) -> bool:
         """Indicate whether an import is defined inside an `if TYPE_CHECKING` block or not."""
-        if node.col_offset == 0:
+        if col_offset == 0:
             return False
         if not self.type_checking_blocks and not self.empty_type_checking_blocks:
             return False
 
         return any(
-            type_checking_block[0] <= node.lineno <= type_checking_block[1]
+            type_checking_block[0] <= lineno <= type_checking_block[1]
             for type_checking_block in self.type_checking_blocks + self.empty_type_checking_blocks
         )
 
@@ -589,7 +589,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     def add_import(self, node: Import) -> None:  # noqa: C901
         """Add relevant ast objects to import lists."""
-        if self.in_type_checking_block(node):
+        if self.in_type_checking_block(node.lineno, node.col_offset):
             # For type checking blocks we want to
             # 1. Record annotations for TC2XX errors
             # 2. Avoid recording imports for TC1XX errors, by returning early
@@ -720,7 +720,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             # Skip handling of annotation objects
             return node
 
-        if self.in_type_checking_block(node):
+        if self.in_type_checking_block(node.lineno, node.col_offset):
             return node
 
         if hasattr(node, ATTRIBUTE_PROPERTY):
@@ -1066,6 +1066,12 @@ class TypingOnlyImportsChecker:
     def missing_quotes(self) -> Flake8Generator:
         """TC200."""
         for lineno, col_offset, annotation in self.visitor.unwrapped_annotations:
+            # Annotations inside `if TYPE_CHECKING:` blocks do not need to be wrapped
+            # unless they're used before definition, which is already covered by other
+            # flake8 rules (and also static type checkers)
+            if self.visitor.in_type_checking_block(lineno, col_offset):
+                continue
+
             for _, name in self.visitor.type_checking_block_imports:
                 if annotation == name:
                     yield lineno, col_offset, TC200.format(annotation=annotation), None

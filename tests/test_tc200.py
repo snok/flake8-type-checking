@@ -56,6 +56,57 @@ examples = [
         '''),
         {'7:15 ' + TC200.format(annotation='ast')},
     ),
+    # Regression test for issue #163
+    (
+        textwrap.dedent('''
+        from typing import TYPE_CHECKING
+
+        if TYPE_CHECKING:
+            from collections.abc import Sequence
+            from typing import NamedTuple, Protocol
+            from typing_extensions import TypeAlias, TypedDict
+
+            Foo: TypeAlias = Sequence[int]
+
+            class FooTuple(NamedTuple):
+                seq: Sequence[int]
+
+            class FooProtocol(Protocol):
+                seq: Sequence[int]
+
+            class FooDict(TypedDict):
+                seq: Sequence[int]
+        '''),
+        set(),
+    ),
+    # Inverse regression test for issue #163
+    (
+        textwrap.dedent('''
+        from typing import TYPE_CHECKING
+
+        if TYPE_CHECKING:
+            from collections.abc import Sequence
+            from typing import NamedTuple, Protocol
+            from typing_extensions import TypeAlias, TypedDict
+
+        Foo: TypeAlias = Sequence[int]
+
+        class FooTuple(NamedTuple):
+            seq: Sequence[int]
+
+        class FooProtocol(Protocol):
+            seq: Sequence[int]
+
+        class FooDict(TypedDict):
+            seq: Sequence[int]
+        '''),
+        {
+            '9:5 ' + TC200.format(annotation='TypeAlias'),
+            '12:9 ' + TC200.format(annotation='Sequence'),
+            '15:9 ' + TC200.format(annotation='Sequence'),
+            '18:9 ' + TC200.format(annotation='Sequence'),
+        },
+    ),
 ]
 
 
