@@ -10,7 +10,7 @@ if TYPE_CHECKING:
         start: int
         end: int
 
-    class FunctionScopeImportsDict(TypedDict):
+    class FunctionScopeNamesDict(TypedDict):
         names: list[str]
 
     Import = Union[ast.Import, ast.ImportFrom]

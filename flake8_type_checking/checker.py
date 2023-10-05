@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from flake8_type_checking.types import (
         Flake8Generator,
         FunctionRangesDict,
-        FunctionScopeImportsDict,
+        FunctionScopeNamesDict,
         Import,
         ImportTypeValue,
         Name,
@@ -420,7 +420,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         #: Function imports and ranges
         # Function scopes can tell us if imports that appear in type-checking blocks
         # are repeated inside a function. This prevents false TC004 positives.
-        self.function_scope_names: dict[int, FunctionScopeImportsDict] = {}
+        self.function_scope_names: dict[int, FunctionScopeNamesDict] = {}
         self.function_ranges: dict[int, FunctionRangesDict] = {}
 
         #: Set to the alias of TYPE_CHECKING if one is found
