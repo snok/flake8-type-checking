@@ -76,6 +76,17 @@ examples = [
         '''),
         set(),
     ),
+    (
+        # avoid false positive for annotations that make
+        # use of a newly defined class
+        textwrap.dedent('''
+        class Foo(Protocol):
+            pass
+
+        x: 'Foo | None'
+        '''),
+        set(),
+    ),
 ]
 
 
