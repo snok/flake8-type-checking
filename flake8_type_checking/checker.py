@@ -1139,7 +1139,7 @@ class TypingOnlyImportsChecker:
                     break
             else:
                 for class_name in self.visitor.class_names:
-                    if class_name == annotation:
+                    if class_name in annotation:
                         break
                 else:
                     yield lineno, col_offset, TC201.format(annotation=annotation), None
