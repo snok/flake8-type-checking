@@ -2,6 +2,7 @@
 File tests TC101:
     Annotation is wrapped in unnecessary quotes
 """
+import sys
 import textwrap
 
 import pytest
@@ -113,7 +114,37 @@ examples = [
         '''),
         set(),
     ),
+    # Make sure we didn't introduce any regressions while solving #167
+    # since we started to treat the RHS sort of like an annotation for
+    # some of the use-cases
+    (
+        textwrap.dedent('''
+        from __future__ import annotations
+        if TYPE_CHECKING:
+            from foo import Foo
+
+        x: TypeAlias = 'Foo'
+        '''),
+        set(),
+    ),
 ]
+
+if sys.version_info >= (3, 12):
+    examples.append(
+        (
+            # Make sure we didn't introduce any regressions while solving #167
+            # using new type alias syntax
+            # TODO: Make sure we actually need to wrap Foo if we use future
+            textwrap.dedent('''
+            from __future__ import annotations
+            if TYPE_CHECKING:
+                from foo import Foo
+
+            type x = 'Foo'
+            '''),
+            set(),
+        )
+    )
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
