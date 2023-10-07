@@ -801,22 +801,23 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         become a ForwardRef, like a true annotation would.
         """
         self.add_annotation(node.annotation)
-        if node_value := getattr(node, 'value', None):
-            self.visit(node_value)
 
-        # node is an explicit TypeAlias
-        if (
-            node.value is not None
-            and isinstance(node.target, ast.Name)
-            and (
-                (isinstance(node.annotation, ast.Name) and node.annotation.id == 'TypeAlias')
-                or (isinstance(node.annotation, ast.Constant) and node.annotation.value == 'TypeAlias')
-            )
+        if node.value is None:
+            return
+
+        # node is an explicit TypeAlias assignment
+        if isinstance(node.target, ast.Name) and (
+            (isinstance(node.annotation, ast.Name) and node.annotation.id == 'TypeAlias')
+            or (isinstance(node.annotation, ast.Constant) and node.annotation.value == 'TypeAlias')
         ):
             self.add_annotation(node.value, is_alias=True)
 
             if getattr(node, TOP_LEVEL_PROPERTY, False):
                 self.type_checking_block_declarations.add(node.target.id)
+
+        # if it wasn't a TypeAlias we need to visit the value expression
+        else:
+            self.visit(node.value)
 
     def visit_Assign(self, node: ast.Assign) -> ast.Assign:
         """
