@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import fnmatch
 import os
+import sys
 from ast import Index, literal_eval
 from contextlib import suppress
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from flake8_type_checking.constants import (
     TC101,
     TC200,
     TC201,
+    TOP_LEVEL_PROPERTY,
     py38,
 )
 
@@ -399,13 +401,21 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         #: Tuple of (node, import name) for all import defined within a type-checking block
         # This lets us identify imports that *are* needed at runtime, for TC004 errors.
         self.type_checking_block_imports: set[tuple[Import, str]] = set()
+
+        #: Set of variable names for all declarations defined within a type-checking block
+        # This lets us avoid false positives for annotations referring to e.g. a TypeAlias
+        # defined within a type checking block
+        self.type_checking_block_declarations: set[str] = set()
+
+        #: Set of all the class names defined within the file
+        # This lets us avoid false positives for classes referring to themselves
         self.class_names: set[str] = set()
 
         #: All type annotations in the file, without quotes around them
-        self.unwrapped_annotations: list[tuple[int, int, str]] = []
+        self.unwrapped_annotations: list[tuple[int, int, str, bool]] = []
 
         #: All type annotations in the file, with quotes around them
-        self.wrapped_annotations: list[tuple[int, int, str]] = []
+        self.wrapped_annotations: list[tuple[int, int, str, bool]] = []
 
         #: Whether there is a `from __futures__ import annotations` is present in the file
         self.futures_annotation: Optional[bool] = None
@@ -565,6 +575,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                 # The start of the else block is the lineno of the
                 # first element in the else block - 1
                 start_of_else_block = node.orelse[0].lineno - 1
+
+            # mark all the top-level statements
+            for stmt in node.body:
+                setattr(stmt, TOP_LEVEL_PROPERTY, True)
 
             # Check for TC005 errors.
             if ((node.end_lineno or node.lineno) - node.lineno == 1) and (
@@ -730,34 +744,34 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         super().visit_Constant(node)
         return node
 
-    def add_annotation(self, node: ast.AST) -> None:
+    def add_annotation(self, node: ast.AST, is_alias: bool = False) -> None:
         """Map all annotations on an AST node."""
         if isinstance(node, ast.Ellipsis) or node is None:
             return
         if isinstance(node, ast.BinOp):
             if not isinstance(node.op, ast.BitOr):
                 return
-            self.add_annotation(node.left)
-            self.add_annotation(node.right)
+            self.add_annotation(node.left, is_alias)
+            self.add_annotation(node.right, is_alias)
         elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
-            self.add_annotation(node.value)
+            self.add_annotation(node.value, is_alias)
         elif isinstance(node, ast.Subscript):
             if getattr(node.value, 'id', '') != 'Literal':
-                self.add_annotation(node.value)
-                self.add_annotation(node.slice)
+                self.add_annotation(node.value, is_alias)
+                self.add_annotation(node.slice, is_alias)
             else:
-                self.add_annotation(node.value)
+                self.add_annotation(node.value, is_alias)
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
-                self.add_annotation(n)
+                self.add_annotation(n, is_alias)
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             # Register annotation value
             setattr(node, ANNOTATION_PROPERTY, True)
-            self.wrapped_annotations.append((node.lineno, node.col_offset, node.value))
+            self.wrapped_annotations.append((node.lineno, node.col_offset, node.value, is_alias))
         elif isinstance(node, ast.Name):
             # Register annotation value
             setattr(node, ANNOTATION_PROPERTY, True)
-            self.unwrapped_annotations.append((node.lineno, node.col_offset, node.id))
+            self.unwrapped_annotations.append((node.lineno, node.col_offset, node.id, is_alias))
 
     @staticmethod
     def set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
@@ -779,10 +793,62 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         return node
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        """Remove all annotation assignments."""
+        """
+        Remove all annotation assignments.
+
+        But also keep track of any explicit `TypeAlias` assignments, we should treat the RHS like
+        an annotation as well, but only for the 2xx codes, since the RHS will not automatically
+        become a ForwardRef, like a true annotation would.
+        """
         self.add_annotation(node.annotation)
         if node_value := getattr(node, 'value', None):
             self.visit(node_value)
+
+        # node is an explicit TypeAlias
+        if (
+            node.value is not None
+            and isinstance(node.target, ast.Name)
+            and (
+                (isinstance(node.annotation, ast.Name) and node.annotation.id == 'TypeAlias')
+                or (isinstance(node.annotation, ast.Constant) and node.annotation.value == 'TypeAlias')
+            )
+        ):
+            self.add_annotation(node.value, is_alias=True)
+
+            if getattr(node, TOP_LEVEL_PROPERTY, False):
+                self.type_checking_block_declarations.add(node.target.id)
+
+    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+        """
+        Keep track of any top-level variable declarations inside type-checking blocks.
+
+        For simplicity we only accept single value assignments, i.e. there should only be one
+        target and it should be an `ast.Name`.
+        """
+        if (
+            getattr(node, TOP_LEVEL_PROPERTY, False)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            self.type_checking_block_declarations.add(node.targets[0].id)
+
+        super().visit_Assign(node)
+        return node
+
+    if sys.version_info >= (3, 12):
+
+        def visit_TypeAlias(self, node: ast.TypeAlias) -> None:
+            """
+            Remove all type aliases, but treat the value on the RHS like an annotation.
+
+            Keep track of any type aliases declared inside a type checking block using the new
+            `type Alias = value` syntax.
+            """
+            # TODO: Check if the new syntax is affected by futures import and results in a ForwardRef
+            self.add_annotation(node.value, is_alias=True)
+
+            if getattr(node, TOP_LEVEL_PROPERTY, False):
+                self.type_checking_block_declarations.add(node.name.id)
 
     def register_function_ranges(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
         """
@@ -1071,7 +1137,10 @@ class TypingOnlyImportsChecker:
         """TC101."""
         # If futures imports are present, any ast.Constant captured in add_annotation should yield an error
         if self.visitor.futures_annotation:
-            for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
+            for lineno, col_offset, annotation, is_alias in self.visitor.wrapped_annotations:
+                if is_alias:  # TypeAlias value will not be affected by a futures import
+                    continue
+
                 yield lineno, col_offset, TC101.format(annotation=annotation), None
         else:
             """
@@ -1096,21 +1165,24 @@ class TypingOnlyImportsChecker:
 
             For anyone with more insight into how this might be tackled, contributions are very welcome.
             """
-            for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
+            for lineno, col_offset, annotation, is_alias in self.visitor.wrapped_annotations:
+                if is_alias:  # TypeAlias value will not be affected by a futures import
+                    continue
+
                 for _, import_name in self.visitor.type_checking_block_imports:
                     if import_name in annotation:
                         break
 
                 else:
                     for class_name in self.visitor.class_names:
-                        if class_name == annotation:
+                        if class_name in annotation:
                             break
                     else:
                         yield lineno, col_offset, TC101.format(annotation=annotation), None
 
     def missing_quotes(self) -> Flake8Generator:
         """TC200."""
-        for lineno, col_offset, annotation in self.visitor.unwrapped_annotations:
+        for lineno, col_offset, annotation, _ in self.visitor.unwrapped_annotations:
             # Annotations inside `if TYPE_CHECKING:` blocks do not need to be wrapped
             # unless they're used before definition, which is already covered by other
             # flake8 rules (and also static type checkers)
@@ -1123,7 +1195,7 @@ class TypingOnlyImportsChecker:
 
     def excess_quotes(self) -> Flake8Generator:
         """TC201."""
-        for lineno, col_offset, annotation in self.visitor.wrapped_annotations:
+        for lineno, col_offset, annotation, _ in self.visitor.wrapped_annotations:
             # False positives for TC201 can be harmful, since fixing them, rather than
             # ignoring them will incur a runtime TypeError, so we should be even more
             # careful than with TC101 and favor false negatives even more, as such we
@@ -1134,15 +1206,16 @@ class TypingOnlyImportsChecker:
                 continue
 
             # See comment in futures_excess_quotes
-            for _, import_name in self.visitor.type_checking_block_imports:
-                if import_name in annotation:
-                    break
-            else:
-                for class_name in self.visitor.class_names:
-                    if class_name in annotation:
-                        break
-                else:
-                    yield lineno, col_offset, TC201.format(annotation=annotation), None
+            if any(import_name in annotation for _, import_name in self.visitor.type_checking_block_imports):
+                continue
+
+            if any(class_name in annotation for class_name in self.visitor.class_names):
+                continue
+
+            if any(variable_name in annotation for variable_name in self.visitor.type_checking_block_declarations):
+                continue
+
+            yield lineno, col_offset, TC201.format(annotation=annotation), None
 
     @property
     def errors(self) -> Flake8Generator:

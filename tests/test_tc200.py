@@ -2,6 +2,7 @@
 File tests TC200:
     Annotation should be wrapped in quotes
 """
+import sys
 import textwrap
 
 import pytest
@@ -102,12 +103,44 @@ examples = [
         '''),
         {
             '9:5 ' + TC200.format(annotation='TypeAlias'),
+            '9:17 ' + TC200.format(annotation='Sequence'),
             '12:9 ' + TC200.format(annotation='Sequence'),
             '15:9 ' + TC200.format(annotation='Sequence'),
             '18:9 ' + TC200.format(annotation='Sequence'),
         },
     ),
+    # RHS on an explicit TypeAlias should also emit a TC200
+    (
+        textwrap.dedent('''
+        from typing import TypeAlias
+
+        if TYPE_CHECKING:
+            from collections.abc import Sequence
+
+        Foo: TypeAlias = Sequence[int]
+        '''),
+        {
+            '7:17 ' + TC200.format(annotation='Sequence'),
+        },
+    ),
 ]
+
+if sys.version_info >= (3, 12):
+    # RHS on an explicit TypeAlias should also emit a TC200
+    # new type alias syntax
+    examples.append(
+        (
+            textwrap.dedent('''
+            if TYPE_CHECKING:
+                from collections.abc import Sequence
+
+            type Foo = Sequence[int]
+            '''),
+            {
+                '5:17 ' + TC200.format(annotation='Sequence'),
+            },
+        )
+    )
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
