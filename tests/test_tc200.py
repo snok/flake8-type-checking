@@ -137,7 +137,7 @@ if sys.version_info >= (3, 12):
             type Foo = Sequence[int]
             '''),
             {
-                '5:17 ' + TC200.format(annotation='Sequence'),
+                '5:11 ' + TC200.format(annotation='Sequence'),
             },
         )
     )
