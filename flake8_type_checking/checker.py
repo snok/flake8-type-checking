@@ -24,6 +24,8 @@ from flake8_type_checking.constants import (
     TC004,
     TC005,
     TC006,
+    TC007,
+    TC008,
     TC100,
     TC101,
     TC200,
@@ -363,7 +365,7 @@ class UnwrappedAnnotation(NamedTuple):
     lineno: int
     col_offset: int
     annotation: str
-    is_alias: bool
+    type: Literal['annotation', 'alias', 'new-alias']
 
 
 class WrappedAnnotation(NamedTuple):
@@ -373,7 +375,7 @@ class WrappedAnnotation(NamedTuple):
     col_offset: int
     annotation: str
     names: set[str]
-    is_alias: bool
+    type: Literal['annotation', 'alias', 'new-alias']
 
 
 class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
@@ -764,36 +766,34 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         super().visit_Constant(node)
         return node
 
-    def add_annotation(self, node: ast.AST, is_alias: bool = False) -> None:
+    def add_annotation(self, node: ast.AST, type: Literal['annotation', 'alias', 'new-alias'] = 'annotation') -> None:
         """Map all annotations on an AST node."""
         if isinstance(node, ast.Ellipsis) or node is None:
             return
         if isinstance(node, ast.BinOp):
             if not isinstance(node.op, ast.BitOr):
                 return
-            self.add_annotation(node.left, is_alias)
-            self.add_annotation(node.right, is_alias)
+            self.add_annotation(node.left, type)
+            self.add_annotation(node.right, type)
         elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
-            self.add_annotation(node.value, is_alias)
+            self.add_annotation(node.value, type)
         elif isinstance(node, ast.Subscript):
+            self.add_annotation(node.value, type)
             if getattr(node.value, 'id', '') != 'Literal':
-                self.add_annotation(node.value, is_alias)
-                self.add_annotation(node.slice, is_alias)
-            else:
-                self.add_annotation(node.value, is_alias)
+                self.add_annotation(node.slice, type)
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
-                self.add_annotation(n, is_alias)
+                self.add_annotation(n, type)
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             # Register annotation value
             setattr(node, ANNOTATION_PROPERTY, True)
             self.wrapped_annotations.append(
-                WrappedAnnotation(node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), is_alias)
+                WrappedAnnotation(node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), type)
             )
         elif isinstance(node, ast.Name):
             # Register annotation value
             setattr(node, ANNOTATION_PROPERTY, True)
-            self.unwrapped_annotations.append(UnwrappedAnnotation(node.lineno, node.col_offset, node.id, is_alias))
+            self.unwrapped_annotations.append(UnwrappedAnnotation(node.lineno, node.col_offset, node.id, type))
 
     @staticmethod
     def set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
@@ -832,7 +832,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             (isinstance(node.annotation, ast.Name) and node.annotation.id == 'TypeAlias')
             or (isinstance(node.annotation, ast.Constant) and node.annotation.value == 'TypeAlias')
         ):
-            self.add_annotation(node.value, is_alias=True)
+            self.add_annotation(node.value, 'alias')
 
             if getattr(node, TOP_LEVEL_PROPERTY, False):
                 self.type_checking_block_declarations.add(node.target.id)
@@ -867,8 +867,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             Keep track of any type aliases declared inside a type checking block using the new
             `type Alias = value` syntax.
             """
-            # TODO: Check if the new syntax is affected by futures import and results in a ForwardRef
-            self.add_annotation(node.value, is_alias=True)
+            self.add_annotation(node.value, 'new-alias')
 
             if getattr(node, TOP_LEVEL_PROPERTY, False):
                 self.type_checking_block_declarations.add(node.name.id)
@@ -1073,9 +1072,9 @@ class TypingOnlyImportsChecker:
             self.missing_futures_import,
             # TC101
             self.futures_excess_quotes,
-            # TC200
+            # TC200, TC006
             self.missing_quotes,
-            # TC201
+            # TC201, TC007
             self.excess_quotes,
         ]
 
@@ -1090,8 +1089,8 @@ class TypingOnlyImportsChecker:
         unused_imports = set(self.visitor.imports) - self.visitor.names
         used_imports = set(self.visitor.imports) - unused_imports
         already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
-        annotation_names = [n for i in self.visitor.wrapped_annotations for n in i.names] + [
-            i.annotation for i in self.visitor.unwrapped_annotations
+        annotation_names = [n for i in self.visitor.wrapped_annotations if i.type != 'new-alias' for n in i.names] + [
+            i.annotation for i in self.visitor.unwrapped_annotations if i.type != 'new-alias'
         ]
 
         for name in unused_imports:
@@ -1161,7 +1160,7 @@ class TypingOnlyImportsChecker:
         # If futures imports are present, any ast.Constant captured in add_annotation should yield an error
         if self.visitor.futures_annotation:
             for item in self.visitor.wrapped_annotations:
-                if item.is_alias:  # TypeAlias value will not be affected by a futures import
+                if item.type != 'annotation':  # TypeAlias value will not be affected by a futures import
                     continue
 
                 yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
@@ -1198,7 +1197,7 @@ class TypingOnlyImportsChecker:
             annotation can be unwrapped or not.
             """
             for item in self.visitor.wrapped_annotations:
-                if item.is_alias:  # TypeAlias value will not be affected by a futures import
+                if item.type != 'annotation':  # TypeAlias value will not be affected by a futures import
                     continue
 
                 if any(import_name in item.names for _, import_name in self.visitor.type_checking_block_imports):
@@ -1210,21 +1209,34 @@ class TypingOnlyImportsChecker:
                 yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
 
     def missing_quotes(self) -> Flake8Generator:
-        """TC200."""
-        for lineno, col_offset, annotation, _ in self.visitor.unwrapped_annotations:
+        """TC200 and TC007."""
+        for item in self.visitor.unwrapped_annotations:
+            # A new style alias does never need to be wrapped
+            if item.type == 'new-alias':
+                continue
+
             # Annotations inside `if TYPE_CHECKING:` blocks do not need to be wrapped
             # unless they're used before definition, which is already covered by other
             # flake8 rules (and also static type checkers)
-            if self.visitor.in_type_checking_block(lineno, col_offset):
+            if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
                 continue
 
             for _, name in self.visitor.type_checking_block_imports:
-                if annotation == name:
-                    yield lineno, col_offset, TC200.format(annotation=annotation), None
+                if item.annotation == name:
+                    if item.type == 'alias':
+                        error = TC007.format(alias=item.annotation)
+                    else:
+                        error = TC200.format(annotation=item.annotation)
+                    yield item.lineno, item.col_offset, error, None
 
     def excess_quotes(self) -> Flake8Generator:
-        """TC201."""
+        """TC201 and TC008."""
         for item in self.visitor.wrapped_annotations:
+            # A new style type alias should never be wrapped
+            if item.type == 'new-alias':
+                yield item.lineno, item.col_offset, TC008.format(alias=item.annotation), None
+                continue
+
             # False positives for TC201 can be harmful, since fixing them, rather than
             # ignoring them will incur a runtime TypeError, so we should be even more
             # careful than with TC101 and favor false negatives even more, as such we
@@ -1244,7 +1256,12 @@ class TypingOnlyImportsChecker:
             if any(variable_name in item.names for variable_name in self.visitor.type_checking_block_declarations):
                 continue
 
-            yield item.lineno, item.col_offset, TC201.format(annotation=item.annotation), None
+            if item.type == 'alias':
+                error = TC008.format(alias=item.annotation)
+            else:
+                error = TC201.format(annotation=item.annotation)
+
+            yield item.lineno, item.col_offset, error, None
 
     @property
     def errors(self) -> Flake8Generator:

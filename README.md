@@ -70,6 +70,8 @@ And depending on which error code range you've opted into, it will tell you
 | TC004 | Move import out of type-checking block. Import is used for more than type hinting. |
 | TC005 | Found empty type-checking block                                                    |
 | TC006 | Annotation in typing.cast() should be a string literal                             |
+| TC007 | Type alias needs to be made into a string literal                                  |
+| TC008 | Type alias does not need to be a string literal                                    |
 
 ## Choosing how to handle forward references
 

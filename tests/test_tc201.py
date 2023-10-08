@@ -2,7 +2,6 @@
 File tests TC201:
     Annotation is wrapped in unnecessary quotes
 """
-import sys
 import textwrap
 
 import pytest
@@ -125,7 +124,7 @@ examples = [
 
         x: 'Foo | None'
         y: 'Bar | None'
-        Z: TypeAlias = 'Foo'
+        Z: TypeAlias = Foo
 
         def foo(a: 'T', *args: Unpack['Ts']) -> None:
             pass
@@ -136,7 +135,6 @@ examples = [
         {
             '10:3 ' + TC201.format(annotation='Foo | None'),
             '11:3 ' + TC201.format(annotation='Bar | None'),
-            '12:15 ' + TC201.format(annotation='Foo'),
             '14:11 ' + TC201.format(annotation='T'),
             '14:30 ' + TC201.format(annotation='Ts'),
             '17:15 ' + TC201.format(annotation='P.args'),
@@ -144,22 +142,6 @@ examples = [
         },
     ),
 ]
-
-if sys.version_info >= (3, 12):
-    examples.append(
-        (
-            # Regression test for Issue #168
-            # using new type alias syntax
-            textwrap.dedent('''
-            if TYPE_CHECKING:
-                type Foo = str | int
-
-            x: 'Foo | None'
-            type Z = 'Foo'
-            '''),
-            set(),
-        )
-    )
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
