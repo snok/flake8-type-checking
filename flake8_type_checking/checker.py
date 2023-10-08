@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import fnmatch
 import os
-import re
 import sys
 from ast import Index, literal_eval
 from contextlib import suppress
@@ -18,6 +17,7 @@ from flake8_type_checking.constants import (
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
     ATTRS_IMPORTS,
+    NAME_RE,
     TC001,
     TC002,
     TC003,
@@ -57,9 +57,6 @@ if TYPE_CHECKING:
         ImportTypeValue,
         Name,
     )
-
-
-NAME_RE = re.compile(r'[A-Za-z_]\w*')
 
 
 class AttrsMixin:
