@@ -1089,8 +1089,8 @@ class TypingOnlyImportsChecker:
         unused_imports = set(self.visitor.imports) - self.visitor.names
         used_imports = set(self.visitor.imports) - unused_imports
         already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
-        annotation_names = [n for i in self.visitor.wrapped_annotations if i.type != 'new-alias' for n in i.names] + [
-            i.annotation for i in self.visitor.unwrapped_annotations if i.type != 'new-alias'
+        annotation_names = [n for i in self.visitor.wrapped_annotations for n in i.names] + [
+            i.annotation for i in self.visitor.unwrapped_annotations
         ]
 
         for name in unused_imports:
