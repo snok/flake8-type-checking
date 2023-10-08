@@ -9,6 +9,7 @@ library or builtin module. Application imports commonly create import circularit
 
 from __future__ import annotations
 
+import sys
 import textwrap
 from typing import List, Set, Tuple
 
@@ -100,6 +101,16 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
         # Aliased imports
         (f'import {import_} as x\ndef example() -> x:\n\tpass', {'1:0 ' + ERROR.format(module='x')}),
     ]
+
+    used_for_type_alias_only: L = [
+        (f'import {import_}\nx: TypeAlias = {import_}', {f"1:0 {ERROR.format(module=f'{import_}')}"}),
+    ]
+
+    if sys.version_info >= (3, 12):
+        # new style type alias
+        used_for_type_alias_only.append(
+            (f'import {import_}\ntype x = {import_}', {f"1:0 {ERROR.format(module=f'{import_}')}"})
+        )
 
     other_useful_test_cases: L = [
         (
@@ -193,6 +204,7 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
         *used_for_annotations_only,
         *used_for_arg_annotations_only,
         *used_for_return_annotations_only,
+        *used_for_type_alias_only,
         *other_useful_test_cases,
     ]
 
