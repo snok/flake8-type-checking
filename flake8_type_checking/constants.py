@@ -1,3 +1,4 @@
+import re
 import sys
 
 import flake8
@@ -5,6 +6,8 @@ import flake8
 ATTRIBUTE_PROPERTY = '_flake8-type-checking__parent'
 ANNOTATION_PROPERTY = '_flake8-type-checking__is_annotation'
 TOP_LEVEL_PROPERTY = '_flake8-type-checking__is_top_level'
+
+NAME_RE = re.compile(r'(?<![\'"])\b[A-Za-z_]\w*(?![\'"])')
 
 ATTRS_DECORATORS = [
     'attrs.define',
