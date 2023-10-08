@@ -50,7 +50,7 @@ examples = [
 ]
 
 if sys.version_info >= (3, 12):
-    # RHS on an explicit TypeAlias with 3.12 syntax should not emit a TC107
+    # RHS on an explicit TypeAlias with 3.12 syntax should not emit a TC007
     examples.append(
         (
             textwrap.dedent('''
