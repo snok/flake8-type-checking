@@ -819,8 +819,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         Remove all annotation assignments.
 
         But also keep track of any explicit `TypeAlias` assignments, we should treat the RHS like
-        an annotation as well, but only for the 2xx codes, since the RHS will not automatically
-        become a ForwardRef, like a true annotation would.
+        an annotation as well, but we have to keep in mind that the RHS will not automatically become
+        a ForwardRef with a future import, like a true annotation would.
         """
         self.add_annotation(node.annotation)
 
@@ -862,10 +862,13 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
         def visit_TypeAlias(self, node: ast.TypeAlias) -> None:
             """
-            Remove all type aliases, but treat the value on the RHS like an annotation.
+            Remove all type aliases.
 
             Keep track of any type aliases declared inside a type checking block using the new
-            `type Alias = value` syntax.
+            `type Alias = value` syntax. We need to keep in mind that the RHS using this syntax
+            will always become a ForwardRef, so none of the names are needed at runtime, so we
+            don't visit the RHS and also have to treat the annotation differently from a regular
+            annotation when emitting errors.
             """
             self.add_annotation(node.value, 'new-alias')
 
