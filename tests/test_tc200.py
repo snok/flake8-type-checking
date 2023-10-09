@@ -99,6 +99,12 @@ examples = [
 
         class FooDict(TypedDict):
             seq: Sequence[int]
+
+            if TYPE_CHECKING:
+                # this should not count as a type checking global
+                Bar: int
+
+        x: Bar
         '''),
         {
             '9:5 ' + TC200.format(annotation='TypeAlias'),

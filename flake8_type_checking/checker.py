@@ -7,6 +7,7 @@ import sys
 from ast import Index, literal_eval
 from contextlib import suppress
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple, cast
 
@@ -17,6 +18,7 @@ from flake8_type_checking.constants import (
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
     ATTRS_IMPORTS,
+    GLOBAL_PROPERTY,
     NAME_RE,
     TC001,
     TC002,
@@ -30,7 +32,6 @@ from flake8_type_checking.constants import (
     TC101,
     TC200,
     TC201,
-    TOP_LEVEL_PROPERTY,
     py38,
 )
 
@@ -584,8 +585,44 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             return 'TYPE_CHECKING'
         return False
 
+    def visit_Module(self, node: ast.Module) -> ast.Module:
+        """
+        Mark global statments.
+
+        We propagate this marking when visiting control flow nodes, that don't affect
+        scope, such as if/else, try/except. Although for simplicity we don't handle
+        quite all the possible cases, since we're only interested in type checking blocks
+        and it's not realistic to encounter these for example inside a TryStar/With/Match.
+
+        If we're serious about handling all the cases it would probably make more sense
+        to override generic_visit to propagate this property for a sequence of node types
+        and attributes that contain the statements that should propagate global scope.
+        """
+        for stmt in node.body:
+            setattr(stmt, GLOBAL_PROPERTY, True)
+
+        self.generic_visit(node)
+        return node
+
+    def visit_Try(self, node: ast.Try) -> ast.Try:
+        """Propagate global statements."""
+        if getattr(node, GLOBAL_PROPERTY, False):
+            for stmt in chain(node.body, (s for h in node.handlers for s in h.body), node.orelse, node.finalbody):
+                setattr(stmt, GLOBAL_PROPERTY, True)
+
+        self.generic_visit(node)
+        return node
+
     def visit_If(self, node: ast.If) -> Any:
-        """Look for a TYPE_CHECKING block."""
+        """
+        Look for a TYPE_CHECKING block.
+
+        Also recursively propagate global, since if/else does not affect scope.
+        """
+        if getattr(node, GLOBAL_PROPERTY, False):
+            for stmt in chain(node.body, getattr(node, 'orelse', ()) or ()):
+                setattr(stmt, GLOBAL_PROPERTY, True)
+
         type_checking_condition = self.is_true_when_type_checking(node.test) == 'TYPE_CHECKING'
 
         # If it is, note down the line-number-range where the type-checking block exists
@@ -597,10 +634,6 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                 # The start of the else block is the lineno of the
                 # first element in the else block - 1
                 start_of_else_block = node.orelse[0].lineno - 1
-
-            # mark all the top-level statements
-            for stmt in node.body:
-                setattr(stmt, TOP_LEVEL_PROPERTY, True)
 
             # Check for TC005 errors.
             if ((node.end_lineno or node.lineno) - node.lineno == 1) and (
@@ -834,7 +867,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         ):
             self.add_annotation(node.value, 'alias')
 
-            if getattr(node, TOP_LEVEL_PROPERTY, False):
+            if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
                 self.type_checking_block_declarations.add(node.target.id)
 
         # if it wasn't a TypeAlias we need to visit the value expression
@@ -849,9 +882,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         target and it should be an `ast.Name`.
         """
         if (
-            getattr(node, TOP_LEVEL_PROPERTY, False)
+            getattr(node, GLOBAL_PROPERTY, False)
             and len(node.targets) == 1
             and isinstance(node.targets[0], ast.Name)
+            and self.in_type_checking_block(node.lineno, node.col_offset)
         ):
             self.type_checking_block_declarations.add(node.targets[0].id)
 
@@ -872,7 +906,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             """
             self.add_annotation(node.value, 'new-alias')
 
-            if getattr(node, TOP_LEVEL_PROPERTY, False):
+            if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
                 self.type_checking_block_declarations.add(node.name.id)
 
     def register_function_ranges(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:

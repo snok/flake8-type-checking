@@ -5,7 +5,7 @@ import flake8
 
 ATTRIBUTE_PROPERTY = '_flake8-type-checking__parent'
 ANNOTATION_PROPERTY = '_flake8-type-checking__is_annotation'
-TOP_LEVEL_PROPERTY = '_flake8-type-checking__is_top_level'
+GLOBAL_PROPERTY = '_flake8-type-checking__is_global'
 
 NAME_RE = re.compile(r'(?<![\'"])\b[A-Za-z_]\w*(?![\'"])')
 
