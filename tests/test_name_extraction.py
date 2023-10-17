@@ -21,6 +21,9 @@ examples = [
     # even when it's formatted badly
     ('*Ts|_T&P', ['Ts', '_T', 'P']),
     ('Union[Dict[str, Any], Literal["Foo", "Bar"], _T]', ['Union', 'Dict', 'str', 'Any', 'Literal', '_T']),
+    # for attribute access only everything up to the first dot should count
+    # this matches the behavior of add_annotation
+    ('datetime.date | os.path.sep', ['datetime', 'os']),
 ]
 
 

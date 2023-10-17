@@ -113,6 +113,10 @@ examples = [
         # Inverse regression test for Issue #168
         # The declarations are inside a Protocol so they should not
         # count towards declarations inside a type checking block
+        # This used to raise errors for P.args and P.kwargs and
+        # ideally it still would, but it would require more complex
+        # logic in order to avoid false positives, so for now we
+        # put up with the false negatives here
         textwrap.dedent('''
         if TYPE_CHECKING:
             class X(Protocol):
@@ -137,9 +141,16 @@ examples = [
             '11:3 ' + TC201.format(annotation='Bar | None'),
             '14:11 ' + TC201.format(annotation='T'),
             '14:30 ' + TC201.format(annotation='Ts'),
-            '17:15 ' + TC201.format(annotation='P.args'),
-            '17:35 ' + TC201.format(annotation='P.kwargs'),
         },
+    ),
+    (
+        # Regression test for type checking only module attributes
+        textwrap.dedent('''
+        import lxml.etree
+
+        foo: 'lxml.etree._Element'
+        '''),
+        set(),
     ),
 ]
 
