@@ -1280,7 +1280,7 @@ class TypingOnlyImportsChecker:
             # give up immediately if the annotation contains square brackets, because
             # we can't know if subscripting the type at runtime is safe without inspecting
             # the type's source code.
-            if '[' in item.annotation:
+            if '[' in item.annotation or '.' in item.annotation:
                 continue
 
             # See comment in futures_excess_quotes
