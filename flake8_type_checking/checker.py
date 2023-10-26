@@ -28,6 +28,7 @@ from flake8_type_checking.constants import (
     TC006,
     TC007,
     TC008,
+    TC009,
     TC100,
     TC101,
     TC200,
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from typing import Any, Optional, Union
 
     from flake8_type_checking.types import (
+        Declaration,
         Flake8Generator,
         FunctionRangesDict,
         FunctionScopeNamesDict,
@@ -425,10 +427,11 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         # This lets us identify imports that *are* needed at runtime, for TC004 errors.
         self.type_checking_block_imports: set[tuple[Import, str]] = set()
 
-        #: Set of variable names for all declarations defined within a type-checking block
+        #: Tuple of (node, variable name) for all global declarations within a type-checking block
         # This lets us avoid false positives for annotations referring to e.g. a TypeAlias
-        # defined within a type checking block
-        self.type_checking_block_declarations: set[str] = set()
+        # defined within a type checking block. We currently ignore function definitions, since
+        # those should be exceedingly rare inside type checking blocks.
+        self.type_checking_block_declarations: set[tuple[Declaration, str]] = set()
 
         #: Set of all the class names defined within the file
         # This lets us avoid false positives for classes referring to themselves
@@ -491,6 +494,11 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
     def names(self) -> set[str]:
         """Return unique names."""
         return set(self.uses.keys())
+
+    @property
+    def type_checking_names(self) -> set[str]:
+        """Return unique names either imported or declared in type checking blocks."""
+        return {name for _, name in chain(self.type_checking_block_imports, self.type_checking_block_declarations)}
 
     # -- Map type checking block ---------------
 
@@ -775,7 +783,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                 if isinstance(element, ast.AnnAssign):
                     self.visit(element.annotation)
 
-        self.class_names.add(node.name)
+        if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
+            self.type_checking_block_declarations.add((node, node.name))
+        else:
+            self.class_names.add(node.name)
         self.generic_visit(node)
         return node
 
@@ -868,7 +879,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             self.add_annotation(node.value, 'alias')
 
             if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
-                self.type_checking_block_declarations.add(node.target.id)
+                self.type_checking_block_declarations.add((node, node.target.id))
 
         # if it wasn't a TypeAlias we need to visit the value expression
         else:
@@ -887,7 +898,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             and isinstance(node.targets[0], ast.Name)
             and self.in_type_checking_block(node.lineno, node.col_offset)
         ):
-            self.type_checking_block_declarations.add(node.targets[0].id)
+            self.type_checking_block_declarations.add((node, node.targets[0].id))
 
         super().visit_Assign(node)
         return node
@@ -907,7 +918,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             self.add_annotation(node.value, 'new-alias')
 
             if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
-                self.type_checking_block_declarations.add(node.name.id)
+                self.type_checking_block_declarations.add((node, node.name.id))
 
     def register_function_ranges(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
         """
@@ -1105,6 +1116,8 @@ class TypingOnlyImportsChecker:
             self.empty_type_checking_blocks,
             # TC006
             self.unquoted_type_in_cast,
+            # TC009
+            self.used_type_checking_declarations,
             # TC100
             self.missing_futures_import,
             # TC101
@@ -1184,13 +1197,54 @@ class TypingOnlyImportsChecker:
         for lineno, col_offset, annotation in self.visitor.unquoted_types_in_casts:
             yield lineno, col_offset, TC006.format(annotation=annotation), None
 
+    def used_type_checking_declarations(self) -> Flake8Generator:
+        """TC009."""
+        for decl, decl_name in self.visitor.type_checking_block_declarations:
+            if decl_name in self.visitor.uses:
+                # If we get to here, we're pretty sure that the declaration
+                # shouldn't actually live inside a type-checking block
+
+                use = self.visitor.uses[decl_name]
+
+                # .. or whether one of the argument names shadows a declaration
+                use_in_function = False
+                if use.lineno in self.visitor.function_ranges:
+                    for i in range(
+                        self.visitor.function_ranges[use.lineno]['start'],
+                        self.visitor.function_ranges[use.lineno]['end'],
+                    ):
+                        if (
+                            i in self.visitor.function_scope_names
+                            and decl_name in self.visitor.function_scope_names[i]['names']
+                        ):
+                            use_in_function = True
+                            break
+
+                if not use_in_function:
+                    yield decl.lineno, decl.col_offset, TC009.format(name=decl_name), None
+
     def missing_futures_import(self) -> Flake8Generator:
         """TC100."""
-        if (
-            not self.visitor.futures_annotation
-            and {name for _, name in self.visitor.type_checking_block_imports} - self.visitor.names
-        ):
+        if self.visitor.futures_annotation:
+            return
+
+        # if all the symbols imported/declared in type checking blocks are used
+        # at runtime, then we're covered by TC004
+        unused_type_checking_names = self.visitor.type_checking_names - self.visitor.names
+        if not unused_type_checking_names:
+            return
+
+        # if any of the symbols imported/declared in type checking blocks are used
+        # in an annotation outside a type checking block, then we need to emit TC100
+        for item in self.visitor.unwrapped_annotations:
+            if item.annotation not in unused_type_checking_names:
+                continue
+
+            if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
+                continue
+
             yield 1, 0, TC100, None
+            return
 
     def futures_excess_quotes(self) -> Flake8Generator:
         """TC101."""
@@ -1233,11 +1287,13 @@ class TypingOnlyImportsChecker:
             So we don't try to unwrap the annotations as far as possible, we just check if the entire
             annotation can be unwrapped or not.
             """
+            type_checking_names = self.visitor.type_checking_names
+
             for item in self.visitor.wrapped_annotations:
                 if item.type != 'annotation':  # TypeAlias value will not be affected by a futures import
                     continue
 
-                if any(import_name in item.names for _, import_name in self.visitor.type_checking_block_imports):
+                if not item.names.isdisjoint(type_checking_names):
                     continue
 
                 if any(class_name in item.names for class_name in self.visitor.class_names):
@@ -1247,6 +1303,8 @@ class TypingOnlyImportsChecker:
 
     def missing_quotes(self) -> Flake8Generator:
         """TC200 and TC007."""
+        unused_type_checking_names = self.visitor.type_checking_names - self.visitor.names
+
         for item in self.visitor.unwrapped_annotations:
             # A new style alias does never need to be wrapped
             if item.type == 'new-alias':
@@ -1258,16 +1316,17 @@ class TypingOnlyImportsChecker:
             if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
                 continue
 
-            for _, name in self.visitor.type_checking_block_imports:
-                if item.annotation == name:
-                    if item.type == 'alias':
-                        error = TC007.format(alias=item.annotation)
-                    else:
-                        error = TC200.format(annotation=item.annotation)
-                    yield item.lineno, item.col_offset, error, None
+            if item.annotation in unused_type_checking_names:
+                if item.type == 'alias':
+                    error = TC007.format(alias=item.annotation)
+                else:
+                    error = TC200.format(annotation=item.annotation)
+                yield item.lineno, item.col_offset, error, None
 
     def excess_quotes(self) -> Flake8Generator:
         """TC201 and TC008."""
+        type_checking_names = self.visitor.type_checking_names
+
         for item in self.visitor.wrapped_annotations:
             # A new style type alias should never be wrapped
             if item.type == 'new-alias':
@@ -1284,13 +1343,10 @@ class TypingOnlyImportsChecker:
                 continue
 
             # See comment in futures_excess_quotes
-            if any(import_name in item.names for _, import_name in self.visitor.type_checking_block_imports):
+            if not item.names.isdisjoint(type_checking_names):
                 continue
 
             if any(class_name in item.names for class_name in self.visitor.class_names):
-                continue
-
-            if any(variable_name in item.names for variable_name in self.visitor.type_checking_block_declarations):
                 continue
 
             if item.type == 'alias':

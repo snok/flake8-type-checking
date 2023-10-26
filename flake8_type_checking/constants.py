@@ -33,6 +33,7 @@ TC005 = 'TC005 Found empty type-checking block'
 TC006 = "TC006 Annotation '{annotation}' in typing.cast() should be a string literal"
 TC007 = "TC007 Type alias '{alias}' needs to be made into a string literal"
 TC008 = "TC008 Type alias '{alias}' does not need to be a string literal"
+TC009 = "TC009 Move declaration '{name}' out of type-checking block. Variable is used for more than type hinting."
 TC100 = "TC100 Add 'from __future__ import annotations' import"
 TC101 = "TC101 Annotation '{annotation}' does not need to be a string literal"
 TC200 = "TC200 Annotation '{annotation}' needs to be made into a string literal"
