@@ -16,12 +16,18 @@ from tests.conftest import _get_error, mod
 examples = [
     # No errors
     ('', set()),
+    # Unused declaration
     ('if TYPE_CHECKING:\n\tx = 2', set()),
+    # Used declaration
+    ('if TYPE_CHECKING:\n\tx = 2\ny = x + 2', set()),
+    ('if TYPE_CHECKING:\n\tT = TypeVar("T")\nx: T\ny = T', set()),
+    # Declaration used only in annotation
+    ('if TYPE_CHECKING:\n\tT = TypeVar("T")\nx: T', {'1:0 ' + TC100}),
     # Unused import
-    ('if TYPE_CHECKING:\n\tfrom typing import Dict', {'1:0 ' + TC100}),
-    ('if TYPE_CHECKING:\n\tfrom typing import Dict, Any', {'1:0 ' + TC100}),
-    (f'if TYPE_CHECKING:\n\timport {mod}', {'1:0 ' + TC100}),
-    (f'if TYPE_CHECKING:\n\tfrom {mod} import constants', {'1:0 ' + TC100}),
+    ('if TYPE_CHECKING:\n\tfrom typing import Dict', set()),
+    ('if TYPE_CHECKING:\n\tfrom typing import Dict, Any', set()),
+    (f'if TYPE_CHECKING:\n\timport {mod}', set()),
+    (f'if TYPE_CHECKING:\n\tfrom {mod} import constants', set()),
     # Used imports
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx = Dict', set()),
     ('if TYPE_CHECKING:\n\tfrom typing import Dict, Any\nx, y = Dict, Any', set()),
@@ -35,9 +41,6 @@ examples = [
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\ndef example(x: Dict[str, int] = {}):\n\tpass', {'1:0 ' + TC100}),
     # Import used for returns
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\ndef example() -> Dict[str, int]:\n\tpass', {'1:0 ' + TC100}),
-    # Probably not much point in adding many more test cases, as the logic for TC100
-    # is not dependent on the type of annotation assignments; it's purely concerned with
-    # whether an ast.Import or ast.ImportFrom exists within a type checking block
 ]
 
 

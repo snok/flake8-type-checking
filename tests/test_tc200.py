@@ -15,8 +15,19 @@ examples = [
     ('x: int', set()),
     ('x: "int"', set()),
     ('from typing import Dict\nx: Dict[int]', set()),
+    # Unused import/declaration
+    ('if TYPE_CHECKING:\n\tfrom typing import Dict', set()),
+    ('if TYPE_CHECKING:\n\tx = 2', set()),
+    # Used import/declaration
+    ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict = Dict()', set()),
+    ('if TYPE_CHECKING:\n\tx = 2\ny = x + 2', set()),
+    ('if TYPE_CHECKING:\n\tT = TypeVar("T")\nx: T\ny = T', set()),
+    # Import/Declaration used only in annotation
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict', {'3:3 ' + TC200.format(annotation='Dict')}),
+    ('if TYPE_CHECKING:\n\tT = TypeVar("T")\nx: T', {'3:3 ' + TC200.format(annotation='T')}),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'", set()),
+    ('if TYPE_CHECKING:\n\tFoo: TypeAlias = Any\nx: Foo', {'3:3 ' + TC200.format(annotation='Foo')}),
+    ("if TYPE_CHECKING:\n\tFoo: TypeAlias = Any\nx: 'Foo'", set()),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict as d\nx: 'd[int]'", set()),
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: Dict[int]', {'3:3 ' + TC200.format(annotation='Dict')}),
     ('if TYPE_CHECKING:\n\timport something\nx: something', {'3:3 ' + TC200.format(annotation='something')}),
