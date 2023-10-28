@@ -106,6 +106,34 @@ examples = [
     """),
         set(),
     ),
+    # Regression test for #131
+    # handle scopes correctly
+    (
+        textwrap.dedent("""
+        if TYPE_CHECKING:
+            Foo: something
+
+        def foo():
+            if TYPE_CHECKING:
+                Foo: something_else
+            else:
+                Foo = object
+
+            bar: Foo
+            return bar
+
+        class X:
+            if TYPE_CHECKING:
+                class Foo(Protocol):
+                    pass
+            else:
+                Foo = object
+
+            bar: Foo
+
+    """),
+        set(),
+    ),
 ]
 
 if sys.version_info >= (3, 12):
