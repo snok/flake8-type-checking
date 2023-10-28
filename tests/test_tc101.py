@@ -16,7 +16,8 @@ examples = [
     ("x: 'int'", {'1:3 ' + TC101.format(annotation='int')}),
     ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TC101.format(annotation='int')}),
     ("if TYPE_CHECKING:\n\timport y\nx: 'y'", set()),
-    ("x: 'Dict[int]'", {'1:3 ' + TC101.format(annotation='Dict[int]')}),
+    # this used to return an error, but it's prone to false positives
+    ("x: 'dict[int]'", set()),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
     ("if TYPE_CHECKING:\n\tFoo: TypeAlias = Any\nx: 'Foo'", set()),
     # Basic AnnAssign with type-checking block and exact match

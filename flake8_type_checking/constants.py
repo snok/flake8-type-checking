@@ -1,3 +1,4 @@
+import builtins
 import re
 import sys
 
@@ -5,7 +6,7 @@ import flake8
 
 ATTRIBUTE_PROPERTY = '_flake8-type-checking__parent'
 ANNOTATION_PROPERTY = '_flake8-type-checking__is_annotation'
-GLOBAL_PROPERTY = '_flake8-type-checking__is_global'
+DUNDER_ALL_PROPERTY = '_flake8-type-checking__in__all__'
 
 NAME_RE = re.compile(r'(?<![\'".])\b[A-Za-z_]\w*(?![\'"])')
 
@@ -23,6 +24,8 @@ ATTRS_IMPORTS = {'attrs', 'attr'}
 py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 flake_version_gt_v4 = tuple(int(i) for i in flake8.__version__.split('.')) >= (4, 0, 0)
 
+# Based off of what pyflakes does
+builtin_names = set(dir(builtins)) | {'__file__', '__builtins__', '__annotations__', 'WindowsError'}
 
 # Error codes
 TC001 = "TC001 Move application import '{module}' into a type-checking block"

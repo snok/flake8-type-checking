@@ -33,6 +33,7 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         mock_options.select = [error_code_filter]
         mock_options.extend_select = None
         # defaults
+        mock_options.builtins = []
         mock_options.extended_default_select = []
         mock_options.enable_extensions = []
         mock_options.type_checking_pydantic_enabled = False
