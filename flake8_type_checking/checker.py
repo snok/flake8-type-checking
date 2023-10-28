@@ -419,9 +419,12 @@ class Scope:
     be accessible inside a different kind of scope and it may go away entirely
     when comprehension inlining becomes a thing and it no longer generates a
     new stack frame.
+
+    For ClassDef/FunctionDef/AsyncFunctionDef we create a tiny virtual scope
+    for the head to properly handle PEP695 parameter scopes.
     """
 
-    def __init__(self, node: ast.Module | ast.ClassDef | Function, parent: Scope | None = None):
+    def __init__(self, node: ast.Module | ast.ClassDef | Function, parent: Scope | None = None, is_head: bool = False):
         #: The ast.AST node that created this scope
         self.node = node
 
@@ -434,6 +437,9 @@ class Scope:
         # We use this to traverse up to the outer scopes when looking up
         # symbols
         self.parent = parent
+
+        #: For function scopes/class scopes whether it is just for the head or also the body
+        self.is_head = is_head
 
         #: The name of the class if this is a scope created by a class definition
         # classes are not real scopes, i.e. they don't propagate symbols
@@ -467,6 +473,16 @@ class Scope:
             # be quoted to ensure the correct type is assigned
             if symbol_name == self.class_name:
                 return None
+
+            if parent is not None:
+                # because of our virtual scope for function definition headers
+                # we also need to check the parent scope for a class name
+                if self.is_head and symbol_name == parent.class_name:
+                    return None
+
+                # if the next scope up is a head scope we don't want to skip it
+                if parent.is_head:
+                    return parent.lookup(symbol_name, use, runtime_only)
 
             # skip class scopes when looking up symbols in parent scopes
             # they're only available inside the class scope itself
@@ -556,10 +572,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         self.unquoted_types_in_casts: list[tuple[int, int, str]] = []
 
     @contextmanager
-    def create_scope(self, node: ast.Module | ast.ClassDef | Function) -> Iterator[Scope]:
+    def create_scope(self, node: ast.ClassDef | Function, is_head: bool = True) -> Iterator[Scope]:
         """Create a new scope."""
         parent = self.current_scope
-        scope = Scope(node, parent=parent)
+        scope = Scope(node, parent=parent, is_head=is_head)
         self.scopes.append(scope)
         self.current_scope = scope
         yield scope
@@ -845,6 +861,9 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         """Create class scope and Note down class names."""
+        for expr in node.decorator_list:
+            self.visit(expr)
+
         in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
         self.current_scope.symbols[node.name].append(
             Symbol(
@@ -856,28 +875,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             )
         )
 
-        with self.create_scope(node) as scope:
-            has_base_classes = node.bases
-            all_base_classes_ignored = all(
-                isinstance(base, ast.Name) and base.id in self.pydantic_enabled_baseclass_passlist
-                for base in node.bases
-            )
-            affected_by_pydantic_support = self.pydantic_enabled and has_base_classes and not all_base_classes_ignored
-            affected_by_cattrs_support = self.cattrs_enabled and self.is_attrs_class(node)
-
-            if affected_by_pydantic_support or affected_by_cattrs_support:
-                # When pydantic or cattrs support is enabled, treat any class variable
-                # annotation as being required at runtime. We need to do this, or
-                # users run the risk of guarding imports to resources that actually are
-                # required at runtime. This can be pretty scary, since it will crashes
-                # the application at runtime.
-                for element in node.body:
-                    if isinstance(element, ast.AnnAssign):
-                        self.visit(element.annotation)
-
+        with self.create_scope(node, is_head=True) as head_scope:
             # add PEP695 type parameters to class scope
             for type_param in getattr(node, 'type_params', ()):
-                scope.symbols[type_param.name].append(
+                head_scope.symbols[type_param.name].append(
                     Symbol(
                         type_param.name,
                         type_param.lineno,
@@ -886,9 +887,33 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                         in_type_checking_block=in_type_checking_block,
                     )
                 )
+            for head_expr in chain(node.bases, node.keywords):
+                self.visit(head_expr)
 
-            self.generic_visit(node)
-            return node
+            with self.create_scope(node, is_head=False):
+                has_base_classes = node.bases
+                all_base_classes_ignored = all(
+                    isinstance(base, ast.Name) and base.id in self.pydantic_enabled_baseclass_passlist
+                    for base in node.bases
+                )
+                affected_by_pydantic_support = (
+                    self.pydantic_enabled and has_base_classes and not all_base_classes_ignored
+                )
+                affected_by_cattrs_support = self.cattrs_enabled and self.is_attrs_class(node)
+
+                if affected_by_pydantic_support or affected_by_cattrs_support:
+                    # When pydantic or cattrs support is enabled, treat any class variable
+                    # annotation as being required at runtime. We need to do this, or
+                    # users run the risk of guarding imports to resources that actually are
+                    # required at runtime. This can be pretty scary, since it will crashes
+                    # the application at runtime.
+                    for element in node.body:
+                        if isinstance(element, ast.AnnAssign):
+                            self.visit(element.annotation)
+
+                for stmt in node.body:
+                    self.visit(stmt)
+                return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
@@ -1109,16 +1134,30 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         """
         in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
 
-        # some of the symbols/annotations need to be added to the parent scope
-        parent_scope = self.current_scope.parent
-        assert parent_scope is not None
+        # some of the symbols/annotations need to be added to the head scope
+        head_scope = self.current_scope.parent
+        assert head_scope is not None
+        assert head_scope.is_head
+
+        # add PEP695 type parameters to function head scope
+        for type_param in getattr(node, 'type_params', ()):
+            head_scope.symbols[type_param.name].append(
+                Symbol(
+                    type_param.name,
+                    type_param.lineno,
+                    type_param.col_offset,
+                    # we should be able to treat type vars like arguments
+                    'argument',
+                    in_type_checking_block=in_type_checking_block,
+                )
+            )
 
         for argument in chain(node.args.args, node.args.kwonlyargs, node.args.posonlyargs):
             # Map annotations
             if hasattr(argument, 'annotation') and argument.annotation:
-                self.add_annotation(argument.annotation, parent_scope)
+                self.add_annotation(argument.annotation, head_scope)
 
-            # Map argument names
+            # argument names go into the function scope not the head scope
             self.current_scope.symbols[argument.arg].append(
                 Symbol(
                     argument.arg,
@@ -1133,9 +1172,9 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             if arg := getattr(node.args, path, None):
                 # Map annotations
                 if getattr(arg, 'annotation', None):
-                    self.add_annotation(arg.annotation, parent_scope)
+                    self.add_annotation(arg.annotation, head_scope)
 
-                # Map argument names
+                # argument names go into the function scope not the head scope
                 if name := getattr(arg, 'arg', None):
                     self.current_scope.symbols[name].append(
                         Symbol(
@@ -1143,24 +1182,11 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                         )
                     )
 
-        # add PEP695 type parameters to function scope
-        for type_param in getattr(node, 'type_params', ()):
-            self.current_scope.symbols[type_param.name].append(
-                Symbol(
-                    type_param.name,
-                    type_param.lineno,
-                    type_param.col_offset,
-                    # we should be able to treat type vars like arguments
-                    'argument',
-                    in_type_checking_block=in_type_checking_block,
-                )
-            )
-
         if returns := getattr(node, 'returns', None):
-            self.add_annotation(returns, parent_scope)
+            self.add_annotation(returns, head_scope)
 
         if name := getattr(node, 'name', None):
-            parent_scope.symbols[name].append(
+            head_scope.symbols[name].append(
                 Symbol(
                     name,
                     node.lineno,
@@ -1172,21 +1198,21 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
-        with self.create_scope(node):
+        with self.create_scope(node, is_head=True), self.create_scope(node, is_head=False):
             super().visit_FunctionDef(node)
             self.register_function_annotations(node)
             self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
-        with self.create_scope(node):
+        with self.create_scope(node, is_head=True), self.create_scope(node, is_head=False):
             super().visit_AsyncFunctionDef(node)
             self.register_function_annotations(node)
             self.generic_visit(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         """Remove and map argument symbols."""
-        with self.create_scope(node):
+        with self.create_scope(node, is_head=True), self.create_scope(node, is_head=False):
             self.register_function_annotations(node)
             self.generic_visit(node)
 
@@ -1397,15 +1423,18 @@ class TypingOnlyImportsChecker:
                 # this symbol already caused a TC004/TC009
                 continue
 
+            # Annotations inside `if TYPE_CHECKING:` blocks do not need to be wrapped
+            # unless they're used before definition, which is already covered by other
+            # flake8 rules (and also static type checkers)
             if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
                 continue
 
-            if item.scope.lookup(item.annotation, item):
-                # the symbol is available at runtime, so we're fine
-                continue
-
-            yield 1, 0, TC100, None
-            return
+            if item.scope.lookup(item.annotation, item, runtime_only=False) and not item.scope.lookup(
+                item.annotation, item, runtime_only=True
+            ):
+                # the symbol is only available for type checking
+                yield 1, 0, TC100, None
+                return
 
     def futures_excess_quotes(self) -> Flake8Generator:
         """TC101."""

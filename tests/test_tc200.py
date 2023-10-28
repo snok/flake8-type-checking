@@ -2,6 +2,7 @@
 File tests TC200:
     Annotation should be wrapped in quotes
 """
+import sys
 import textwrap
 
 import pytest
@@ -125,6 +126,25 @@ examples = [
         },
     ),
 ]
+
+if sys.version_info >= (3, 12):
+    # PEP695 tests
+    examples += [
+        (
+            textwrap.dedent("""
+            if TYPE_CHECKING:
+                from .types import T
+
+            def foo[T](a: T) -> T: ...
+
+            type Foo[T] = T | None
+
+            class Bar[T](Sequence[T]):
+                x: T
+            """),
+            set(),
+        )
+    ]
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
