@@ -127,6 +127,49 @@ examples = [
     """),
         set(),
     ),
+    # regression test for #131
+    # a common pattern for inheriting from generics that aren't runtime subscriptable
+    (
+        textwrap.dedent("""
+        from wtforms import Field
+
+        if TYPE_CHECKING:
+            BaseField = Field[int]
+        else:
+            BaseField = Field
+
+        class IntegerField(BaseField):
+            pass
+    """),
+        set(),
+    ),
+    # Regression test for #131
+    # handle scopes correctly
+    (
+        textwrap.dedent("""
+        if TYPE_CHECKING:
+            from a import Foo
+
+        def foo():
+            if TYPE_CHECKING:
+                from b import Foo
+            else:
+                Foo = object
+
+            bar: Foo
+            return bar
+
+        class X:
+            if TYPE_CHECKING:
+                from b import Foo
+            else:
+                Foo = object
+
+            bar: Foo
+
+    """),
+        set(),
+    ),
 ]
 
 
