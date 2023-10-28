@@ -156,7 +156,7 @@ examples = [
             else:
                 Foo = object
 
-            bar: Foo
+            bar: Foo = Foo()
             return bar
 
         class X:
@@ -165,7 +165,7 @@ examples = [
             else:
                 Foo = object
 
-            bar: Foo
+            bar: Foo = Foo()
 
     """),
         set(),
