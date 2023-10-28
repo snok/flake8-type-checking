@@ -5,7 +5,8 @@ import fnmatch
 import os
 import sys
 from ast import Index, literal_eval
-from contextlib import suppress
+from collections import defaultdict
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
@@ -18,7 +19,7 @@ from flake8_type_checking.constants import (
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
     ATTRS_IMPORTS,
-    GLOBAL_PROPERTY,
+    DUNDER_ALL_PROPERTY,
     NAME_RE,
     TC001,
     TC002,
@@ -33,6 +34,7 @@ from flake8_type_checking.constants import (
     TC101,
     TC200,
     TC201,
+    builtin_names,
     py38,
 )
 
@@ -51,17 +53,10 @@ except AttributeError:  # pragma: no cover
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
     from argparse import Namespace
+    from collections.abc import Iterator
     from typing import Any, Optional, Union
 
-    from flake8_type_checking.types import (
-        Declaration,
-        Flake8Generator,
-        FunctionRangesDict,
-        FunctionScopeNamesDict,
-        Import,
-        ImportTypeValue,
-        Name,
-    )
+    from flake8_type_checking.types import Flake8Generator, Function, HasPosition, Import, ImportTypeValue, Name
 
 
 class AttrsMixin:
@@ -142,7 +137,8 @@ class DunderAllMixin:
     """
 
     if TYPE_CHECKING:
-        uses: dict[str, ast.AST]
+        uses: dict[str, list[tuple[ast.AST, Scope]]]
+        current_scope: Scope
 
         def generic_visit(self, node: ast.AST) -> None:  # noqa: D102
             ...
@@ -196,7 +192,10 @@ class DunderAllMixin:
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
         """Map constant as use, if we're inside an __all__ declaration."""
         if self.in___all___declaration(node):
-            self.uses[node.value] = node
+            # for these it doesn't matter where they are declared, the symbol
+            # just needs to be available in global scope anywhere
+            setattr(node, DUNDER_ALL_PROPERTY, True)
+            self.uses[node.value].append((node, self.current_scope))
         return node
 
 
@@ -362,15 +361,6 @@ class ImportName:
         return cast('ImportTypeValue', classify_base(self.full_name.partition('.')[0]))
 
 
-class UnwrappedAnnotation(NamedTuple):
-    """Represents a single `ast.Name` in an unwrapped annotation."""
-
-    lineno: int
-    col_offset: int
-    annotation: str
-    type: Literal['annotation', 'alias', 'new-alias']
-
-
 class WrappedAnnotation(NamedTuple):
     """Represents a wrapped annotation i.e. a string constant."""
 
@@ -378,11 +368,123 @@ class WrappedAnnotation(NamedTuple):
     col_offset: int
     annotation: str
     names: set[str]
+    scope: Scope
     type: Literal['annotation', 'alias', 'new-alias']
+
+
+class UnwrappedAnnotation(NamedTuple):
+    """Represents a single `ast.Name` in an unwrapped annotation."""
+
+    lineno: int
+    col_offset: int
+    annotation: str
+    scope: Scope
+    type: Literal['annotation', 'alias', 'new-alias']
+
+
+class Symbol(NamedTuple):
+    """Represents an import/definition/declaration of a variable."""
+
+    name: str
+    lineno: int
+    col_offset: int
+    type: Literal['import', 'definition', 'declaration', 'argument']
+    in_type_checking_block: bool
+
+    def available_at_runtime(self, use: HasPosition | None = None) -> bool:
+        """Return whether or not this symbol is available at runtime."""
+        if self.in_type_checking_block or self.type == 'declaration':
+            return False
+
+        # we punt in this case, this is to support some use-cases where
+        # the location of use does not matter, such as __all__
+        if use is None:
+            return True
+
+        if use.lineno < self.lineno:
+            return False
+
+        if use.lineno == self.lineno and use.col_offset < self.col_offset:
+            return False
+
+        return True
+
+
+class Scope:
+    """
+    Represents a scope for looking up symbols.
+
+    We currently don't create a new scope for generator expressions, since it
+    already has a bunch of special cases for accessing symbols that would not
+    be accessible inside a different kind of scope and it may go away entirely
+    when comprehension inlining becomes a thing and it no longer generates a
+    new stack frame.
+    """
+
+    def __init__(self, node: ast.Module | ast.ClassDef | Function, parent: Scope | None = None):
+        #: The ast.AST node that created this scope
+        self.node = node
+
+        #: Map of symbol name to a list of imports/definitions/declarations
+        # This also includes the scoping of the symbol so we can look up if
+        # it is available at runtime/type checking time.
+        self.symbols: dict[str, list[Symbol]] = defaultdict(list)
+
+        #: The outer scope, this will be `None` for the global scope
+        # We use this to traverse up to the outer scopes when looking up
+        # symbols
+        self.parent = parent
+
+        #: The name of the class if this is a scope created by a class definition
+        # classes are not real scopes, i.e. they don't propagate symbols
+        # to inner-scopes, so we need to treat them differently in lookup
+        # the class name itself is also special, since it's available in methods
+        # but not in the class body itself, so we record it, so we can special-case
+        # it in symbol lookups
+        self.class_name = node.name if isinstance(node, ast.ClassDef) else None
+
+    def lookup(self, symbol_name: str, use: HasPosition | None = None, runtime_only: bool = True) -> Symbol | None:
+        """
+        Simulate a symbol lookup.
+
+        If a symbol is redefined multiple times in the same block we don't try
+        to return the symbol closest to the use-site, we just return the first
+        one we find, since we don't really care what symbol we find currently.
+        """
+        for symbol in self.symbols.get(symbol_name, ()):
+            if runtime_only and not symbol.available_at_runtime(use):
+                continue
+
+            # we just return the first symbol we find
+            return symbol
+
+        parent = self.parent
+        if runtime_only:
+            # if the symbol matches our class name we return at this point
+            # technically if the class definition is a redefinition of the
+            # the same symbol_name it could still exist at runtime, but it's
+            # probably an actual mistake at that point and an annotation should
+            # be quoted to ensure the correct type is assigned
+            if symbol_name == self.class_name:
+                return None
+
+            # skip class scopes when looking up symbols in parent scopes
+            # they're only available inside the class scope itself
+            while parent is not None and parent.class_name is not None:
+                parent = parent.parent
+
+        # we're done looking up and didn't find anything
+        if parent is None:
+            return None
+
+        return parent.lookup(symbol_name, use, runtime_only)
 
 
 class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
     """Map all imports outside of type-checking blocks."""
+
+    #: The currently active scope
+    current_scope: Scope
 
     def __init__(
         self,
@@ -420,22 +522,11 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         # then use the import type to yield the error with the appropriate type
         self.imports: dict[str, ImportName] = {}
 
+        #: List of scopes including all the symbols within
+        self.scopes: list[Scope] = []
+
         #: List of all names and ids, except type declarations
-        self.uses: dict[str, ast.AST] = {}
-
-        #: Tuple of (node, import name) for all import defined within a type-checking block
-        # This lets us identify imports that *are* needed at runtime, for TC004 errors.
-        self.type_checking_block_imports: set[tuple[Import, str]] = set()
-
-        #: Tuple of (node, variable name) for all global declarations within a type-checking block
-        # This lets us avoid false positives for annotations referring to e.g. a TypeAlias
-        # defined within a type checking block. We currently ignore function definitions, since
-        # those should be exceedingly rare inside type checking blocks.
-        self.type_checking_block_declarations: set[tuple[Declaration, str]] = set()
-
-        #: Set of all the class names defined within the file
-        # This lets us avoid false positives for classes referring to themselves
-        self.class_names: set[str] = set()
+        self.uses: dict[str, list[tuple[ast.AST, Scope]]] = defaultdict(list)
 
         #: All type annotations in the file, without quotes around them
         self.unwrapped_annotations: list[UnwrappedAnnotation] = []
@@ -453,12 +544,6 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         self.empty_type_checking_blocks: list[tuple[int, int, int]] = []
         self.type_checking_blocks: list[tuple[int, int, int]] = []
 
-        #: Function imports and ranges
-        # Function scopes can tell us if imports that appear in type-checking blocks
-        # are repeated inside a function. This prevents false TC004 positives.
-        self.function_scope_names: dict[int, FunctionScopeNamesDict] = {}
-        self.function_ranges: dict[int, FunctionRangesDict] = {}
-
         #: Set to the alias of TYPE_CHECKING if one is found
         self.type_checking_alias: Optional[str] = None
 
@@ -469,6 +554,16 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         # Used for TC006 errors. Also tracks imported aliases of typing.cast().
         self.typing_cast_aliases: set[str] = set()
         self.unquoted_types_in_casts: list[tuple[int, int, str]] = []
+
+    @contextmanager
+    def create_scope(self, node: ast.Module | ast.ClassDef | Function) -> Iterator[Scope]:
+        """Create a new scope."""
+        parent = self.current_scope
+        scope = Scope(node, parent=parent)
+        self.scopes.append(scope)
+        self.current_scope = scope
+        yield scope
+        self.current_scope = parent
 
     @property
     def typing_module_name(self) -> str:
@@ -495,10 +590,13 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         """Return unique names."""
         return set(self.uses.keys())
 
-    @property
-    def type_checking_names(self) -> set[str]:
-        """Return unique names either imported or declared in type checking blocks."""
-        return {name for _, name in chain(self.type_checking_block_imports, self.type_checking_block_declarations)}
+    def type_checking_symbols(self) -> Iterator[Symbol]:
+        """Yield all the symbols declared inside a type checking block."""
+        for scope in self.scopes:
+            for symbols in scope.symbols.values():
+                for symbol in symbols:
+                    if symbol.in_type_checking_block:
+                        yield symbol
 
     # -- Map type checking block ---------------
 
@@ -594,43 +692,15 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         return False
 
     def visit_Module(self, node: ast.Module) -> ast.Module:
-        """
-        Mark global statments.
-
-        We propagate this marking when visiting control flow nodes, that don't affect
-        scope, such as if/else, try/except. Although for simplicity we don't handle
-        quite all the possible cases, since we're only interested in type checking blocks
-        and it's not realistic to encounter these for example inside a TryStar/With/Match.
-
-        If we're serious about handling all the cases it would probably make more sense
-        to override generic_visit to propagate this property for a sequence of node types
-        and attributes that contain the statements that should propagate global scope.
-        """
-        for stmt in node.body:
-            setattr(stmt, GLOBAL_PROPERTY, True)
-
-        self.generic_visit(node)
-        return node
-
-    def visit_Try(self, node: ast.Try) -> ast.Try:
-        """Propagate global statements."""
-        if getattr(node, GLOBAL_PROPERTY, False):
-            for stmt in chain(node.body, (s for h in node.handlers for s in h.body), node.orelse, node.finalbody):
-                setattr(stmt, GLOBAL_PROPERTY, True)
-
+        """Create the global scope."""
+        scope = Scope(node)
+        self.current_scope = scope
+        self.scopes.append(scope)
         self.generic_visit(node)
         return node
 
     def visit_If(self, node: ast.If) -> Any:
-        """
-        Look for a TYPE_CHECKING block.
-
-        Also recursively propagate global, since if/else does not affect scope.
-        """
-        if getattr(node, GLOBAL_PROPERTY, False):
-            for stmt in chain(node.body, getattr(node, 'orelse', ()) or ()):
-                setattr(stmt, GLOBAL_PROPERTY, True)
-
+        """Look for a TYPE_CHECKING block."""
         type_checking_condition = self.is_true_when_type_checking(node.test) == 'TYPE_CHECKING'
 
         # If it is, note down the line-number-range where the type-checking block exists
@@ -666,16 +736,28 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
     def add_import(self, node: Import) -> None:  # noqa: C901
         """Add relevant ast objects to import lists."""
-        if self.in_type_checking_block(node.lineno, node.col_offset):
+        in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
+
+        # Record the imported names as symbols
+        for name_node in node.names:
+            if hasattr(name_node, 'asname') and name_node.asname:
+                name = name_node.asname
+            else:
+                name = name_node.name
+
+            self.current_scope.symbols[name].append(
+                Symbol(
+                    name,
+                    node.lineno,
+                    node.col_offset,
+                    'import',
+                    in_type_checking_block=in_type_checking_block,
+                )
+            )
+
+        if in_type_checking_block:
             # For type checking blocks we want to
-            # 1. Record annotations for TC2XX errors
-            # 2. Avoid recording imports for TC1XX errors, by returning early
-            for name_node in node.names:
-                if hasattr(name_node, 'asname') and name_node.asname:
-                    name = name_node.asname
-                else:
-                    name = name_node.name
-                self.type_checking_block_imports.add((node, name))
+            # Avoid recording imports for TC1XX errors, by returning early
             return None
 
         # Skip checking the import if the module is passlisted.
@@ -753,9 +835,6 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                 # Add to import names map. This is what we use to match imports to uses
                 self.imports[imp.name] = imp
 
-                # Add to function scope names, to help catch false positive TC004 errors.
-                self._add_function_scope_names(lineno=node.lineno, name=imp.name)
-
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
         self.add_import(node)
@@ -765,30 +844,51 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         self.add_import(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
-        """Note down class names."""
-        has_base_classes = node.bases
-        all_base_classes_ignored = all(
-            isinstance(base, ast.Name) and base.id in self.pydantic_enabled_baseclass_passlist for base in node.bases
+        """Create class scope and Note down class names."""
+        in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
+        self.current_scope.symbols[node.name].append(
+            Symbol(
+                node.name,
+                node.lineno,
+                node.col_offset,
+                'definition',
+                in_type_checking_block=in_type_checking_block,
+            )
         )
-        affected_by_pydantic_support = self.pydantic_enabled and has_base_classes and not all_base_classes_ignored
-        affected_by_cattrs_support = self.cattrs_enabled and self.is_attrs_class(node)
 
-        if affected_by_pydantic_support or affected_by_cattrs_support:
-            # When pydantic or cattrs support is enabled, treat any class variable
-            # annotation as being required at runtime. We need to do this, or
-            # users run the risk of guarding imports to resources that actually are
-            # required at runtime. This can be pretty scary, since it will crashes
-            # the application at runtime.
-            for element in node.body:
-                if isinstance(element, ast.AnnAssign):
-                    self.visit(element.annotation)
+        with self.create_scope(node) as scope:
+            has_base_classes = node.bases
+            all_base_classes_ignored = all(
+                isinstance(base, ast.Name) and base.id in self.pydantic_enabled_baseclass_passlist
+                for base in node.bases
+            )
+            affected_by_pydantic_support = self.pydantic_enabled and has_base_classes and not all_base_classes_ignored
+            affected_by_cattrs_support = self.cattrs_enabled and self.is_attrs_class(node)
 
-        if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
-            self.type_checking_block_declarations.add((node, node.name))
-        else:
-            self.class_names.add(node.name)
-        self.generic_visit(node)
-        return node
+            if affected_by_pydantic_support or affected_by_cattrs_support:
+                # When pydantic or cattrs support is enabled, treat any class variable
+                # annotation as being required at runtime. We need to do this, or
+                # users run the risk of guarding imports to resources that actually are
+                # required at runtime. This can be pretty scary, since it will crashes
+                # the application at runtime.
+                for element in node.body:
+                    if isinstance(element, ast.AnnAssign):
+                        self.visit(element.annotation)
+
+            # add PEP695 type parameters to class scope
+            for type_param in getattr(node, 'type_params', ()):
+                scope.symbols[type_param.name].append(
+                    Symbol(
+                        type_param.name,
+                        type_param.lineno,
+                        type_param.col_offset,
+                        'definition',
+                        in_type_checking_block=in_type_checking_block,
+                    )
+                )
+
+            self.generic_visit(node)
+            return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         """Map names."""
@@ -800,9 +900,9 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             return node
 
         if hasattr(node, ATTRIBUTE_PROPERTY):
-            self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'] = node
+            self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'].append((node, self.current_scope))
 
-        self.uses[node.id] = node
+        self.uses[node.id].append((node, self.current_scope))
         return node
 
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
@@ -810,34 +910,38 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         super().visit_Constant(node)
         return node
 
-    def add_annotation(self, node: ast.AST, type: Literal['annotation', 'alias', 'new-alias'] = 'annotation') -> None:
+    def add_annotation(
+        self, node: ast.AST, scope: Scope, type: Literal['annotation', 'alias', 'new-alias'] = 'annotation'
+    ) -> None:
         """Map all annotations on an AST node."""
         if isinstance(node, ast.Ellipsis) or node is None:
             return
         if isinstance(node, ast.BinOp):
             if not isinstance(node.op, ast.BitOr):
                 return
-            self.add_annotation(node.left, type)
-            self.add_annotation(node.right, type)
+            self.add_annotation(node.left, scope, type)
+            self.add_annotation(node.right, scope, type)
         elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
-            self.add_annotation(node.value, type)
+            self.add_annotation(node.value, scope, type)
         elif isinstance(node, ast.Subscript):
-            self.add_annotation(node.value, type)
+            self.add_annotation(node.value, scope, type)
             if getattr(node.value, 'id', '') != 'Literal':
-                self.add_annotation(node.slice, type)
+                self.add_annotation(node.slice, scope, type)
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
-                self.add_annotation(n, type)
+                self.add_annotation(n, scope, type)
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             # Register annotation value
             setattr(node, ANNOTATION_PROPERTY, True)
             self.wrapped_annotations.append(
-                WrappedAnnotation(node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), type)
+                WrappedAnnotation(
+                    node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), scope, type
+                )
             )
         elif isinstance(node, ast.Name):
             # Register annotation value
             setattr(node, ANNOTATION_PROPERTY, True)
-            self.unwrapped_annotations.append(UnwrappedAnnotation(node.lineno, node.col_offset, node.id, type))
+            self.unwrapped_annotations.append(UnwrappedAnnotation(node.lineno, node.col_offset, node.id, scope, type))
 
     @staticmethod
     def set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
@@ -866,41 +970,106 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         an annotation as well, but we have to keep in mind that the RHS will not automatically become
         a ForwardRef with a future import, like a true annotation would.
         """
-        self.add_annotation(node.annotation)
+        self.add_annotation(node.annotation, self.current_scope)
 
         if node.value is None:
             return
 
-        # node is an explicit TypeAlias assignment
-        if isinstance(node.target, ast.Name) and (
-            (isinstance(node.annotation, ast.Name) and node.annotation.id == 'TypeAlias')
-            or (isinstance(node.annotation, ast.Constant) and node.annotation.value == 'TypeAlias')
-        ):
-            self.add_annotation(node.value, 'alias')
+        if isinstance(node.target, ast.Name):
+            self.current_scope.symbols[node.target.id].append(
+                Symbol(
+                    node.target.id,
+                    node.target.lineno,
+                    node.target.col_offset,
+                    (
+                        # AnnAssign can omit the RHS, in which case it's just a declaration
+                        # and doesn't result in a variable that's available at runtime
+                        'definition'
+                        if node.value
+                        else 'declaration'
+                    ),
+                    in_type_checking_block=self.in_type_checking_block(node.lineno, node.col_offset),
+                )
+            )
 
-            if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
-                self.type_checking_block_declarations.add((node, node.target.id))
+            # node is an explicit TypeAlias assignment
+            if (isinstance(node.annotation, ast.Name) and node.annotation.id == 'TypeAlias') or (
+                isinstance(node.annotation, ast.Constant) and node.annotation.value == 'TypeAlias'
+            ):
+                self.add_annotation(node.value, self.current_scope, 'alias')
+                return
 
         # if it wasn't a TypeAlias we need to visit the value expression
-        else:
-            self.visit(node.value)
+        self.visit(node.value)
 
     def visit_Assign(self, node: ast.Assign) -> ast.Assign:
-        """
-        Keep track of any top-level variable declarations inside type-checking blocks.
+        """Keep track of variable definitions."""
+        in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
 
-        For simplicity we only accept single value assignments, i.e. there should only be one
-        target and it should be an `ast.Name`.
-        """
-        if (
-            getattr(node, GLOBAL_PROPERTY, False)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and self.in_type_checking_block(node.lineno, node.col_offset)
-        ):
-            self.type_checking_block_declarations.add((node, node.targets[0].id))
+        for target in node.targets:
+            for name in getattr(target, 'elts', [target]):
+                if not hasattr(name, 'id'):
+                    continue
+
+                self.current_scope.symbols[name.id].append(
+                    Symbol(
+                        name.id,
+                        name.lineno,
+                        name.col_offset,
+                        'definition',
+                        in_type_checking_block=in_type_checking_block,
+                    )
+                )
 
         super().visit_Assign(node)
+        return node
+
+    def visit_Global(self, node: ast.Global) -> ast.Global:
+        """
+        Treat global statements like a normal assignment.
+
+        We don't check if the symbol exists in the global scope, that isn't our job.
+        """
+        in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
+
+        for name in node.names:
+            if not hasattr(name, 'id'):
+                continue
+
+            self.current_scope.symbols[name].append(
+                Symbol(
+                    name,
+                    node.lineno,
+                    node.col_offset,
+                    'definition',
+                    in_type_checking_block=in_type_checking_block,
+                )
+            )
+
+        return node
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> ast.Nonlocal:
+        """
+        Treat nonlocal statements like a normal assignment.
+
+        We don't check if the symbol exists in the outer scope, that isn't our job.
+        """
+        in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
+
+        for name in node.names:
+            if not hasattr(name, 'id'):
+                continue
+
+            self.current_scope.symbols[name].append(
+                Symbol(
+                    name,
+                    node.lineno,
+                    node.col_offset,
+                    'definition',
+                    in_type_checking_block=in_type_checking_block,
+                )
+            )
+
         return node
 
     if sys.version_info >= (3, 12):
@@ -915,78 +1084,19 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
             don't visit the RHS and also have to treat the annotation differently from a regular
             annotation when emitting errors.
             """
-            self.add_annotation(node.value, 'new-alias')
+            self.add_annotation(node.value, self.current_scope, 'new-alias')
 
-            if getattr(node, GLOBAL_PROPERTY, False) and self.in_type_checking_block(node.lineno, node.col_offset):
-                self.type_checking_block_declarations.add((node, node.name.id))
+            self.current_scope.symbols[node.name.id].append(
+                Symbol(
+                    node.name.id,
+                    node.lineno,
+                    node.col_offset,
+                    'definition',
+                    in_type_checking_block=self.in_type_checking_block(node.lineno, node.col_offset),
+                )
+            )
 
-    def register_function_ranges(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
-        """
-        Note down the start and end line number of a function.
-
-        We use the start and end line numbers to prevent raising false TC004
-        positives in examples like this:
-
-            from typing import TYPE_CHECKING
-
-            if TYPE_CHECKING:
-                from pandas import DataFrame
-
-                MyType = DataFrame | str
-
-            x: MyType
-
-            def some_unrelated_function():
-                from pandas import DataFrame
-                return DataFrame()
-
-        where it could seem like the first pandas import is actually used
-        at runtime, but in fact, it's not.
-        """
-        end_lineno = cast('int', node.end_lineno)
-        for i in range(node.lineno, end_lineno + 1):
-            self.function_ranges[i] = {'start': node.lineno, 'end': end_lineno + 1}
-
-    def _add_function_scope_names(self, lineno: int, name: str) -> None:
-        """
-        Add function names to our function scope map.
-
-        Given this code:
-
-            from typing import TYPE_CHECKING
-
-            if TYPE_CHECKING:
-                import requests
-
-            ...
-
-        The `import requests` import will not be in scope at runtime and cannot be used.
-        To avoid this happening, this plugin ships the TC004 error which warns users if they
-        attempt to use it:
-
-            TC004: Move import out of type-checking block. Import is used for more than type hinting
-
-        The problem is that this is pretty prone to false positives. Some of the things that could happen are:
-
-            1. The user could import `requests` *again* within the scope of the function
-            2. The user could override the name of the import with a function argument name
-                Moreover, there are several classes of function arguments.
-                They could do it with:
-                    - an arg
-                    - a kwarg
-                    - a posonly arg
-                    - a kwonly args
-            3. The user could override the name with a variable assignment
-            4. ?
-
-        This function maps some of these sources of false positives to mitigate them.
-        """
-        if lineno not in self.function_scope_names:
-            self.function_scope_names[lineno] = {'names': [name]}
-        else:
-            self.function_scope_names[lineno]['names'].append(name)
-
-    def register_function_annotations(self, node: Union[FunctionDef, AsyncFunctionDef]) -> None:
+    def register_function_annotations(self, node: Function) -> None:
         """
         Map all annotations in a function signature.
 
@@ -997,42 +1107,88 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
 
         And we also note down the start and end line number for the function.
         """
-        for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
-            for argument in path:
-                # Map annotations
-                if hasattr(argument, 'annotation') and argument.annotation:
-                    self.add_annotation(argument.annotation)
+        in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
 
-                # Map argument names
-                self._add_function_scope_names(lineno=node.lineno, name=argument.arg)
+        # some of the symbols/annotations need to be added to the parent scope
+        parent_scope = self.current_scope.parent
+        assert parent_scope is not None
 
-        path_: str
-        for path_ in ['kwarg', 'vararg']:
-            if arg := getattr(node.args, path_, None):
+        for argument in chain(node.args.args, node.args.kwonlyargs, node.args.posonlyargs):
+            # Map annotations
+            if hasattr(argument, 'annotation') and argument.annotation:
+                self.add_annotation(argument.annotation, parent_scope)
+
+            # Map argument names
+            self.current_scope.symbols[argument.arg].append(
+                Symbol(
+                    argument.arg,
+                    argument.lineno,
+                    argument.col_offset,
+                    'argument',
+                    in_type_checking_block=in_type_checking_block,
+                )
+            )
+
+        for path in ('kwarg', 'vararg'):
+            if arg := getattr(node.args, path, None):
                 # Map annotations
                 if getattr(arg, 'annotation', None):
-                    self.add_annotation(arg.annotation)
+                    self.add_annotation(arg.annotation, parent_scope)
 
                 # Map argument names
                 if name := getattr(arg, 'arg', None):
-                    self._add_function_scope_names(lineno=node.lineno, name=name)
+                    self.current_scope.symbols[name].append(
+                        Symbol(
+                            name, arg.lineno, arg.col_offset, 'argument', in_type_checking_block=in_type_checking_block
+                        )
+                    )
 
-        if hasattr(node, 'returns') and node.returns:
-            self.add_annotation(node.returns)
+        # add PEP695 type parameters to function scope
+        for type_param in getattr(node, 'type_params', ()):
+            self.current_scope.symbols[type_param.name].append(
+                Symbol(
+                    type_param.name,
+                    type_param.lineno,
+                    type_param.col_offset,
+                    # we should be able to treat type vars like arguments
+                    'argument',
+                    in_type_checking_block=in_type_checking_block,
+                )
+            )
 
-        self.register_function_ranges(node)
+        if returns := getattr(node, 'returns', None):
+            self.add_annotation(returns, parent_scope)
+
+        if name := getattr(node, 'name', None):
+            parent_scope.symbols[name].append(
+                Symbol(
+                    name,
+                    node.lineno,
+                    node.col_offset,
+                    'definition',
+                    in_type_checking_block=in_type_checking_block,
+                )
+            )
 
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
-        super().visit_FunctionDef(node)
-        self.register_function_annotations(node)
-        self.generic_visit(node)
+        with self.create_scope(node):
+            super().visit_FunctionDef(node)
+            self.register_function_annotations(node)
+            self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
-        super().visit_AsyncFunctionDef(node)
-        self.register_function_annotations(node)
-        self.generic_visit(node)
+        with self.create_scope(node):
+            super().visit_AsyncFunctionDef(node)
+            self.register_function_annotations(node)
+            self.generic_visit(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        """Remove and map argument symbols."""
+        with self.create_scope(node):
+            self.register_function_annotations(node)
+            self.generic_visit(node)
 
     def register_unquoted_type_in_typing_cast(self, node: ast.Call) -> None:
         """Find typing.cast() calls with the type argument unquoted."""
@@ -1071,6 +1227,8 @@ class TypingOnlyImportsChecker:
     __slots__ = [
         'cwd',
         'strict_mode',
+        'builtin_names',
+        'used_type_checking_names',
         'visitor',
         'generators',
         'future_option_enabled',
@@ -1079,6 +1237,14 @@ class TypingOnlyImportsChecker:
     def __init__(self, node: ast.Module, options: Optional[Namespace]) -> None:
         self.cwd = Path(os.getcwd())
         self.strict_mode = getattr(options, 'type_checking_strict', False)
+
+        # we use the same option as pyflakes to extend the list of builtins
+        self.builtin_names = builtin_names
+        additional_builtins = getattr(options, 'builtins', [])
+        if additional_builtins:
+            self.builtin_names.union(additional_builtins)
+
+        self.used_type_checking_names: set[str] = set()
 
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
@@ -1110,21 +1276,19 @@ class TypingOnlyImportsChecker:
         self.generators = [
             # TC001 - TC003
             self.unused_imports,
-            # TC004
-            self.used_type_checking_imports,
+            # TC004, TC009 this needs to run before TC100/TC200/TC007
+            self.used_type_checking_symbols,
             # TC005
             self.empty_type_checking_blocks,
             # TC006
             self.unquoted_type_in_cast,
-            # TC009
-            self.used_type_checking_declarations,
             # TC100
             self.missing_futures_import,
             # TC101
             self.futures_excess_quotes,
-            # TC200, TC006
+            # TC200, TC007
             self.missing_quotes,
-            # TC201, TC007
+            # TC201, TC008
             self.excess_quotes,
         ]
 
@@ -1160,32 +1324,48 @@ class TypingOnlyImportsChecker:
                 node = error_specific_imports.pop(import_name.import_name)
                 yield node.lineno, node.col_offset, error.format(module=import_name.import_name), None
 
-    def used_type_checking_imports(self) -> Flake8Generator:
-        """TC004."""
-        for _import, import_name in self.visitor.type_checking_block_imports:
-            if import_name in self.visitor.uses:
-                # If we get to here, we're pretty sure that the import
-                # shouldn't actually live inside a type-checking block
+    def used_type_checking_symbols(self) -> Flake8Generator:
+        """TC004 and TC009."""
+        for symbol in self.visitor.type_checking_symbols():
+            if symbol.name in self.builtin_names:
+                # this symbol is always available at runtime
+                continue
 
-                use = self.visitor.uses[import_name]
+            uses = self.visitor.uses.get(symbol.name)
+            if not uses:
+                # the symbol is not used at runtime so we're fine
+                continue
 
-                # .. or whether there is another duplicate import inside the function scope
-                # (if the use is in a function scope)
-                use_in_function = False
-                if use.lineno in self.visitor.function_ranges:
-                    for i in range(
-                        self.visitor.function_ranges[use.lineno]['start'],
-                        self.visitor.function_ranges[use.lineno]['end'],
-                    ):
-                        if (
-                            i in self.visitor.function_scope_names
-                            and import_name in self.visitor.function_scope_names[i]['names']
-                        ):
-                            use_in_function = True
-                            break
+            for use, scope in uses:
+                if symbol.type not in ('import', 'definition'):
+                    # only imports and definitions can be moved around
+                    continue
 
-                if not use_in_function:
-                    yield _import.lineno, 0, TC004.format(module=import_name), None
+                if getattr(use, DUNDER_ALL_PROPERTY, False):
+                    # this is actually a quoted name, so it should exist
+                    # as long as it's in the scope at all, we don't need
+                    # to take the position into account
+                    lookup_from = None
+                else:
+                    lookup_from = use
+
+                if scope.lookup(symbol.name, lookup_from):
+                    # the symbol is available at runtime so we're fine
+                    continue
+
+                if symbol.type == 'import':
+                    msg = TC004.format(module=symbol.name)
+                    col_offset = 0
+                else:
+                    msg = TC009.format(name=symbol.name)
+                    col_offset = symbol.col_offset
+
+                yield symbol.lineno, col_offset, msg, None
+
+                self.used_type_checking_names.add(symbol.name)
+
+                # no need to check the other uses, since the error is on the symbol
+                break
 
     def empty_type_checking_blocks(self) -> Flake8Generator:
         """TC005."""
@@ -1197,50 +1377,31 @@ class TypingOnlyImportsChecker:
         for lineno, col_offset, annotation in self.visitor.unquoted_types_in_casts:
             yield lineno, col_offset, TC006.format(annotation=annotation), None
 
-    def used_type_checking_declarations(self) -> Flake8Generator:
-        """TC009."""
-        for decl, decl_name in self.visitor.type_checking_block_declarations:
-            if decl_name in self.visitor.uses:
-                # If we get to here, we're pretty sure that the declaration
-                # shouldn't actually live inside a type-checking block
-
-                use = self.visitor.uses[decl_name]
-
-                # .. or whether one of the argument names shadows a declaration
-                use_in_function = False
-                if use.lineno in self.visitor.function_ranges:
-                    for i in range(
-                        self.visitor.function_ranges[use.lineno]['start'],
-                        self.visitor.function_ranges[use.lineno]['end'],
-                    ):
-                        if (
-                            i in self.visitor.function_scope_names
-                            and decl_name in self.visitor.function_scope_names[i]['names']
-                        ):
-                            use_in_function = True
-                            break
-
-                if not use_in_function:
-                    yield decl.lineno, decl.col_offset, TC009.format(name=decl_name), None
-
     def missing_futures_import(self) -> Flake8Generator:
         """TC100."""
         if self.visitor.futures_annotation:
             return
 
-        # if all the symbols imported/declared in type checking blocks are used
-        # at runtime, then we're covered by TC004
-        unused_type_checking_names = self.visitor.type_checking_names - self.visitor.names
-        if not unused_type_checking_names:
-            return
-
         # if any of the symbols imported/declared in type checking blocks are used
         # in an annotation outside a type checking block, then we need to emit TC100
         for item in self.visitor.unwrapped_annotations:
-            if item.annotation not in unused_type_checking_names:
+            if item.type != 'annotation':
+                # aliases are unaffected by futures import
+                continue
+
+            if item.annotation in self.builtin_names:
+                # this symbol is always available at runtime
+                continue
+
+            if item.annotation in self.used_type_checking_names:
+                # this symbol already caused a TC004/TC009
                 continue
 
             if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
+                continue
+
+            if item.scope.lookup(item.annotation, item):
+                # the symbol is available at runtime, so we're fine
                 continue
 
             yield 1, 0, TC100, None
@@ -1255,9 +1416,59 @@ class TypingOnlyImportsChecker:
                     continue
 
                 yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
-        else:
+        # If no futures imports are present, then we use the generic excess_quotes function
+        # since the logic is the same as TC201
+
+    def missing_quotes(self) -> Flake8Generator:
+        """TC200 and TC007."""
+        for item in self.visitor.unwrapped_annotations:
+            # A new style alias does never need to be wrapped
+            if item.type == 'new-alias':
+                continue
+
+            if item.annotation in self.builtin_names:
+                # this symbol is always available at runtime
+                continue
+
+            if item.annotation in self.used_type_checking_names:
+                # this symbol already caused a TC004/TC009
+                continue
+
+            # Annotations inside `if TYPE_CHECKING:` blocks do not need to be wrapped
+            # unless they're used before definition, which is already covered by other
+            # flake8 rules (and also static type checkers)
+            if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
+                continue
+
+            if item.scope.lookup(item.annotation, item, runtime_only=False) and not item.scope.lookup(
+                item.annotation, item, runtime_only=True
+            ):
+                # the symbol is only available for type checking
+                if item.type == 'alias':
+                    error = TC007.format(alias=item.annotation)
+                else:
+                    error = TC200.format(annotation=item.annotation)
+                yield item.lineno, item.col_offset, error, None
+
+    def excess_quotes(self) -> Flake8Generator:
+        """TC101, TC201 and TC008."""
+        for item in self.visitor.wrapped_annotations:
+            # A new style type alias should never be wrapped
+            if item.type == 'new-alias':
+                yield item.lineno, item.col_offset, TC008.format(alias=item.annotation), None
+                continue
+
+            # False positives for TC201 can be harmful, since fixing them, rather than
+            # ignoring them will incur a runtime TypeError, so we should be even more
+            # careful than with TC101 and favor false negatives even more, as such we
+            # give up immediately if the annotation contains square brackets, because
+            # we can't know if subscripting the type at runtime is safe without inspecting
+            # the type's source code.
+            if '[' in item.annotation or '.' in item.annotation:
+                continue
+
             """
-            If we have no futures import and we have no imports inside a type-checking block, things get more tricky:
+            With wrapped annotations, things get more tricky:
 
             When you annotate something like this:
 
@@ -1287,72 +1498,25 @@ class TypingOnlyImportsChecker:
             So we don't try to unwrap the annotations as far as possible, we just check if the entire
             annotation can be unwrapped or not.
             """
-            type_checking_names = self.visitor.type_checking_names
 
-            for item in self.visitor.wrapped_annotations:
-                if item.type != 'annotation':  # TypeAlias value will not be affected by a futures import
-                    continue
-
-                if not item.names.isdisjoint(type_checking_names):
-                    continue
-
-                if any(class_name in item.names for class_name in self.visitor.class_names):
-                    continue
-
-                yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
-
-    def missing_quotes(self) -> Flake8Generator:
-        """TC200 and TC007."""
-        unused_type_checking_names = self.visitor.type_checking_names - self.visitor.names
-
-        for item in self.visitor.unwrapped_annotations:
-            # A new style alias does never need to be wrapped
-            if item.type == 'new-alias':
-                continue
-
-            # Annotations inside `if TYPE_CHECKING:` blocks do not need to be wrapped
-            # unless they're used before definition, which is already covered by other
-            # flake8 rules (and also static type checkers)
-            if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
-                continue
-
-            if item.annotation in unused_type_checking_names:
-                if item.type == 'alias':
-                    error = TC007.format(alias=item.annotation)
-                else:
-                    error = TC200.format(annotation=item.annotation)
-                yield item.lineno, item.col_offset, error, None
-
-    def excess_quotes(self) -> Flake8Generator:
-        """TC201 and TC008."""
-        type_checking_names = self.visitor.type_checking_names
-
-        for item in self.visitor.wrapped_annotations:
-            # A new style type alias should never be wrapped
-            if item.type == 'new-alias':
-                yield item.lineno, item.col_offset, TC008.format(alias=item.annotation), None
-                continue
-
-            # False positives for TC201 can be harmful, since fixing them, rather than
-            # ignoring them will incur a runtime TypeError, so we should be even more
-            # careful than with TC101 and favor false negatives even more, as such we
-            # give up immediately if the annotation contains square brackets, because
-            # we can't know if subscripting the type at runtime is safe without inspecting
-            # the type's source code.
-            if '[' in item.annotation or '.' in item.annotation:
-                continue
-
-            # See comment in futures_excess_quotes
-            if not item.names.isdisjoint(type_checking_names):
-                continue
-
-            if any(class_name in item.names for class_name in self.visitor.class_names):
+            if any(
+                name not in self.builtin_names
+                and (
+                    item.scope.lookup(name, item, runtime_only=False) is not None
+                    and item.scope.lookup(name, item, runtime_only=True) is None
+                )
+                for name in item.names
+            ):
+                # if any of the symbols are only available at type checking time we can't unwrap
                 continue
 
             if item.type == 'alias':
                 error = TC008.format(alias=item.annotation)
             else:
                 error = TC201.format(annotation=item.annotation)
+
+                if not self.visitor.futures_annotation:
+                    yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
 
             yield item.lineno, item.col_offset, error, None
 

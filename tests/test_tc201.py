@@ -15,6 +15,7 @@ examples = [
     # this used to emit an error before fixing #164 if we wanted to handle
     # this case once again we could add a whitelist of subscriptable types
     ("x: 'Dict[int]'", set()),
+    ("from typing import Dict\nx: 'Dict'", {'2:3 ' + TC201.format(annotation='Dict')}),
     ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TC201.format(annotation='int')}),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'", set()),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
@@ -77,15 +78,14 @@ examples = [
         set(),
     ),
     (
-        # avoid false positive for annotations that make
-        # use of a newly defined class
+        # this used to yield false negatives but works now, yay
         textwrap.dedent('''
         class Foo(Protocol):
             pass
 
         x: 'Foo | None'
         '''),
-        set(),
+        {'5:3 ' + TC201.format(annotation='Foo | None')},
     ),
     (
         # Regression test for Issue #168
@@ -110,15 +110,21 @@ examples = [
         set(),
     ),
     (
-        # Inverse regression test for Issue #168
-        # The declarations are inside a Protocol so they should not
-        # count towards declarations inside a type checking block
+        # Regression test for Issue #168
+        # The runtime declarations are inside a different scope, so
+        # they should not affect the outcome in the global scope
         # This used to raise errors for P.args and P.kwargs and
         # ideally it still would, but it would require more complex
         # logic in order to avoid false positives, so for now we
         # put up with the false negatives here
         textwrap.dedent('''
         if TYPE_CHECKING:
+            Foo = str | int
+            Bar: TypeAlias = Foo | None
+            T = TypeVar('T')
+            Ts = TypeVarTuple('Ts')
+            P = ParamSpec('P')
+        else:
             class X(Protocol):
                 Foo = str | int
                 Bar: TypeAlias = Foo | None
@@ -136,12 +142,7 @@ examples = [
         def bar(*args: 'P.args', **kwargs: 'P.kwargs') -> None:
             pass
         '''),
-        {
-            '10:3 ' + TC201.format(annotation='Foo | None'),
-            '11:3 ' + TC201.format(annotation='Bar | None'),
-            '14:11 ' + TC201.format(annotation='T'),
-            '14:30 ' + TC201.format(annotation='Ts'),
-        },
+        set(),
     ),
     (
         # Regression test for type checking only module attributes

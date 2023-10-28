@@ -51,15 +51,14 @@ examples = [
         set(),
     ),
     (
-        # avoid false positive for annotations that make
-        # use of a newly defined class
+        # this used to yield false negatives but works now, yay
         textwrap.dedent('''
         class Foo(Protocol):
             pass
 
         x: TypeAlias = 'Foo | None'
         '''),
-        set(),
+        {'5:15 ' + TC008.format(alias='Foo | None')},
     ),
     (
         # Regression test for Issue #168
@@ -72,19 +71,19 @@ examples = [
         set(),
     ),
     (
-        # Inverse regression test for Issue #168
-        # The declarations are inside a Protocol so they should not
-        # count towards declarations inside a type checking block
+        # Regression test for Issue #168
+        # The runtime declaration are inside a Protocol so they should not
+        # affect the outcome
         textwrap.dedent('''
         if TYPE_CHECKING:
+            Foo: TypeAlias = str | int
+        else:
             class X(Protocol):
                 Foo: str | int
 
         Bar: TypeAlias = 'Foo'
         '''),
-        {
-            '6:17 ' + TC008.format(alias='Foo'),
-        },
+        set(),
     ),
 ]
 
