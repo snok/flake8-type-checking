@@ -581,6 +581,14 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         yield scope
         self.current_scope = parent
 
+    @contextmanager
+    def change_scope(self, scope: Scope) -> Iterator[None]:
+        """Change to a different scope."""
+        old_scope = self.current_scope
+        self.current_scope = scope
+        yield
+        self.current_scope = old_scope
+
     @property
     def typing_module_name(self) -> str:
         """
@@ -876,7 +884,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         )
 
         with self.create_scope(node, is_head=True) as head_scope:
-            # add PEP695 type parameters to class scope
+            # add PEP695 type parameters to class head scope
             for type_param in getattr(node, 'type_params', ()):
                 head_scope.symbols[type_param.name].append(
                     Symbol(
@@ -1182,6 +1190,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                         )
                     )
 
+        # we need to visit the arguments in the head scope instead of the body scope
+        with self.change_scope(head_scope):
+            self.visit(node.args)
+
         if returns := getattr(node, 'returns', None):
             self.add_annotation(returns, head_scope)
 
@@ -1196,25 +1208,36 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
                 )
             )
 
+        if isinstance(node, ast.Lambda):
+            self.visit(node.body)
+        else:
+            for stmt in node.body:
+                self.visit(stmt)
+
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
+        for expr in node.decorator_list:
+            self.visit(expr)
+
         with self.create_scope(node, is_head=True), self.create_scope(node, is_head=False):
             super().visit_FunctionDef(node)
             self.register_function_annotations(node)
-            self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function argument- and return annotations."""
+        for expr in node.decorator_list:
+            self.visit(expr)
+
         with self.create_scope(node, is_head=True), self.create_scope(node, is_head=False):
             super().visit_AsyncFunctionDef(node)
             self.register_function_annotations(node)
-            self.generic_visit(node)
+
+        self.visit(node.args)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         """Remove and map argument symbols."""
         with self.create_scope(node, is_head=True), self.create_scope(node, is_head=False):
             self.register_function_annotations(node)
-            self.generic_visit(node)
 
     def register_unquoted_type_in_typing_cast(self, node: ast.Call) -> None:
         """Find typing.cast() calls with the type argument unquoted."""
