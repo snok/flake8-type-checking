@@ -7,6 +7,8 @@ The idea is that we should raise one of these errors if a file contains any type
 
 One thing to note: futures imports should always be at the top of a file, so we only need to check one line.
 """
+import sys
+import textwrap
 
 import pytest
 
@@ -42,6 +44,25 @@ examples = [
     # Import used for returns
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\ndef example() -> Dict[str, int]:\n\tpass', {'1:0 ' + TC100}),
 ]
+
+if sys.version_info >= (3, 12):
+    # PEP695 tests
+    examples += [
+        (
+            textwrap.dedent("""
+            if TYPE_CHECKING:
+                from .types import T
+
+            def foo[T](a: T) -> T: ...
+
+            type Foo[T] = T | None
+
+            class Bar[T](Sequence[T]):
+                x: T
+            """),
+            set(),
+        )
+    ]
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)

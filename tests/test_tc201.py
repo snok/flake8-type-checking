@@ -2,6 +2,7 @@
 File tests TC201:
     Annotation is wrapped in unnecessary quotes
 """
+import sys
 import textwrap
 
 import pytest
@@ -154,6 +155,25 @@ examples = [
         set(),
     ),
 ]
+
+if sys.version_info >= (3, 12):
+    # PEP695 tests
+    examples += [
+        (
+            textwrap.dedent("""
+            def foo[T](a: 'T') -> 'T':
+                pass
+
+            class Bar[T]:
+                x: 'T'
+            """),
+            {
+                '2:14 ' + TC201.format(annotation='T'),
+                '2:22 ' + TC201.format(annotation='T'),
+                '6:7 ' + TC201.format(annotation='T'),
+            },
+        )
+    ]
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)

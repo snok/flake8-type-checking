@@ -132,21 +132,23 @@ examples = [
 ]
 
 if sys.version_info >= (3, 12):
-    examples.append(
+    # PEP695 tests
+    examples += [
         (
-            # Make sure we didn't introduce any regressions while solving #167
-            # using new type alias syntax
-            # TODO: Make sure we actually need to wrap Foo if we use future
-            textwrap.dedent('''
-            from __future__ import annotations
-            if TYPE_CHECKING:
-                from foo import Foo
+            textwrap.dedent("""
+            def foo[T](a: 'T') -> 'T':
+                pass
 
-            type x = 'Foo'
-            '''),
-            set(),
+            class Bar[T](Set['T']):
+                x: 'T'
+            """),
+            {
+                '2:14 ' + TC101.format(annotation='T'),
+                '2:22 ' + TC101.format(annotation='T'),
+                '6:7 ' + TC101.format(annotation='T'),
+            },
         )
-    )
+    ]
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
