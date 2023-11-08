@@ -1062,15 +1062,31 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         self.visit(node.value)
 
     def visit_Assign(self, node: ast.Assign) -> ast.Assign:
-        """Keep track of variable definitions."""
+        """
+        Keep track of variable definitions.
+
+        Assignments are quite complex and can contain multiple targets such as:
+
+            `a = b = c = ...`
+
+        But each target can also be one of many things, such as a single name, a
+        list of names, a subscript or an attribute. We only care about names and
+        lists of names, i.e.:
+
+            `a = b, c = ...`
+
+        But not something like:
+
+            `foo[a] = foo.bar = ...`
+
+        """
         in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
 
         for target in node.targets:
-            # each target can either be an ast.Name or an ast.Tuple/ast.List containing
-            # ast.Names, but there's also assignments to ast.Subscript/ast.Attribute, we
-            # only need to record new symbols for ast.Name
+            # each target can either be a single node or an ast.Tuple/ast.List of nodes
             for name in getattr(target, 'elts', [target]):
                 if not hasattr(name, 'id'):
+                    # if the node isn't an ast.Name we don't record anything
                     continue
 
                 self.current_scope.symbols[name.id].append(
