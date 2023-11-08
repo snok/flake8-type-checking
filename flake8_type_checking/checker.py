@@ -1319,9 +1319,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         a little lax here, since there are no annotations inside comprehensions
         anyways.
         """
-        in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
-
         assert self.active_context is not None
+        in_type_checking_block = self.in_type_checking_block(self.active_context.lineno, self.active_context.col_offset)
         for name in getattr(node.target, 'elts', [node.target]):
             if not hasattr(name, 'id'):
                 continue
