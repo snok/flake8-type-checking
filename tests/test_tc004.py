@@ -170,24 +170,9 @@ examples = [
         """),
         set(),
     ),
-    # some more complex scope cases where we shouldn't report a
+    # Some more complex scope cases where we shouldn't report a
     # runtime use of a typing only symbol, because it is shadowed
-    # by an inline definition
-    (
-        textwrap.dedent("""
-        if TYPE_CHECKING:
-            from a import foo
-
-        (foo for foo in x)
-        [foo for y in x if (foo := y)]
-        {{foo for y in x for foo in y}}
-        {{foo: bar for y, foo in x for bar in y}}
-        x = foo if (foo := y) else None
-
-        """),
-        set(),
-    ),
-    # Inverse test for complex cases, we use five different symbols
+    # by an inline definition. We use five different symbols
     # since comprehension scopes will probably leak their iterator
     # variables in the future, just like regular loops, due to
     # comprehension inlining. So we currently treat definitions inside
@@ -198,9 +183,24 @@ examples = [
     (
         textwrap.dedent("""
         if TYPE_CHECKING:
-            from foo import u, w, x, y, z
+            from foo import v, w, x, y, z
 
-        (u(a) for a in foo)
+        (v for v in foo)
+        [w for bar in foo if (w := bar)]
+        {{x for bar in foo for x in bar}}
+        {{y: baz for y, bar in foo for baz in y}}
+        foo = z if (z := bar) else None
+
+        """),
+        set(),
+    ),
+    # Inverse test for complex cases
+    (
+        textwrap.dedent("""
+        if TYPE_CHECKING:
+            from foo import v, w, x, y, z
+
+        (v(a) for a in foo)
         [w(a) for a in foo]
         {{x(a) for a in foo}}
         {{a: y for a in foo}}
@@ -208,7 +208,7 @@ examples = [
 
         """),
         {
-            '3:0 ' + TC004.format(module='u'),
+            '3:0 ' + TC004.format(module='v'),
             '3:0 ' + TC004.format(module='w'),
             '3:0 ' + TC004.format(module='x'),
             '3:0 ' + TC004.format(module='y'),
