@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from typing import Any, Generator, Optional, Protocol, Tuple, Union
 
     Function = Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda]
+    Comprehension = Union[ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp]
     Import = Union[ast.Import, ast.ImportFrom]
     Flake8Generator = Generator[Tuple[int, int, str, Any], None, None]
 
