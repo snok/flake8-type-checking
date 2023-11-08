@@ -973,7 +973,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         self, node: ast.AST, scope: Scope, type: Literal['annotation', 'alias', 'new-alias'] = 'annotation'
     ) -> None:
         """Map all annotations on an AST node."""
-        if isinstance(node, ast.Ellipsis) or node is None:
+        if node is None:
             return
         if isinstance(node, ast.BinOp):
             if not isinstance(node.op, ast.BitOr):
@@ -1478,13 +1478,11 @@ class TypingOnlyImportsChecker:
             self.empty_type_checking_blocks,
             # TC006
             self.unquoted_type_in_cast,
-            # TC100
-            self.missing_futures_import,
+            # TC100, TC200, TC007
+            self.missing_quotes_or_futures_import,
             # TC101
             self.futures_excess_quotes,
-            # TC200, TC007
-            self.missing_quotes,
-            # TC201, TC008
+            # TC101, TC201, TC008
             self.excess_quotes,
         ]
 
@@ -1573,53 +1571,10 @@ class TypingOnlyImportsChecker:
         for lineno, col_offset, annotation in self.visitor.unquoted_types_in_casts:
             yield lineno, col_offset, TC006.format(annotation=annotation), None
 
-    def missing_futures_import(self) -> Flake8Generator:
-        """TC100."""
-        if self.visitor.futures_annotation:
-            return
+    def missing_quotes_or_futures_import(self) -> Flake8Generator:
+        """TC100, TC200 and TC007."""
+        encountered_missing_quotes = False
 
-        # if any of the symbols imported/declared in type checking blocks are used
-        # in an annotation outside a type checking block, then we need to emit TC100
-        for item in self.visitor.unwrapped_annotations:
-            if item.type != 'annotation':
-                # aliases are unaffected by futures import
-                continue
-
-            if item.annotation in self.builtin_names:
-                # this symbol is always available at runtime
-                continue
-
-            if item.annotation in self.used_type_checking_names:
-                # this symbol already caused a TC004/TC009
-                continue
-
-            # Annotations inside `if TYPE_CHECKING:` blocks do not need to be wrapped
-            # unless they're used before definition, which is already covered by other
-            # flake8 rules (and also static type checkers)
-            if self.visitor.in_type_checking_block(item.lineno, item.col_offset):
-                continue
-
-            if item.scope.lookup(item.annotation, item, runtime_only=False) and not item.scope.lookup(
-                item.annotation, item, runtime_only=True
-            ):
-                # the symbol is only available for type checking
-                yield 1, 0, TC100, None
-                return
-
-    def futures_excess_quotes(self) -> Flake8Generator:
-        """TC101."""
-        # If futures imports are present, any ast.Constant captured in add_annotation should yield an error
-        if self.visitor.futures_annotation:
-            for item in self.visitor.wrapped_annotations:
-                if item.type != 'annotation':  # TypeAlias value will not be affected by a futures import
-                    continue
-
-                yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
-        # If no futures imports are present, then we use the generic excess_quotes function
-        # since the logic is the same as TC201
-
-    def missing_quotes(self) -> Flake8Generator:
-        """TC200 and TC007."""
         for item in self.visitor.unwrapped_annotations:
             # A new style alias does never need to be wrapped
             if item.type == 'new-alias':
@@ -1646,8 +1601,26 @@ class TypingOnlyImportsChecker:
                 if item.type == 'alias':
                     error = TC007.format(alias=item.annotation)
                 else:
+                    encountered_missing_quotes = True
                     error = TC200.format(annotation=item.annotation)
                 yield item.lineno, item.col_offset, error, None
+
+        # if any of the symbols imported/declared in type checking blocks are used
+        # in an annotation outside a type checking block, then we need to emit TC100
+        if encountered_missing_quotes and not self.visitor.futures_annotation:
+            yield 1, 0, TC100, None
+
+    def futures_excess_quotes(self) -> Flake8Generator:
+        """TC101."""
+        # If futures imports are present, any ast.Constant captured in add_annotation should yield an error
+        if self.visitor.futures_annotation:
+            for item in self.visitor.wrapped_annotations:
+                if item.type != 'annotation':  # TypeAlias value will not be affected by a futures import
+                    continue
+
+                yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
+        # If no futures imports are present, then we use the generic excess_quotes function
+        # since the logic is the same as TC201
 
     def excess_quotes(self) -> Flake8Generator:
         """TC101, TC201 and TC008."""
