@@ -167,8 +167,53 @@ examples = [
 
             bar: Foo = Foo()
 
-    """),
+        """),
         set(),
+    ),
+    # some more complex scope cases where we shouldn't report a
+    # runtime use of a typing only symbol, because it is shadowed
+    # by an inline definition
+    (
+        textwrap.dedent("""
+        if TYPE_CHECKING:
+            from a import foo
+
+        (foo for foo in x)
+        [foo for y in x if (foo := y)]
+        {{foo for y in x for foo in y}}
+        {{foo: bar for y, foo in x for bar in y}}
+        x = foo if (foo := y) else None
+
+        """),
+        set(),
+    ),
+    # Inverse test for complex cases, we use five different symbols
+    # since comprehension scopes will probably leak their iterator
+    # variables in the future, just like regular loops, due to
+    # comprehension inlining. So we currently treat definitions inside
+    # a comprehension as if it occured outside. We may change our minds
+    # about this in the future, but comprehension scopes have a bunch of
+    # special rules (such as being able to access enclosing class scopes)
+    # so it's either to not treat them as separate scopes for now.
+    (
+        textwrap.dedent("""
+        if TYPE_CHECKING:
+            from foo import u, w, x, y, z
+
+        (u(a) for a in foo)
+        [w(a) for a in foo]
+        {{x(a) for a in foo}}
+        {{a: y for a in foo}}
+        x = foo if (foo := z) else None
+
+        """),
+        {
+            '3:0 ' + TC004.format(module='u'),
+            '3:0 ' + TC004.format(module='w'),
+            '3:0 ' + TC004.format(module='x'),
+            '3:0 ' + TC004.format(module='y'),
+            '3:0 ' + TC004.format(module='z'),
+        },
     ),
 ]
 
