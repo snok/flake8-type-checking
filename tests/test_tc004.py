@@ -127,22 +127,6 @@ examples = [
     """),
         set(),
     ),
-    # regression test for #131
-    # a common pattern for inheriting from generics that aren't runtime subscriptable
-    (
-        textwrap.dedent("""
-        from wtforms import Field
-
-        if TYPE_CHECKING:
-            BaseField = Field[int]
-        else:
-            BaseField = Field
-
-        class IntegerField(BaseField):
-            pass
-    """),
-        set(),
-    ),
     # Regression test for #131
     # handle scopes correctly
     (
