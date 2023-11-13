@@ -18,92 +18,92 @@ examples = [
     # Used in file
     (
         textwrap.dedent("""
-    from typing import TYPE_CHECKING
+        from typing import TYPE_CHECKING
 
-    if TYPE_CHECKING:
-        datetime = Any
+        if TYPE_CHECKING:
+            datetime = Any
 
-    x = datetime
-    """),
+        x = datetime
+        """),
         {'5:4 ' + TC009.format(name='datetime')},
     ),
     # Used in function
     (
         textwrap.dedent("""
-    from typing import TYPE_CHECKING
+        from typing import TYPE_CHECKING
 
-    if TYPE_CHECKING:
-        class date: ...
+        if TYPE_CHECKING:
+            class date: ...
 
-    def example():
-        return date()
-    """),
+        def example():
+            return date()
+        """),
         {'5:4 ' + TC009.format(name='date')},
     ),
     # Used, but only used inside the type checking block
     (
         textwrap.dedent("""
-    if TYPE_CHECKING:
-        class date: ...
+        if TYPE_CHECKING:
+            class date: ...
 
-        CustomType = date
-    """),
+            CustomType = date
+        """),
         set(),
     ),
     # Used for typing only
     (
         textwrap.dedent("""
-    if TYPE_CHECKING:
-        class date: ...
+        if TYPE_CHECKING:
+            class date: ...
 
-    def example(*args: date, **kwargs: date):
-        return
+        def example(*args: date, **kwargs: date):
+            return
 
-    my_type: Type[date] | date
-    """),
+        my_type: Type[date] | date
+        """),
         set(),
     ),
     (
         textwrap.dedent("""
-    from __future__ import annotations
+        from __future__ import annotations
 
-    from typing import TYPE_CHECKING
+        from typing import TYPE_CHECKING
 
-    if TYPE_CHECKING:
-        class AsyncIterator: ...
+        if TYPE_CHECKING:
+            class AsyncIterator: ...
 
 
-    class Example:
+        class Example:
 
-        async def example(self) -> AsyncIterator[list[str]]:
-            yield 0
-    """),
+            async def example(self) -> AsyncIterator[list[str]]:
+                yield 0
+        """),
         set(),
     ),
     (
         textwrap.dedent("""
-    from typing import TYPE_CHECKING
-    from weakref import WeakKeyDictionary
+        from typing import TYPE_CHECKING
+        from weakref import WeakKeyDictionary
 
-    if TYPE_CHECKING:
-        Any = str
+        if TYPE_CHECKING:
+            Any = str
 
 
-    d = WeakKeyDictionary["Any", "Any"]()
-    """),
+        d = WeakKeyDictionary["Any", "Any"]()
+        """),
         set(),
     ),
     (
         textwrap.dedent("""
-    if TYPE_CHECKING:
-        a = int
-        b: TypeAlias = str
-        class c(Protocol): ...
-        class d(TypedDict): ...
+        if TYPE_CHECKING:
+            a = int
+            b: TypeAlias = str
+            class c(Protocol): ...
+            class d(TypedDict): ...
 
-    def test_function(a, /, b, *, c, **d):
-        print(a, b, c, d)
-    """),
+        def test_function(a, /, b, *, c, **d):
+            print(a, b, c, d)
+        """),
         set(),
     ),
     # Regression test for #131
@@ -131,8 +131,38 @@ examples = [
 
             bar: Foo = Foo()
 
-    """),
+        """),
         set(),
+    ),
+    # regression test for #131
+    # a common pattern for inheriting from generics that aren't runtime subscriptable
+    (
+        textwrap.dedent("""
+        from wtforms import Field
+
+        if TYPE_CHECKING:
+            BaseField = Field[int]
+        else:
+            BaseField = Field
+
+        class IntegerField(BaseField):
+            pass
+        """),
+        set(),
+    ),
+    # inverse regression test for #131
+    # here we forgot the else so it will complain about BaseField
+    (
+        textwrap.dedent("""
+        from wtforms import Field
+
+        if TYPE_CHECKING:
+            BaseField = Field[int]
+
+        class IntegerField(BaseField):
+            pass
+        """),
+        {'5:4 ' + TC009.format(name='BaseField')},
     ),
 ]
 
