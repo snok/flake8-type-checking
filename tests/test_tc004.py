@@ -154,6 +154,33 @@ examples = [
         """),
         set(),
     ),
+    # Inverse Regression test for #131
+    # handle scopes correctly, so we should get an error for the imports
+    # in the inner scopes, but not one for the outer scope.
+    (
+        textwrap.dedent("""
+        if TYPE_CHECKING:
+            from a import Foo
+
+        def foo():
+            if TYPE_CHECKING:
+                from b import Foo
+
+            bar: Foo = Foo()
+            return bar
+
+        class X:
+            if TYPE_CHECKING:
+                from b import Foo
+
+            bar: Foo = Foo()
+
+        """),
+        {
+            '7:0 ' + TC004.format(module='Foo'),
+            '14:0 ' + TC004.format(module='Foo'),
+        },
+    ),
     # Some more complex scope cases where we shouldn't report a
     # runtime use of a typing only symbol, because it is shadowed
     # by an inline definition. We use five different symbols

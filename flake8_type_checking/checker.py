@@ -1543,8 +1543,15 @@ class TypingOnlyImportsChecker:
                 else:
                     lookup_from = use
 
-                if scope.lookup(symbol.name, lookup_from):
+                if scope.lookup(symbol.name, lookup_from, runtime_only=True):
                     # the symbol is available at runtime so we're fine
+                    continue
+                elif scope.lookup(symbol.name, lookup_from, runtime_only=False) is not symbol:
+                    # we are being shadowed so no need to emit an error, we can emit an error
+                    # for the shadowed name instead, this relies more heavily on giving us the
+                    # closest match when looking up symbols, so we may sometimes get this wrong
+                    # in cases where the symbol has been redefined within the same scope. But
+                    # the most important case is nested scopes, so this is probably fine.
                     continue
 
                 if symbol.type == 'import':
