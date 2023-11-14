@@ -246,6 +246,53 @@ class PydanticMixin:
                         self.visit(argument.annotation)
 
 
+class InjectorMixin:
+    """
+    Contains the necessary logic for injector (https://github.com/python-injector/injector) support.
+
+    For injected dependencies, we want to treat annotations as needed at runtime.
+    """
+
+    if TYPE_CHECKING:
+        injector_enabled: bool
+
+        def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+            ...
+
+    def visit_FunctionDef(self, node: FunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        super().visit_FunctionDef(node)  # type: ignore[misc]
+        if self.injector_enabled:
+            self.handle_injector_declaration(node)
+
+    def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        super().visit_AsyncFunctionDef(node)  # type: ignore[misc]
+        if self.injector_enabled:
+            self.handle_injector_declaration(node)
+
+    def handle_injector_declaration(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+        """
+        Adjust for injector declaration setting.
+
+        When the injector setting is enabled, treat all annotations from within
+        a function definition (except for return annotations) as needed at runtime.
+
+        To achieve this, we just visit the annotations to register them as "uses".
+        """
+        for path in [node.args.args, node.args.kwonlyargs]:
+            for argument in path:
+                if hasattr(argument, 'annotation') and argument.annotation:
+                    annotation = argument.annotation
+                    if not hasattr(annotation, 'value'):
+                        continue
+                    value = annotation.value
+                    if hasattr(value, 'id') and value.id == 'Inject':
+                        self.visit(argument.annotation)
+                    if hasattr(value, 'attr') and value.attr == 'Inject':
+                        self.visit(argument.annotation)
+
+
 class FastAPIMixin:
     """
     Contains the necessary logic for FastAPI support.
@@ -522,7 +569,7 @@ class Scope:
         return parent.lookup(symbol_name, use, runtime_only)
 
 
-class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
+class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
     """Map all imports outside of type-checking blocks."""
 
     #: The currently active scope
@@ -534,6 +581,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         pydantic_enabled: bool,
         fastapi_enabled: bool,
         fastapi_dependency_support_enabled: bool,
+        injector_enabled: bool,
         cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
         exempt_modules: Optional[list[str]] = None,
@@ -545,6 +593,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, FastAPIMixin, PydanticMixin, ast
         self.fastapi_enabled = fastapi_enabled
         self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
         self.cattrs_enabled = cattrs_enabled
+        self.injector_enabled = injector_enabled
         self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
         self.pydantic_validate_arguments_import_name = None
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
@@ -1448,6 +1497,7 @@ class TypingOnlyImportsChecker:
         fastapi_enabled = getattr(options, 'type_checking_fastapi_enabled', False)
         fastapi_dependency_support_enabled = getattr(options, 'type_checking_fastapi_dependency_support_enabled', False)
         cattrs_enabled = getattr(options, 'type_checking_cattrs_enabled', False)
+        injector_enabled = getattr(options, 'type_checking_injector_enabled', False)
 
         if fastapi_enabled and not pydantic_enabled:
             # FastAPI support must include Pydantic support.
@@ -1466,6 +1516,7 @@ class TypingOnlyImportsChecker:
             exempt_modules=exempt_modules,
             fastapi_dependency_support_enabled=fastapi_dependency_support_enabled,
             pydantic_enabled_baseclass_passlist=pydantic_enabled_baseclass_passlist,
+            injector_enabled=injector_enabled,
         )
         self.visitor.visit(node)
 
