@@ -252,13 +252,13 @@ class InjectorMixin:
 
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        super().visit_FunctionDef(node)
+        super().visit_FunctionDef(node)  # type: ignore[misc]
         if self.injector_enabled:
             self.handle_injector_declaration(node)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
-        super().visit_AsyncFunctionDef(node)
+        super().visit_AsyncFunctionDef(node)  # type: ignore[misc]
         if self.injector_enabled:
             self.handle_injector_declaration(node)
 
