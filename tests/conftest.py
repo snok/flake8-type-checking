@@ -40,6 +40,7 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         mock_options.type_checking_fastapi_enabled = False
         mock_options.type_checking_fastapi_dependency_support_enabled = False
         mock_options.type_checking_pydantic_enabled_baseclass_passlist = []
+        mock_options.type_checking_injector_enables = False
         mock_options.type_checking_strict = False
         # kwarg overrides
         for k, v in kwargs.items():

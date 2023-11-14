@@ -44,7 +44,8 @@ More examples can be found in the [examples](#examples) section.
 <br>
 
 If you're using [pydantic](https://pydantic-docs.helpmanual.io/),
-[fastapi](https://fastapi.tiangolo.com/), or [cattrs](https://github.com/python-attrs/cattrs)
+[fastapi](https://fastapi.tiangolo.com/), [cattrs](https://github.com/python-attrs/cattrs),
+or [injector](https://github.com/python-injector/injector)
 see the [configuration](#configuration) for how to enable support.
 
 ## Primary features
@@ -241,6 +242,17 @@ This can be added in the future if needed.
 ```ini
 [flake8]
 type-checking-cattrs-enabled = true  # default false
+```
+
+### Injector support
+
+If you're using the injector library, you can enable support. 
+This will treat any `Inject[Dependency]` types as needed at runtime.
+
+- **name**: `type-checking-injector-enabled`
+- **type**: `bool`
+```ini
+type-checking-injector-enabled = true  # default false
 ```
 
 ## Rationale
