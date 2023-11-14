@@ -19,6 +19,7 @@ def _visit(example: str) -> ImportVisitor:
         fastapi_enabled=False,
         fastapi_dependency_support_enabled=False,
         cattrs_enabled=False,
+        injector_enabled=False,
         pydantic_enabled_baseclass_passlist=[],
     )
     visitor.visit(ast.parse(example.replace('; ', '\n')))
