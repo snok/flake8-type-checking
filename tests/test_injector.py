@@ -1,6 +1,4 @@
-"""
-This file tests injector support.
-"""
+""" This file tests injector support."""
 
 import textwrap
 
@@ -18,9 +16,7 @@ from tests.conftest import _get_error
     ],
 )
 def test_non_pydantic_model(enabled, expected):
-    """
-    A class does not uses injector, so error should be rised in both scenarios.
-    """
+    """ A class does not use injector, so error should be risen in both scenarios."""
     example = textwrap.dedent('''
         from services import Service
 
@@ -40,9 +36,7 @@ def test_non_pydantic_model(enabled, expected):
     ],
 )
 def test_injector_option(enabled, expected):
-    """
-    When injector option is enabled, injector should be ignored.
-    """
+    """When an injector option is enabled, injector should be ignored."""
     example = textwrap.dedent('''
         from injector import Inject
         from services import Service
@@ -57,20 +51,18 @@ def test_injector_option(enabled, expected):
 @pytest.mark.parametrize(
     ('enabled', 'expected'),
     [
-        (True, {'4:0 ' + TC002.format(module='other_depenency.OtherDependency')}),
+        (True, {'4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
         (False, {'2:0 ' + TC002.format(module='injector.Inject'),
                  '3:0 ' + TC002.format(module='services.Service'),
-                 '4:0 ' + TC002.format(module='other_depenency.OtherDependency')}),
+                 '4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
     ],
 )
 def test_injector_option_only_allows_injected_dependencies(enabled, expected):
-    """
-    Whener injector option is enabled, only injected dependencies should be ignored.
-    """
+    """    Whenever an injector option is enabled, only injected dependencies should be ignored."""
     example = textwrap.dedent('''
         from injector import Inject
         from services import Service
-        from other_depenency import OtherDependency
+        from other_dependency import OtherDependency
 
         class X:
             def __init__(self, service: Inject[Service], other: OtherDependency) -> None:
@@ -83,21 +75,22 @@ def test_injector_option_only_allows_injected_dependencies(enabled, expected):
 @pytest.mark.parametrize(
     ('enabled', 'expected'),
     [
-        (True, {'4:0 ' + TC002.format(module='other_depenency.OtherDependency')}),
+        (True, {'4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
         (False, {'2:0 ' + TC002.format(module='injector.Inject'),
                  '3:0 ' + TC002.format(module='services.Service'),
-                 '4:0 ' + TC002.format(module='other_depenency.OtherDependency')}),
+                 '4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
     ],
 )
 def test_injector_option_only_allows_injector_slices(enabled, expected):
     """
-    Whener injector option is enabled, only injected dependencies should be ignored, not any dependencies with slices.
+    Whenever an injector option is enabled, only injected dependencies should be ignored,
+    not any dependencies with slices.
     """
     example = textwrap.dedent(
         """
         from injector import Inject
         from services import Service
-        from other_depenency import OtherDependency
+        from other_dependency import OtherDependency
 
         class X:
             def __init__(self, service: Inject[Service], other_deps: list[OtherDependency]) -> None:
@@ -117,9 +110,7 @@ def test_injector_option_only_allows_injector_slices(enabled, expected):
     ],
 )
 def test_injector_option_allows_injector_as_module(enabled, expected):
-    """
-    Whener injector option is enabled, injected dependencies should be ignored, even if import as module.
-    """
+    """Whenever an injector option is enabled, injected dependencies should be ignored, even if import as module."""
     example = textwrap.dedent('''
             import injector
             from services import Service
@@ -140,9 +131,7 @@ def test_injector_option_allows_injector_as_module(enabled, expected):
     ],
 )
 def test_injector_option_only_mentioned_second_time(enabled, expected):
-    """
-    Whenever an injector option is enabled, dependency referenced second time is accepted.
-    """
+    """Whenever an injector option is enabled, dependency referenced second time is accepted."""
     example = textwrap.dedent(
         """
         from injector import Inject
