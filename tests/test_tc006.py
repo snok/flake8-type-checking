@@ -8,6 +8,7 @@ runtime. Despite this, constructing complex types at runtime can have a very
 significant overhead in hot paths. This can be avoided by quoting the type so
 that it isn't resolved at runtime.
 """
+
 import textwrap
 
 import pytest

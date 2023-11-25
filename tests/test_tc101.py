@@ -2,6 +2,7 @@
 File tests TC101:
     Annotation is wrapped in unnecessary quotes
 """
+
 import sys
 import textwrap
 

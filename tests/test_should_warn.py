@@ -3,6 +3,7 @@ The behavior of all TC000 errors should be opt-out.
 
 The behavior of TC100 and TC200 errors should be opt-in.
 """
+
 import os
 import re
 from importlib.metadata import version

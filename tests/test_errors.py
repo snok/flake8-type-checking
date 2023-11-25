@@ -1,4 +1,5 @@
 """Contains special test cases that fall outside the scope of remaining test files."""
+
 import textwrap
 
 import pytest

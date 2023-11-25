@@ -4,6 +4,7 @@ This file tests the TC009 error:
     >> Move declaration out of type-checking block. Variable is used for more than type hinting.
 
 """
+
 import sys
 import textwrap
 

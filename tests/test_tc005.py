@@ -6,6 +6,7 @@ This file tests the TC005 error:
 Sometimes auto-formatting tools for removing redundant imports (i.e. Pycharms)
 will leave behind empty type-checking blocks. This just flags them as redundant.
 """
+
 import textwrap
 
 import pytest

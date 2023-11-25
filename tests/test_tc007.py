@@ -2,6 +2,7 @@
 File tests TC007:
     Type alias should be wrapped in quotes
 """
+
 import sys
 import textwrap
 

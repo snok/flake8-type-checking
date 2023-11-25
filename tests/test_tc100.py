@@ -7,6 +7,7 @@ The idea is that we should raise one of these errors if a file contains any type
 
 One thing to note: futures imports should always be at the top of a file, so we only need to check one line.
 """
+
 import sys
 import textwrap
 

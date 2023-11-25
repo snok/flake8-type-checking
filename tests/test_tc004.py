@@ -4,6 +4,7 @@ This file tests the TC004 error:
     >> Move import out of type-checking block. Import is used for more than type hinting.
 
 """
+
 import textwrap
 
 import pytest

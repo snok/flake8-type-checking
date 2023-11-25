@@ -2,6 +2,7 @@
 File tests TC200:
     Annotation should be wrapped in quotes
 """
+
 import sys
 import textwrap
 
