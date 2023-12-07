@@ -232,7 +232,7 @@ If you're using SQLAlchemy 2.0+, you can enable support.
 This will treat any `Mapped[...]` types as needed at runtime.
 It will also specially treat the enclosed type, since it may or may not
 need to be available at runtime depending on whether or not the enclosed
-type is a model or not, since model can have circular dependencies.
+type is a model or not, since models can have circular dependencies.
 
 - **name**: `type-checking-sqlalchemy-enabled`
 - **type**: `bool`
