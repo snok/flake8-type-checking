@@ -4,6 +4,7 @@ import ast
 import fnmatch
 import os
 import sys
+from abc import ABC, abstractmethod
 from ast import Index, literal_eval
 from collections import defaultdict
 from contextlib import contextmanager, suppress
@@ -19,7 +20,6 @@ from flake8_type_checking.constants import (
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
     ATTRS_IMPORTS,
-    DUNDER_ALL_PROPERTY,
     NAME_RE,
     TC001,
     TC002,
@@ -36,6 +36,7 @@ from flake8_type_checking.constants import (
     TC201,
     builtin_names,
     py38,
+    sqlalchemy_default_mapped_dotted_names,
 )
 
 try:
@@ -65,6 +66,41 @@ if TYPE_CHECKING:
         ImportTypeValue,
         Name,
     )
+
+
+class AnnotationVisitor(ABC):
+    """Simplified node visitor for traversing annotations."""
+
+    @abstractmethod
+    def visit_annotation_name(self, node: ast.Name) -> None:
+        """Visit a name inside an annotation."""
+
+    @abstractmethod
+    def visit_annotation_string(self, node: ast.Constant) -> None:
+        """Visit a string constant inside an annotation."""
+
+    def visit(self, node: ast.AST) -> None:
+        """Visit relevant child nodes on an annotation."""
+        if node is None:
+            return
+        if isinstance(node, ast.BinOp):
+            if not isinstance(node.op, ast.BitOr):
+                return
+            self.visit(node.left)
+            self.visit(node.right)
+        elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
+            self.visit(node.value)
+        elif isinstance(node, ast.Subscript):
+            self.visit(node.value)
+            if getattr(node.value, 'id', '') != 'Literal':
+                self.visit(node.slice)
+        elif isinstance(node, (ast.Tuple, ast.List)):
+            for n in node.elts:
+                self.visit(n)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            self.visit_annotation_string(node)
+        elif isinstance(node, ast.Name):
+            self.visit_annotation_name(node)
 
 
 class AttrsMixin:
@@ -152,6 +188,7 @@ class DunderAllMixin:
             ...
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
         self.__all___assignments: list[tuple[int, int]] = []
 
     def in___all___declaration(self, node: ast.Constant) -> bool:
@@ -201,8 +238,9 @@ class DunderAllMixin:
         """Map constant as use, if we're inside an __all__ declaration."""
         if self.in___all___declaration(node):
             # for these it doesn't matter where they are declared, the symbol
-            # just needs to be available in global scope anywhere
-            setattr(node, DUNDER_ALL_PROPERTY, True)
+            # just needs to be available in global scope anywhere, we handle
+            # this by special casing `ast.Constant` when we look for used type
+            # checking symbols
             self.uses[node.value].append((node, self.current_scope))
         return node
 
@@ -244,6 +282,207 @@ class PydanticMixin:
                 for argument in path:
                     if hasattr(argument, 'annotation') and argument.annotation:
                         self.visit(argument.annotation)
+
+
+class SQLAlchemyAnnotationVisitor(AnnotationVisitor):
+    """Adds any names in the annotation to mapped names."""
+
+    def __init__(self, mapped_names: set[str]) -> None:
+        self.mapped_names = mapped_names
+
+    def visit_annotation_name(self, node: ast.Name) -> None:
+        """Add name to mapped names."""
+        self.mapped_names.add(node.id)
+
+    def visit_annotation_string(self, node: ast.Constant) -> None:
+        """Add all the names in the string to mapped names."""
+        self.mapped_names.update(NAME_RE.findall(node.value))
+
+
+class SQLAlchemyMixin:
+    """
+    Contains the necessary logic for SQLAlchemy (https://www.sqlalchemy.org/) support.
+
+    For mapped attributes we don't know whether or not the enclosed type needs to be
+    available at runtime, since it may or may not be a model. So we treat it like a
+    runtime use for the purposes of TC001/TC002/TC003 but not anywhere else.
+
+    This supports `sqlalchemy.orm.Mapped`, `sqlalchemy.orm.DynamicMapped` and
+    `sqlalchemy.orm.WriteOnlyMapped` by default, but can be extended to cover
+    additional user-defined subclassed of `sqlalchemy.orm.Mapped` using the
+    setting `type-checking-sqlalchemy-mapped-dotted-names`.
+    """
+
+    if TYPE_CHECKING:
+        sqlalchemy_enabled: bool
+        sqlalchemy_mapped_dotted_names: set[str]
+        current_scope: Scope
+        uses: dict[str, list[tuple[ast.AST, Scope]]]
+
+        def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+            ...
+
+        def in_type_checking_block(self, lineno: int, col_offset: int) -> bool:  # noqa: D102
+            ...
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+        #: Contains a set of all the `Mapped` names that have been imported
+        self.mapped_aliases: set[str] = set()
+
+        #: Contains a dictionary of aliases to one of our dotted names containing one of the `Mapped` names
+        self.mapped_module_aliases: dict[str, str] = {}
+
+        #: Contains a set of all names used inside `Mapped[...]` annotations
+        # These are treated like soft-uses, i.e. we don't know if it will be
+        # used at runtime or not
+        self.mapped_names: set[str] = set()
+
+        #: Used for visiting annotations
+        self.sqlalchemy_annotation_visitor = SQLAlchemyAnnotationVisitor(self.mapped_names)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        """Record `Mapped` module aliases."""
+        if not self.sqlalchemy_enabled:
+            return
+
+        for name in node.names:
+            # we don't need to map anything
+            if name.asname is None:
+                continue
+
+            prefix = name.name + '.'
+            for dotted_name in self.sqlalchemy_mapped_dotted_names:
+                if dotted_name.startswith(prefix):
+                    self.mapped_module_aliases[name.asname] = name.name
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Record `Mapped` aliases."""
+        if not self.sqlalchemy_enabled:
+            return
+
+        # we don't try to deal with relative imports
+        if node.module is None or node.level != 0:
+            return
+
+        prefix = node.module + '.'
+        for dotted_name in self.sqlalchemy_mapped_dotted_names:
+            if not dotted_name.startswith(prefix):
+                continue
+
+            suffix = dotted_name[len(prefix) :]
+            if '.' in suffix:
+                # we may need to record a mapped module
+                for name in node.names:
+                    if suffix.startswith(name.name + '.'):
+                        self.mapped_module_aliases[name.asname or name.name] = node.module
+                    elif name.name == '*':
+                        # in this case we can assume that the next segment of the dotted
+                        # name has been imported
+                        self.mapped_module_aliases[suffix.split('.', 1)[0]] = node.module
+                continue
+
+            # we may need to record a mapped name
+            for name in node.names:
+                if suffix == name.name:
+                    self.mapped_aliases.add(name.asname or name.name)
+                elif name.name == '*':
+                    # in this case we can assume it has been imported
+                    self.mapped_aliases.add(suffix)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        """Remove all annotations assigments."""
+        if (
+            self.sqlalchemy_enabled
+            # We only need to special case runtime use of `Mapped`
+            and not self.in_type_checking_block(node.lineno, node.col_offset)
+        ):
+            self.handle_sqlalchemy_annotation(node.annotation)
+
+    def handle_sqlalchemy_annotation(self, node: ast.AST) -> None:
+        """
+        Record all the mapped names inside the annotations.
+
+        If the annotation is an `ast.Constant` that starts with one of our
+        `Mapped` names, then we will record a runtime use of that symbol,
+        since we know `Mapped` always needs to resolve.
+        """
+        if isinstance(node, ast.Constant):
+            # we only need to handle annotations like `"Mapped[...]"`
+            if not isinstance(node.value, str) or '[' not in node.value:
+                return
+
+            annotation = node.value.strip()
+            if not annotation.endswith(']'):
+                return
+
+            # if we ever do more sophisticated parsing of text annotations
+            # then we would want to strip the trailing `]` from inner, but
+            # with our simple parsing we don't care
+            mapped_name, inner = annotation.split('[', 1)
+            if mapped_name in self.mapped_aliases:
+                # record a use for the name
+                self.uses[mapped_name].append((node, self.current_scope))
+
+            elif mapped_name in self.sqlalchemy_mapped_dotted_names:
+                # record a use for the left-most part of the dotted name
+                self.uses[mapped_name.split('.', 1)[0]].append((node, self.current_scope))
+
+            elif '.' in annotation:
+                # try to resolve to a mapped module alias
+                aliased, mapped_name = mapped_name.split('.', 1)
+                module = self.mapped_module_aliases.get(aliased)
+                if module is None or f'{module}.{mapped_name}' not in self.sqlalchemy_mapped_dotted_names:
+                    return
+
+                # record a use for the alias
+                self.uses[aliased].append((node, self.current_scope))
+
+            # add all names contained in the inner part of the annotation
+            # since this is not as strict as an actual runtime use, we don't
+            # care if we record too much here
+            self.mapped_names.update(NAME_RE.findall(inner))
+            return
+
+        # we only need to handle annotations like `Mapped[...]`
+        if not isinstance(node, ast.Subscript):
+            return
+
+        # simple case only needs to check mapped_aliases
+        if isinstance(node.value, ast.Name):
+            if node.value.id not in self.mapped_aliases:
+                return
+
+            # record a use for the name
+            self.uses[node.value.id].append((node.value, self.current_scope))
+
+        # complex case for dotted names
+        elif isinstance(node.value, ast.Attribute):
+            dotted_name = node.value.attr
+            before_dot = node.value.value
+            while isinstance(before_dot, ast.Attribute):
+                dotted_name = f'{before_dot.attr}.{dotted_name}'
+                before_dot = before_dot.value
+            # there should be no subscripts between the attributes
+            if not isinstance(before_dot, ast.Name):
+                return
+
+            # map the module if it's mapped otherwise use it as is
+            module = self.mapped_module_aliases.get(before_dot.id, before_dot.id)
+            dotted_name = f'{module}.{dotted_name}'
+            if dotted_name not in self.sqlalchemy_mapped_dotted_names:
+                return
+
+            # record a use for the left-most node in the attribute access chain
+            self.uses[before_dot.id].append((before_dot, self.current_scope))
+
+        # any other case is invalid, such as `Foo[...][...]`
+        else:
+            return
+
+        # visit the wrapped annotations to update the mapped names
+        self.sqlalchemy_annotation_visitor.visit(node.slice)
 
 
 class InjectorMixin:
@@ -569,7 +808,46 @@ class Scope:
         return parent.lookup(symbol_name, use, runtime_only)
 
 
-class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, PydanticMixin, ast.NodeVisitor):
+class ImportAnnotationVisitor(AnnotationVisitor):
+    """Map all annotations on an AST node."""
+
+    def __init__(self) -> None:
+        #: All type annotations in the file, without quotes around them
+        self.unwrapped_annotations: list[UnwrappedAnnotation] = []
+
+        #: All type annotations in the file, with quotes around them
+        self.wrapped_annotations: list[WrappedAnnotation] = []
+
+    def visit(
+        self, node: ast.AST, scope: Scope | None = None, type: Literal['annotation', 'alias', 'new-alias'] | None = None
+    ) -> None:
+        """Visit the node with the given scope and annotation type."""
+        if scope is not None:
+            self.scope = scope
+        if type is not None:
+            self.type = type
+        super().visit(node)
+
+    def visit_annotation_name(self, node: ast.Name) -> None:
+        """Register unwrapped annotation."""
+        setattr(node, ANNOTATION_PROPERTY, True)
+        self.unwrapped_annotations.append(
+            UnwrappedAnnotation(node.lineno, node.col_offset, node.id, self.scope, self.type)
+        )
+
+    def visit_annotation_string(self, node: ast.Constant) -> None:
+        """Register wrapped annotation."""
+        setattr(node, ANNOTATION_PROPERTY, True)
+        self.wrapped_annotations.append(
+            WrappedAnnotation(
+                node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), self.scope, self.type
+            )
+        )
+
+
+class ImportVisitor(
+    DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, PydanticMixin, SQLAlchemyMixin, ast.NodeVisitor
+):
     """Map all imports outside of type-checking blocks."""
 
     #: The currently active scope
@@ -581,6 +859,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, Pyd
         pydantic_enabled: bool,
         fastapi_enabled: bool,
         fastapi_dependency_support_enabled: bool,
+        sqlalchemy_enabled: bool,
+        sqlalchemy_mapped_dotted_names: list[str],
         injector_enabled: bool,
         cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
@@ -593,6 +873,10 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, Pyd
         self.fastapi_enabled = fastapi_enabled
         self.fastapi_dependency_support_enabled = fastapi_dependency_support_enabled
         self.cattrs_enabled = cattrs_enabled
+        self.sqlalchemy_enabled = sqlalchemy_enabled
+        self.sqlalchemy_mapped_dotted_names = sqlalchemy_default_mapped_dotted_names | set(
+            sqlalchemy_mapped_dotted_names
+        )
         self.injector_enabled = injector_enabled
         self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
         self.pydantic_validate_arguments_import_name = None
@@ -619,11 +903,8 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, Pyd
         #: List of all names and ids, except type declarations
         self.uses: dict[str, list[tuple[ast.AST, Scope]]] = defaultdict(list)
 
-        #: All type annotations in the file, without quotes around them
-        self.unwrapped_annotations: list[UnwrappedAnnotation] = []
-
-        #: All type annotations in the file, with quotes around them
-        self.wrapped_annotations: list[WrappedAnnotation] = []
+        #: Handles logic of visiting annotation nodes
+        self.annotation_visitor = ImportAnnotationVisitor()
 
         #: Whether there is a `from __futures__ import annotations` is present in the file
         self.futures_annotation: Optional[bool] = None
@@ -666,6 +947,16 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, Pyd
         self.current_scope = scope
         yield
         self.current_scope = old_scope
+
+    @property
+    def unwrapped_annotations(self) -> list[UnwrappedAnnotation]:
+        """All type annotations in the file, without quotes around them."""
+        return self.annotation_visitor.unwrapped_annotations
+
+    @property
+    def wrapped_annotations(self) -> list[WrappedAnnotation]:
+        """All type annotations in the file, with quotes around them."""
+        return self.annotation_visitor.wrapped_annotations
 
     @property
     def typing_module_name(self) -> str:
@@ -939,10 +1230,12 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, Pyd
 
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
+        super().visit_Import(node)
         self.add_import(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Append objects to our import map."""
+        super().visit_ImportFrom(node)
         self.add_import(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
@@ -1022,34 +1315,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, Pyd
         self, node: ast.AST, scope: Scope, type: Literal['annotation', 'alias', 'new-alias'] = 'annotation'
     ) -> None:
         """Map all annotations on an AST node."""
-        if node is None:
-            return
-        if isinstance(node, ast.BinOp):
-            if not isinstance(node.op, ast.BitOr):
-                return
-            self.add_annotation(node.left, scope, type)
-            self.add_annotation(node.right, scope, type)
-        elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
-            self.add_annotation(node.value, scope, type)
-        elif isinstance(node, ast.Subscript):
-            self.add_annotation(node.value, scope, type)
-            if getattr(node.value, 'id', '') != 'Literal':
-                self.add_annotation(node.slice, scope, type)
-        elif isinstance(node, (ast.Tuple, ast.List)):
-            for n in node.elts:
-                self.add_annotation(n, scope, type)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            # Register annotation value
-            setattr(node, ANNOTATION_PROPERTY, True)
-            self.wrapped_annotations.append(
-                WrappedAnnotation(
-                    node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), scope, type
-                )
-            )
-        elif isinstance(node, ast.Name):
-            # Register annotation value
-            setattr(node, ANNOTATION_PROPERTY, True)
-            self.unwrapped_annotations.append(UnwrappedAnnotation(node.lineno, node.col_offset, node.id, scope, type))
+        self.annotation_visitor.visit(node, scope, type)
 
     @staticmethod
     def set_child_node_attribute(node: Any, attr: str, val: Any) -> Any:
@@ -1078,6 +1344,7 @@ class ImportVisitor(DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, Pyd
         an annotation as well, but we have to keep in mind that the RHS will not automatically become
         a ForwardRef with a future import, like a true annotation would.
         """
+        super().visit_AnnAssign(node)
         self.add_annotation(node.annotation, self.current_scope)
 
         if node.value is None:
@@ -1494,6 +1761,8 @@ class TypingOnlyImportsChecker:
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
         pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
+        sqlalchemy_enabled = getattr(options, 'type_checking_sqlalchemy_enabled', False)
+        sqlalchemy_mapped_dotted_names = getattr(options, 'type_checking_sqlalchemy_mapped_dotted_names', [])
         fastapi_enabled = getattr(options, 'type_checking_fastapi_enabled', False)
         fastapi_dependency_support_enabled = getattr(options, 'type_checking_fastapi_dependency_support_enabled', False)
         cattrs_enabled = getattr(options, 'type_checking_cattrs_enabled', False)
@@ -1514,6 +1783,8 @@ class TypingOnlyImportsChecker:
             fastapi_enabled=fastapi_enabled,
             cattrs_enabled=cattrs_enabled,
             exempt_modules=exempt_modules,
+            sqlalchemy_enabled=sqlalchemy_enabled,
+            sqlalchemy_mapped_dotted_names=sqlalchemy_mapped_dotted_names,
             fastapi_dependency_support_enabled=fastapi_dependency_support_enabled,
             pydantic_enabled_baseclass_passlist=pydantic_enabled_baseclass_passlist,
             injector_enabled=injector_enabled,
@@ -1545,7 +1816,7 @@ class TypingOnlyImportsChecker:
             Classified.BUILTIN: (self.visitor.built_in_imports, TC003),
         }
 
-        unused_imports = set(self.visitor.imports) - self.visitor.names
+        unused_imports = set(self.visitor.imports) - self.visitor.names - self.visitor.mapped_names
         used_imports = set(self.visitor.imports) - unused_imports
         already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
         annotation_names = [n for i in self.visitor.wrapped_annotations for n in i.names] + [
@@ -1586,7 +1857,7 @@ class TypingOnlyImportsChecker:
                     # only imports and definitions can be moved around
                     continue
 
-                if getattr(use, DUNDER_ALL_PROPERTY, False):
+                if isinstance(use, ast.Constant):
                     # this is actually a quoted name, so it should exist
                     # as long as it's in the scope at all, we don't need
                     # to take the position into account

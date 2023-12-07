@@ -19,6 +19,8 @@ def _get_names(example: str) -> Set[str]:
         fastapi_enabled=False,
         fastapi_dependency_support_enabled=False,
         cattrs_enabled=False,
+        sqlalchemy_enabled=False,
+        sqlalchemy_mapped_dotted_names=[],
         injector_enabled=False,
         pydantic_enabled_baseclass_passlist=[],
     )
