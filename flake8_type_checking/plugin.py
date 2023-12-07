@@ -65,6 +65,20 @@ class Plugin:
             help='Names of base classes to not treat as pydantic models. For example `NamedTuple` or `TypedDict`.',
         )
         option_manager.add_option(
+            '--type-checking-sqlalchemy-enabled',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Prevent flagging of annotations on mapped attributes.',
+        )
+        option_manager.add_option(
+            '--type-checking-sqlalchemy-mapped-dotted-names',
+            comma_separated_list=True,
+            parse_from_config=True,
+            default=[],
+            help='Dotted names of additional Mapped subclasses. For example `a.MyMapped, a.b.MyMapped`',
+        )
+        option_manager.add_option(
             '--type-checking-fastapi-enabled',
             action='store_true',
             parse_from_config=True,

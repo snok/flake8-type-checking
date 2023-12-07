@@ -6,7 +6,6 @@ import flake8
 
 ATTRIBUTE_PROPERTY = '_flake8-type-checking__parent'
 ANNOTATION_PROPERTY = '_flake8-type-checking__is_annotation'
-DUNDER_ALL_PROPERTY = '_flake8-type-checking__in__all__'
 
 NAME_RE = re.compile(r'(?<![\'".])\b[A-Za-z_]\w*(?![\'"])')
 
@@ -26,6 +25,13 @@ flake_version_gt_v4 = tuple(int(i) for i in flake8.__version__.split('.')) >= (4
 
 # Based off of what pyflakes does
 builtin_names = set(dir(builtins)) | {'__file__', '__builtins__', '__annotations__', 'WindowsError'}
+
+# SQLAlchemy 2.0 default mapped dotted names
+sqlalchemy_default_mapped_dotted_names = {
+    'sqlalchemy.orm.Mapped',
+    'sqlalchemy.orm.DynamicMapped',
+    'sqlalchemy.orm.WriteOnlyMapped',
+}
 
 # Error codes
 TC001 = "TC001 Move application import '{module}' into a type-checking block"

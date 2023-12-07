@@ -226,6 +226,38 @@ Enabling dependency support will also enable FastAPI and Pydantic support.
 type-checking-fastapi-dependency-support-enabled = true  # default false
 ```
 
+### SQLAlchemy 2.0+ support
+
+If you're using SQLAlchemy 2.0+, you can enable support.
+This will treat any `Mapped[...]` types as needed at runtime.
+It will also specially treat the enclosed type, since it may or may not
+need to be available at runtime depending on whether or not the enclosed
+type is a model or not, since model can have circular dependencies.
+
+- **name**: `type-checking-sqlalchemy-enabled`
+- **type**: `bool`
+```ini
+type-checking-sqlalchemy-enabled = true  # default false
+```
+
+### SQLAlchemy 2.0+ support mapped dotted names
+
+Since it's possible to create subclasses of `sqlalchemy.orm.Mapped` that
+define some custom behavior for the mapped attribute, but otherwise still
+behave like any other mapped attribute, i.e. the same runtime restrictions
+apply it's possible to provide additional dotted names that should be treated
+like subclasses of `Mapped`. By default we check for `sqlalchemy.orm.Mapped`,
+`sqlalchemy.orm.DynamicMapped` and `sqlalchemy.orm.WriteOnlyMapped`.
+
+If there's more than one import path for the same `Mapped` subclass, then you
+need to specify each of them as a separate dotted name.
+
+- **name**: `type-checking-sqlalchemy-mapped-dotted-names`
+- **type**: `list`
+```ini
+type-checking-sqlalchemy-mapped-dotted-names = a.MyMapped, a.b.MyMapped  # default []
+```
+
 ### Cattrs support
 
 If you're using the plugin in a project which uses `cattrs`,
