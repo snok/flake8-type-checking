@@ -20,6 +20,7 @@ from flake8_type_checking.constants import (
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
     ATTRS_IMPORTS,
+    BINOP_OPERAND_PROPERTY,
     NAME_RE,
     TC001,
     TC002,
@@ -30,6 +31,7 @@ from flake8_type_checking.constants import (
     TC007,
     TC008,
     TC009,
+    TC010,
     TC100,
     TC101,
     TC200,
@@ -86,6 +88,8 @@ class AnnotationVisitor(ABC):
         if isinstance(node, ast.BinOp):
             if not isinstance(node.op, ast.BitOr):
                 return
+            setattr(node.left, BINOP_OPERAND_PROPERTY, True)
+            setattr(node.right, BINOP_OPERAND_PROPERTY, True)
             self.visit(node.left)
             self.visit(node.right)
         elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
@@ -818,6 +822,9 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         #: All type annotations in the file, with quotes around them
         self.wrapped_annotations: list[WrappedAnnotation] = []
 
+        #: All the invalid uses of string literals inside ast.BinOp
+        self.invalid_binop_literals: list[ast.Constant] = []
+
     def visit(
         self, node: ast.AST, scope: Scope | None = None, type: Literal['annotation', 'alias', 'new-alias'] | None = None
     ) -> None:
@@ -836,13 +843,17 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         )
 
     def visit_annotation_string(self, node: ast.Constant) -> None:
-        """Register wrapped annotation."""
+        """Register wrapped annotation and invalid binop literals."""
         setattr(node, ANNOTATION_PROPERTY, True)
-        self.wrapped_annotations.append(
-            WrappedAnnotation(
-                node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), self.scope, self.type
+        # we don't want to register them as both so we don't emit redundant errors
+        if getattr(node, BINOP_OPERAND_PROPERTY, False):
+            self.invalid_binop_literals.append(node)
+        else:
+            self.wrapped_annotations.append(
+                WrappedAnnotation(
+                    node.lineno, node.col_offset, node.value, set(NAME_RE.findall(node.value)), self.scope, self.type
+                )
             )
-        )
 
 
 class ImportVisitor(
@@ -957,6 +968,11 @@ class ImportVisitor(
     def wrapped_annotations(self) -> list[WrappedAnnotation]:
         """All type annotations in the file, with quotes around them."""
         return self.annotation_visitor.wrapped_annotations
+
+    @property
+    def invalid_binop_literals(self) -> list[ast.Constant]:
+        """All invalid uses of binop literals."""
+        return self.annotation_visitor.invalid_binop_literals
 
     @property
     def typing_module_name(self) -> str:
@@ -1800,6 +1816,8 @@ class TypingOnlyImportsChecker:
             self.empty_type_checking_blocks,
             # TC006
             self.unquoted_type_in_cast,
+            # TC010
+            self.invalid_string_literal_in_binop,
             # TC100, TC200, TC007
             self.missing_quotes_or_futures_import,
             # TC101
@@ -1899,6 +1917,11 @@ class TypingOnlyImportsChecker:
         """TC006."""
         for lineno, col_offset, annotation in self.visitor.unquoted_types_in_casts:
             yield lineno, col_offset, TC006.format(annotation=annotation), None
+
+    def invalid_string_literal_in_binop(self) -> Flake8Generator:
+        """TC010."""
+        for node in self.visitor.invalid_binop_literals:
+            yield node.lineno, node.col_offset, TC010, None
 
     def missing_quotes_or_futures_import(self) -> Flake8Generator:
         """TC100, TC200 and TC007."""

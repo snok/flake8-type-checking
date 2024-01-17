@@ -74,6 +74,7 @@ And depending on which error code range you've opted into, it will tell you
 | TC007 | Type alias needs to be made into a string literal                                         |
 | TC008 | Type alias does not need to be a string literal                                           |
 | TC009 | Move declaration out of type-checking block. Variable is used for more than type hinting. |
+| TC010 | Operands for &#124; cannot be a string literal                                            |
 
 ## Choosing how to handle forward references
 
