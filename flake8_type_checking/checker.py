@@ -97,6 +97,8 @@ class AnnotationVisitor(ABC):
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
                 self.visit(n)
+        elif isinstance(node, ast.Starred) and isinstance(node.ctx, ast.Load):
+            self.visit(node.value)
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             self.visit_annotation_string(node)
         elif isinstance(node, ast.Name):
