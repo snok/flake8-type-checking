@@ -18,6 +18,8 @@ examples = [
     # this case once again we could add a whitelist of subscriptable types
     ("x: 'Dict[int]'", set()),
     ("from typing import Dict\nx: 'Dict'", {'2:3 ' + TC201.format(annotation='Dict')}),
+    # this should emit a TC010 instead
+    ("from typing import Dict\nx: 'Dict' | None", set()),
     ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TC201.format(annotation='int')}),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'", set()),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
