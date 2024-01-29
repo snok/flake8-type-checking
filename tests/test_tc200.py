@@ -128,6 +128,20 @@ examples = [
     ),
 ]
 
+if sys.version_info >= (3, 11):
+    # PEP646 tests
+    examples += [
+        (
+            textwrap.dedent("""
+            if TYPE_CHECKING:
+                Ts = TypeVarTuple("Ts")
+
+            x: tuple[*Ts]
+            """),
+            {'5:10 ' + TC200.format(annotation='Ts')},
+        )
+    ]
+
 if sys.version_info >= (3, 12):
     # PEP695 tests
     examples += [
