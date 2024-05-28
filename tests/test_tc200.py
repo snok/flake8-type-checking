@@ -126,6 +126,17 @@ examples = [
             '18:9 ' + TC200.format(annotation='Sequence'),
         },
     ),
+    (
+        # Regression test for #186
+        textwrap.dedent('''
+        if TYPE_CHECKING:
+            from baz import Bar
+
+        def foo(self) -> None:
+            x: Bar
+        '''),
+        set(),
+    ),
 ]
 
 if sys.version_info >= (3, 11):
