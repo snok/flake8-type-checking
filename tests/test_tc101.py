@@ -130,6 +130,22 @@ examples = [
         '''),
         set(),
     ),
+    (
+        # Regression test for #186
+        textwrap.dedent('''
+        def foo(self) -> None:
+            x: Bar
+        '''),
+        set(),
+    ),
+    (
+        # Reverse regression test for #186
+        textwrap.dedent('''
+        def foo(self) -> None:
+            x: 'Bar'
+        '''),
+        {'3:7 ' + TC101.format(annotation='Bar')},
+    ),
 ]
 
 if sys.version_info >= (3, 12):

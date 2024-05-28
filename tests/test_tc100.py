@@ -44,6 +44,17 @@ examples = [
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\ndef example(x: Dict[str, int] = {}):\n\tpass', {'1:0 ' + TC100}),
     # Import used for returns
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\ndef example() -> Dict[str, int]:\n\tpass', {'1:0 ' + TC100}),
+    (
+        # Regression test for #186
+        textwrap.dedent('''
+        if TYPE_CHECKING:
+            from baz import Bar
+
+        def foo(self) -> None:
+            x: Bar
+        '''),
+        set(),
+    ),
 ]
 
 if sys.version_info >= (3, 12):
