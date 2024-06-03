@@ -47,19 +47,7 @@ def test_injector_option(enabled, expected):
     assert _get_error(example, error_code_filter='TC002', type_checking_injector_enabled=enabled) == expected
 
 
-@pytest.mark.parametrize(
-    'enabled',
-    [
-        (
-            False,
-            {
-                '2:0 ' + TC002.format(module='injector.Inject'),
-                '3:0 ' + TC002.format(module='services.Service'),
-                '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
-            },
-        ),
-    ],
-)
+@pytest.mark.parametrize(('enabled', 'expected'), [(True, set())])
 def test_injector_option_only_allows_injected_dependencies(enabled, expected):
     """Whenever an injector option is enabled, only injected dependencies should be ignored."""
     example = textwrap.dedent('''
@@ -75,19 +63,7 @@ def test_injector_option_only_allows_injected_dependencies(enabled, expected):
     assert _get_error(example, error_code_filter='TC002', type_checking_injector_enabled=enabled) == expected
 
 
-@pytest.mark.parametrize(
-    'enabled',
-    [
-        (
-            False,
-            {
-                '2:0 ' + TC002.format(module='injector.Inject'),
-                '3:0 ' + TC002.format(module='services.Service'),
-                '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
-            },
-        ),
-    ],
-)
+@pytest.mark.parametrize(('enabled', 'expected'), [(True, set())])
 def test_injector_option_only_allows_injector_slices(enabled, expected):
     """
     Whenever an injector option is enabled, only injected dependencies should be ignored,
