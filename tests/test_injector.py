@@ -50,14 +50,18 @@ def test_injector_option(enabled, expected):
 @pytest.mark.parametrize(
     ('enabled', 'expected'),
     [
-        (True, {'4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
+        (False, {
+            '2:0 ' + TC002.format(module='injector.Inject'),
+            '3:0 ' + TC002.format(module='services.Service'),
+            '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
+        }),
         (
-            False,
-            {
-                '2:0 ' + TC002.format(module='injector.Inject'),
-                '3:0 ' + TC002.format(module='services.Service'),
-                '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
-            },
+                False,
+                {
+                    '2:0 ' + TC002.format(module='injector.Inject'),
+                    '3:0 ' + TC002.format(module='services.Service'),
+                    '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
+                },
         ),
     ],
 )
@@ -79,14 +83,18 @@ def test_injector_option_only_allows_injected_dependencies(enabled, expected):
 @pytest.mark.parametrize(
     ('enabled', 'expected'),
     [
-        (True, {'4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
+        (False, {
+            '2:0 ' + TC002.format(module='injector.Inject'),
+            '3:0 ' + TC002.format(module='services.Service'),
+            '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
+        }),
         (
-            False,
-            {
-                '2:0 ' + TC002.format(module='injector.Inject'),
-                '3:0 ' + TC002.format(module='services.Service'),
-                '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
-            },
+                False,
+                {
+                    '2:0 ' + TC002.format(module='injector.Inject'),
+                    '3:0 ' + TC002.format(module='services.Service'),
+                    '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
+                },
         ),
     ],
 )

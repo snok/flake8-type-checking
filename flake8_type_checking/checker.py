@@ -525,17 +525,27 @@ class InjectorMixin:
 
         To achieve this, we just visit the annotations to register them as "uses".
         """
+        if not self._has_injected_annotation(node):
+            return None
+
+        for annotation in self._list_annotations(node):
+            self.visit(annotation)
+
+    def _has_injected_annotation(self, node: Union[AsyncFunctionDef, FunctionDef]) -> bool:
+        for annotation in self._list_annotations(node):
+            if not hasattr(annotation, 'value'):
+                continue
+            value = annotation.value
+            if hasattr(value, 'id') and value.id == 'Inject':
+                return True
+            if hasattr(value, 'attr') and value.attr == 'Inject':
+                return True
+        return False
+
+    def _list_annotations(self, node: Union[AsyncFunctionDef, FunctionDef]) -> Iterator[ast.AST]:
         for path in [node.args.args, node.args.kwonlyargs]:
-            for argument in path:
-                if hasattr(argument, 'annotation') and argument.annotation:
-                    annotation = argument.annotation
-                    if not hasattr(annotation, 'value'):
-                        continue
-                    value = annotation.value
-                    if hasattr(value, 'id') and value.id == 'Inject':
-                        self.visit(argument.annotation)
-                    if hasattr(value, 'attr') and value.attr == 'Inject':
-                        self.visit(argument.annotation)
+            for argument in (item for item in path if hasattr(item, 'annotation') and item.annotation):
+                yield argument.annotation
 
 
 class FastAPIMixin:
