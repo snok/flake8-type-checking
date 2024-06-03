@@ -544,8 +544,9 @@ class InjectorMixin:
 
     def _list_annotations(self, node: Union[AsyncFunctionDef, FunctionDef]) -> Iterator[ast.AST]:
         for path in [node.args.args, node.args.kwonlyargs]:
-            for argument in (item for item in path if hasattr(item, 'annotation') and item.annotation):
-                yield argument.annotation
+            for argument in (item for item in path if hasattr(item, 'annotation')):
+                if argument.annotation:
+                    yield argument.annotation
 
 
 class FastAPIMixin:
