@@ -547,6 +547,8 @@ class InjectorMixin:
             for argument in (item for item in path if hasattr(item, 'annotation')):
                 if argument.annotation:
                     yield argument.annotation
+        if node.args.kwarg and hasattr(node.args.kwarg, 'annotation') and node.args.kwarg.annotation:
+            yield node.args.kwarg.annotation
 
 
 class FastAPIMixin:

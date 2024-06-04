@@ -82,6 +82,23 @@ def test_injector_option_only_allows_injector_slices(enabled, expected):
     assert _get_error(example, error_code_filter='TC002', type_checking_injector_enabled=enabled) == expected
 
 
+@pytest.mark.parametrize(('enabled', 'expected'), [(True, set())])
+def test_injector_option_require_injections_under_unpack(enabled, expected):
+    """Whenever an injector option is enabled, injected dependencies should be ignored, even if unpacked."""
+    example = textwrap.dedent("""
+        from typing import Unpack
+
+        from injector import Inject
+        from services import ServiceKwargs
+
+        class X:
+            def __init__(self, service: Inject[Service], **kwargs: Unpack[ServiceKwargs]) -> None:
+                self.service = service
+                self.args = args
+        """)
+    assert _get_error(example, error_code_filter='TC002', type_checking_injector_enabled=enabled) == expected
+
+
 @pytest.mark.parametrize(
     ('enabled', 'expected'),
     [
