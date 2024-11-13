@@ -96,7 +96,12 @@ class AnnotationVisitor(ABC):
             self.visit(node.value)
         elif isinstance(node, ast.Subscript):
             self.visit(node.value)
-            if getattr(node.value, 'id', '') != 'Literal':
+            if getattr(node.value, 'id', '') == 'Annotated' and isinstance(node.slice, (ast.Tuple, ast.List)):
+                if node.slice.elts:
+                    # only visit the first element
+                    self.visit(node.slice.elts[0])
+                    # TODO: We may want to visit the rest as a soft-runtime use
+            elif getattr(node.value, 'id', '') != 'Literal':
                 self.visit(node.slice)
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
