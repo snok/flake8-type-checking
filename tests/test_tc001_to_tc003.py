@@ -195,6 +195,26 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                 '''),
             set(),
         ),
+        (
+            textwrap.dedent(f'''
+                from typing import Annotated
+
+                from {import_} import Depends
+
+                x: Annotated[str, Depends]
+            '''),
+            set(),
+        ),
+        (
+            textwrap.dedent(f'''
+                from typing import Annotated
+
+                from {import_} import Depends
+
+                x: Annotated[str, "Depends"]
+            '''),
+            set(),
+        ),
     ]
 
     return [
