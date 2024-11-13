@@ -841,7 +841,7 @@ class StringAnnotationVisitor(AnnotationVisitor):
             # the quoted subexpression is only valid syntax in the context
             # of the parent expression, in which case we would have to
             # do something more clever here
-            module_node = ast.parse(f'_: {annotation}')
+            module_node = ast.parse(f'_: _[{annotation}]')
         except Exception:
             # if we can't parse the annotation we should do nothing
             return
@@ -849,7 +849,8 @@ class StringAnnotationVisitor(AnnotationVisitor):
         ann_assign_node = module_node.body[0]
         assert isinstance(ann_assign_node, ast.AnnAssign)
         annotation_node = ann_assign_node.annotation
-        self.visit(annotation_node)
+        assert isinstance(annotation_node, ast.Subscript)
+        self.visit(annotation_node.slice)
 
     def visit_annotation_name(self, node: ast.Name) -> None:
         """Remember all the visited names."""
