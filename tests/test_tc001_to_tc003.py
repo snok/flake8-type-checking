@@ -41,6 +41,14 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
         (f'from {import_} import constants as x\ny:x', {'1:0 ' + ERROR.format(module='x')}),
     ]
 
+    if ERROR == TC001:
+        # test relative imports
+        no_use.extend([
+            ('from .. import Plugin\nx:Plugin', {'1:0 ' + ERROR.format(module='..Plugin')}),
+            ('\n\nfrom .foo import constants\nx:constants', {'3:0 ' + ERROR.format(module='.foo.constants')}),
+            ('from . import constants as x\ny:x', {'1:0 ' + ERROR.format(module='x')}),
+        ])
+
     # These imports are all used. None should generate errors.
     used: L = [
         # ast.Import
