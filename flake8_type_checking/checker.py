@@ -1194,11 +1194,21 @@ class ImportVisitor(
                 else:
                     self.pydantic_validate_arguments_import_name = name_node.name
 
+            if name_node.name == '*':
+                # don't record * imports
+                continue
+
             exempt = exempt or name_node.name in self.exempt_imports
 
             # Classify and map imports
+            if isinstance(node, ast.ImportFrom):
+                module = f'{node.module}.' if node.module else ''
+                if node.level != 0:
+                    module = '.' * node.level + module
+            else:
+                module = ''
             imp = ImportName(
-                _module=f'{node.module}.' if isinstance(node, ast.ImportFrom) else '',
+                _module=module,
                 _alias=name_node.asname,
                 _name=name_node.name,
                 exempt=exempt,
