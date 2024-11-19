@@ -1005,11 +1005,32 @@ class ImportVisitor(
             imp = self.imports.get(node.id)
             return imp.full_name if imp is not None else node.id
 
-        if not isinstance(node, ast.Attribute) or not isinstance(node.value, (ast.Name, ast.Attribute)):
+        if not isinstance(node, ast.Attribute):
             return None
 
-        prefix = self.lookup_full_name(node.value)
-        return f'{prefix}.{node.attr}'
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            # left append to the list so the names are in the
+            # natural reading order i.e. `a.b.c` becomes `['a', 'b', 'c']`
+            parts.insert(0, node.attr)
+            node = node.value
+
+        if not isinstance(node, ast.Name):
+            return None
+
+        parts.insert(0, node.id)
+
+        # lookup all variations of `a` `a.b` `a.b.c` in that order
+        for num_parts in range(1, len(parts) + 1):
+            name = '.'.join(parts[:num_parts])
+            imp = self.imports.get(name)
+            if imp is not None:
+                prefix = imp.full_name
+                remainder = '.'.join(parts[num_parts:])
+                return f'{prefix}.{remainder}' if remainder else prefix
+
+        # fallback to returning the name as-is
+        return '.'.join(parts)
 
     def is_typing(self, node: ast.AST, symbol: str) -> bool:
         """Check if the given node matches the given typing symbol."""
