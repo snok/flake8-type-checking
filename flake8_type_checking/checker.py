@@ -333,6 +333,7 @@ class SQLAlchemyMixin:
         sqlalchemy_mapped_dotted_names: set[str]
         current_scope: Scope
         uses: dict[str, list[tuple[ast.AST, Scope]]]
+        star_import_module_names: set[str]
 
         def in_type_checking_block(self, lineno: int, col_offset: int) -> bool:  # noqa: D102
             ...
@@ -370,6 +371,19 @@ class SQLAlchemyMixin:
                 node_or_name = ann_assign_node.target
             except Exception:
                 return False
+
+        if self.star_import_module_names and isinstance(node_or_name, ast.Name):
+            for dotted_name in self.sqlalchemy_mapped_dotted_names:
+                parts = dotted_name.rsplit('.', 1)
+                if len(parts) != 2:
+                    # Should we not make this a silent error? Or do we perhaps
+                    # even want to allow unqualified names and accept any symbol
+                    # that has the same name?
+                    continue
+
+                module, symbol = parts
+                if symbol == node_or_name.id and module in self.star_import_module_names:
+                    return True
 
         return self.lookup_full_name(node_or_name) in self.sqlalchemy_mapped_dotted_names
 
@@ -909,7 +923,6 @@ class ImportVisitor(
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         #: Import patterns we want to avoid mapping
-        self.exempt_imports: list[str] = ['*', 'TYPE_CHECKING']
         self.exempt_modules: list[str] = exempt_modules or []
 
         #: All imports, in each category
@@ -922,6 +935,12 @@ class ImportVisitor(
         # which imports are unused (after ignoring all annotation uses),
         # then use the import type to yield the error with the appropriate type
         self.imports: dict[str, ImportName] = {}
+
+        #: A set of all the module names that star imported all their symbols
+        # This is used to figure out when a simple qualified name lookup won't
+        # work, so if we want to match a target expression against a full name
+        # we will have to check if the module part is within this set
+        self.star_import_module_names: set[str] = set()
 
         #: List of scopes including all the symbols within
         self.scopes: list[Scope] = []
@@ -1032,8 +1051,22 @@ class ImportVisitor(
         # fallback to returning the name as-is
         return '.'.join(parts)
 
+    def match_full_name(self, node: ast.AST, full_name: str) -> bool:
+        """Check if the given target node matches the given fully qualified name."""
+        if self.star_import_module_names and isinstance(node, ast.Name):
+            module, symbol = full_name.rsplit('.', 1)
+            if module in self.star_import_module_names:
+                # for star imports we can only check if the symbol name matches
+                return symbol == node.id
+
+        return self.lookup_full_name(node) == full_name
+
     def is_typing(self, node: ast.AST, symbol: str) -> bool:
-        """Check if the given node matches the given typing symbol."""
+        """Check if the given target node matches the given typing symbol."""
+        if isinstance(node, ast.Name) and self.star_import_module_names & {'typing', 'typing_extensions'}:
+            # for star imports we can only check if the symbol name matches
+            return node.id == symbol
+
         full_name = self.lookup_full_name(node)
         if full_name is None or '.' not in full_name:
             return False
@@ -1216,10 +1249,11 @@ class ImportVisitor(
                     self.pydantic_validate_arguments_import_name = name_node.name
 
             if name_node.name == '*':
-                # don't record * imports
+                # Only add the module to the list of star imports
+                assert isinstance(node, ast.ImportFrom)
+                if node.level == 0 and node.module:
+                    self.star_import_module_names.add(node.module)
                 continue
-
-            exempt = exempt or name_node.name in self.exempt_imports
 
             # Classify and map imports
             if isinstance(node, ast.ImportFrom):
@@ -1228,6 +1262,7 @@ class ImportVisitor(
                     module = '.' * node.level + module
             else:
                 module = ''
+
             imp = ImportName(
                 _module=module,
                 _alias=name_node.asname,

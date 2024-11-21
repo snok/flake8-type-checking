@@ -100,6 +100,15 @@ examples = [
     """),
         {'4:7 ' + TC006.format(annotation='int')},
     ),
+    # Call function from star-imported module
+    (
+        textwrap.dedent("""
+    from typing import *
+
+    cast(int, 3.0)
+    """),
+        {'4:5 ' + TC006.format(annotation='int')},
+    ),
     # TODO: What about importing typing.cast() from another module, e.g. a compat module?
 ]
 
