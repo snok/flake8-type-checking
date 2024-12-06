@@ -890,6 +890,7 @@ class ImportVisitor(
         injector_enabled: bool,
         cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
+        typing_modules: Optional[list[str]] = None,
         exempt_modules: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
@@ -907,6 +908,9 @@ class ImportVisitor(
         self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
         self.pydantic_validate_arguments_import_name = None
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
+
+        #: A list of modules that re-export symbols from the typing module
+        self.typing_modules: list[str] = ['typing', 'typing_extensions', *(typing_modules or ())]
 
         #: Import patterns we want to avoid mapping
         self.exempt_modules: list[str] = exempt_modules or []
@@ -1037,7 +1041,9 @@ class ImportVisitor(
         if full_name is None or '.' not in full_name:
             return False
 
-        return full_name == f'typing.{symbol}' or full_name == f'typing_extensions.{symbol}'
+        module, found_symbol = full_name.rsplit('.', 1)
+
+        return symbol == found_symbol and module in self.typing_modules
 
     # -- Map type checking block ---------------
 
@@ -1784,6 +1790,7 @@ class TypingOnlyImportsChecker:
 
         self.used_type_checking_names: set[str] = set()
 
+        typing_modules = getattr(options, 'type_checking_typing_modules', [])
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
         pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
@@ -1808,6 +1815,7 @@ class TypingOnlyImportsChecker:
             pydantic_enabled=pydantic_enabled,
             fastapi_enabled=fastapi_enabled,
             cattrs_enabled=cattrs_enabled,
+            typing_modules=typing_modules,
             exempt_modules=exempt_modules,
             sqlalchemy_enabled=sqlalchemy_enabled,
             sqlalchemy_mapped_dotted_names=sqlalchemy_mapped_dotted_names,
