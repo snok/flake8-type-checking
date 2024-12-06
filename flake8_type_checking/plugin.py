@@ -35,6 +35,13 @@ class Plugin:
     def add_options(cls, option_manager: OptionManager) -> None:  # pragma: no cover
         """Parse plugin options."""
         option_manager.add_option(
+            '--type-checking-typing-modules',
+            comma_separated_list=True,
+            parse_from_config=True,
+            default=[],
+            help='A list of modules whose exports should be treated equivalently to members of the `typing` module.',
+        )
+        option_manager.add_option(
             '--type-checking-exempt-modules',
             comma_separated_list=True,
             parse_from_config=True,

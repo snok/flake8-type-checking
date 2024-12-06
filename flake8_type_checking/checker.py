@@ -334,20 +334,14 @@ class SQLAlchemyMixin:
         current_scope: Scope
         uses: dict[str, list[tuple[ast.AST, Scope]]]
 
-        def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+        def in_type_checking_block(self, lineno: int, col_offset: int) -> bool:  # noqa: D102
             ...
 
-        def in_type_checking_block(self, lineno: int, col_offset: int) -> bool:  # noqa: D102
+        def lookup_full_name(self, node: ast.AST) -> str | None:  # noqa: D102
             ...
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-
-        #: Contains a set of all the `Mapped` names that have been imported
-        self.mapped_aliases: set[str] = set()
-
-        #: Contains a dictionary of aliases to one of our dotted names containing one of the `Mapped` names
-        self.mapped_module_aliases: dict[str, str] = {}
 
         #: Contains a set of all names used inside `Mapped[...]` annotations
         # These are treated like soft-uses, i.e. we don't know if it will be
@@ -357,55 +351,6 @@ class SQLAlchemyMixin:
         #: Used for visiting annotations
         self.sqlalchemy_annotation_visitor = SQLAlchemyAnnotationVisitor(self.mapped_names)
 
-    def visit_Import(self, node: ast.Import) -> None:
-        """Record `Mapped` module aliases."""
-        if not self.sqlalchemy_enabled:
-            return
-
-        for name in node.names:
-            # we don't need to map anything
-            if name.asname is None:
-                continue
-
-            prefix = name.name + '.'
-            for dotted_name in self.sqlalchemy_mapped_dotted_names:
-                if dotted_name.startswith(prefix):
-                    self.mapped_module_aliases[name.asname] = name.name
-
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        """Record `Mapped` aliases."""
-        if not self.sqlalchemy_enabled:
-            return
-
-        # we don't try to deal with relative imports
-        if node.module is None or node.level != 0:
-            return
-
-        prefix = node.module + '.'
-        for dotted_name in self.sqlalchemy_mapped_dotted_names:
-            if not dotted_name.startswith(prefix):
-                continue
-
-            suffix = dotted_name[len(prefix) :]
-            if '.' in suffix:
-                # we may need to record a mapped module
-                for name in node.names:
-                    if suffix.startswith(name.name + '.'):
-                        self.mapped_module_aliases[name.asname or name.name] = node.module
-                    elif name.name == '*':
-                        # in this case we can assume that the next segment of the dotted
-                        # name has been imported
-                        self.mapped_module_aliases[suffix.split('.', 1)[0]] = node.module
-                continue
-
-            # we may need to record a mapped name
-            for name in node.names:
-                if suffix == name.name:
-                    self.mapped_aliases.add(name.asname or name.name)
-                elif name.name == '*':
-                    # in this case we can assume it has been imported
-                    self.mapped_aliases.add(suffix)
-
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotations assigments."""
         if (
@@ -414,6 +359,19 @@ class SQLAlchemyMixin:
             and not self.in_type_checking_block(node.lineno, node.col_offset)
         ):
             self.handle_sqlalchemy_annotation(node.annotation)
+
+    def is_mapped(self, node_or_name: ast.AST | str) -> bool:
+        """Check whether the given node or name should be treated as `Mapped`."""
+        if isinstance(node_or_name, str):
+            try:
+                root_node = ast.parse(f'{node_or_name}: _')
+                ann_assign_node = root_node.body[0]
+                assert isinstance(ann_assign_node, ast.AnnAssign)
+                node_or_name = ann_assign_node.target
+            except Exception:
+                return False
+
+        return self.lookup_full_name(node_or_name) in self.sqlalchemy_mapped_dotted_names
 
     def handle_sqlalchemy_annotation(self, node: ast.AST) -> None:
         """
@@ -435,23 +393,12 @@ class SQLAlchemyMixin:
             mapped_name, inner = annotation.split('[', 1)
             # strip trailing `]` from inner
             inner = inner[:-1]
-            if mapped_name in self.mapped_aliases:
-                # record a use for the name
-                self.uses[mapped_name].append((node, self.current_scope))
+            if not self.is_mapped(mapped_name):
+                return
 
-            elif mapped_name in self.sqlalchemy_mapped_dotted_names:
-                # record a use for the left-most part of the dotted name
-                self.uses[mapped_name.split('.', 1)[0]].append((node, self.current_scope))
-
-            elif '.' in annotation:
-                # try to resolve to a mapped module alias
-                aliased, mapped_name = mapped_name.split('.', 1)
-                module = self.mapped_module_aliases.get(aliased)
-                if module is None or f'{module}.{mapped_name}' not in self.sqlalchemy_mapped_dotted_names:
-                    return
-
-                # record a use for the alias
-                self.uses[aliased].append((node, self.current_scope))
+            # record a use for the first part of the name
+            used_name, *_ = mapped_name.split('.', 1)
+            self.uses[used_name].append((node, self.current_scope))
 
             # add all names contained in the inner part of the annotation
             # since this is not as strict as an actual runtime use, we don't
@@ -467,7 +414,7 @@ class SQLAlchemyMixin:
 
         # simple case only needs to check mapped_aliases
         if isinstance(node.value, ast.Name):
-            if node.value.id not in self.mapped_aliases:
+            if not self.is_mapped(node.value):
                 return
 
             # record a use for the name
@@ -485,7 +432,7 @@ class SQLAlchemyMixin:
                 return
 
             # map the module if it's mapped otherwise use it as is
-            module = self.mapped_module_aliases.get(before_dot.id, before_dot.id)
+            module = self.lookup_full_name(before_dot) or before_dot.id
             dotted_name = f'{module}.{dotted_name}'
             if dotted_name not in self.sqlalchemy_mapped_dotted_names:
                 return
@@ -611,6 +558,9 @@ class ImportName:
     _module: str
     _name: str
     _alias: Optional[str]
+
+    #: Whether or not this import is exempt from TC001-004 checks.
+    exempt: bool
 
     @property
     def module(self) -> str:
@@ -940,6 +890,7 @@ class ImportVisitor(
         injector_enabled: bool,
         cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
+        typing_modules: Optional[list[str]] = None,
         exempt_modules: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
@@ -958,8 +909,10 @@ class ImportVisitor(
         self.pydantic_validate_arguments_import_name = None
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
+        #: A list of modules that re-export symbols from the typing module
+        self.typing_modules: list[str] = ['typing', 'typing_extensions', *(typing_modules or ())]
+
         #: Import patterns we want to avoid mapping
-        self.exempt_imports: list[str] = ['*', 'TYPE_CHECKING']
         self.exempt_modules: list[str] = exempt_modules or []
 
         #: All imports, in each category
@@ -992,15 +945,7 @@ class ImportVisitor(
         self.empty_type_checking_blocks: list[tuple[int, int, int]] = []
         self.type_checking_blocks: list[tuple[int, int, int]] = []
 
-        #: Set to the alias of TYPE_CHECKING if one is found
-        self.type_checking_alias: Optional[str] = None
-
-        #: Set to the alias of typing if one is found
-        self.typing_alias: Optional[str] = None
-
         #: Where typing.cast() is called with an unquoted type.
-        # Used for TC006 errors. Also tracks imported aliases of typing.cast().
-        self.typing_cast_aliases: set[str] = set()
         self.unquoted_types_in_casts: list[tuple[int, int, str]] = []
 
         #: For tracking which comprehension/IfExp we're currently inside of
@@ -1045,26 +990,6 @@ class ImportVisitor(
         return self.annotation_visitor.invalid_binop_literals
 
     @property
-    def typing_module_name(self) -> str:
-        """
-        Return the appropriate module name for the typing import.
-
-        It's possible to do:
-
-            from typing import Set
-                    ^--> module name is `typing`
-
-        but you could also do:
-
-            from typing as t import Set
-                           ^--> module name is `t`
-
-        This property returns the correct module name, accounting
-        for possible aliases.
-        """
-        return self.typing_alias or 'typing'
-
-    @property
     def names(self) -> set[str]:
         """Return unique names."""
         return set(self.uses.keys())
@@ -1076,6 +1001,49 @@ class ImportVisitor(
                 for symbol in symbols:
                     if symbol.in_type_checking_block:
                         yield symbol
+
+    def lookup_full_name(self, node: ast.AST) -> str | None:
+        """Lookup the fully qualified name of the given node."""
+        if isinstance(node, ast.Name):
+            imp = self.imports.get(node.id)
+            return imp.full_name if imp is not None else node.id
+
+        if not isinstance(node, ast.Attribute):
+            return None
+
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            # left append to the list so the names are in the
+            # natural reading order i.e. `a.b.c` becomes `['a', 'b', 'c']`
+            parts.insert(0, node.attr)
+            node = node.value
+
+        if not isinstance(node, ast.Name):
+            return None
+
+        parts.insert(0, node.id)
+
+        # lookup all variations of `a` `a.b` `a.b.c` in that order
+        for num_parts in range(1, len(parts) + 1):
+            name = '.'.join(parts[:num_parts])
+            imp = self.imports.get(name)
+            if imp is not None:
+                prefix = imp.full_name
+                remainder = '.'.join(parts[num_parts:])
+                return f'{prefix}.{remainder}' if remainder else prefix
+
+        # fallback to returning the name as-is
+        return '.'.join(parts)
+
+    def is_typing(self, node: ast.AST, symbol: str) -> bool:
+        """Check if the given node matches the given typing symbol."""
+        full_name = self.lookup_full_name(node)
+        if full_name is None or '.' not in full_name:
+            return False
+
+        module, found_symbol = full_name.rsplit('.', 1)
+
+        return symbol == found_symbol and module in self.typing_modules
 
     # -- Map type checking block ---------------
 
@@ -1093,15 +1061,12 @@ class ImportVisitor(
 
     def is_type_checking(self, node: ast.AST) -> bool:
         """Determine if the node is equivalent to TYPE_CHECKING."""
-        return (
-            # True for `TYPE_CHECKING`
-            hasattr(node, 'id')
-            and (node.id == 'TYPE_CHECKING')
-            # True for `typing.TYPE_CHECKING` or `T.TYPE_CHECKING`
-            or (hasattr(node, 'attr') and node.attr == 'TYPE_CHECKING')
-            # True for `from typing import TYPE_CHECKING as TC\nTC`
-            or (self.type_checking_alias is not None and hasattr(node, 'id') and (node.id == self.type_checking_alias))
-        )
+        if getattr(node, 'id', '') == 'TYPE_CHECKING':
+            # NOTE: For backwards-compatibility we still allow unqualified
+            #       if TYPE_CHECKING to work, but we may decide to get rid
+            #       of this. We'll just have to change our test cases.
+            return True
+        return self.is_typing(node, 'TYPE_CHECKING')
 
     def is_type_checking_true(self, node: ast.Compare) -> bool:
         """
@@ -1211,7 +1176,12 @@ class ImportVisitor(
 
     def is_exempt_module(self, module_name: str) -> bool:
         """Template module name check."""
-        return any(fnmatch.fnmatch(module_name, exempt_module) for exempt_module in self.exempt_modules)
+        # For backwards compatibility we always treat typing as exempt
+        # although we may wish to change that to a default setting, so
+        # people can override that decision if they choose.
+        return module_name == 'typing' or any(
+            fnmatch.fnmatch(module_name, exempt_module) for exempt_module in self.exempt_modules
+        )
 
     def add_import(self, node: Import) -> None:  # noqa: C901
         """Add relevant ast objects to import lists."""
@@ -1234,61 +1204,44 @@ class ImportVisitor(
                 )
             )
 
-        if in_type_checking_block:
-            # For type checking blocks we want to
-            # Avoid recording imports for TC1XX errors, by returning early
-            return None
-
-        # Skip checking the import if the module is passlisted.
-        if isinstance(node, ast.ImportFrom) and node.module and self.is_exempt_module(node.module):
-            return
+        all_exempt = in_type_checking_block or (
+            isinstance(node, ast.ImportFrom) and node.module and self.is_exempt_module(node.module)
+        )
 
         for name_node in node.names:
             # Skip checking the import if the module is passlisted
-            if isinstance(node, ast.Import) and self.is_exempt_module(name_node.name):
-                return
-
-            # Look for a TYPE_CHECKING import
-            if name_node.name == 'TYPE_CHECKING' and name_node.asname is not None:
-                self.type_checking_alias = name_node.asname
+            exempt = all_exempt or (isinstance(node, ast.Import) and self.is_exempt_module(name_node.name))
 
             # Look for pydantic.validate_arguments import
+            # TODO: Switch to using lookup_full_name instead
             if name_node.name == 'validate_arguments':
                 if name_node.asname is not None:
                     self.pydantic_validate_arguments_import_name = name_node.asname
                 else:
                     self.pydantic_validate_arguments_import_name = name_node.name
 
-            # Look for typing import
-            if name_node.name == 'typing' and name_node.asname is not None:
-                self.typing_alias = name_node.asname
-                return
-
-            # Find aliases of typing.cast()
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.level == 0
-                and node.module == self.typing_module_name
-                and name_node.name == 'cast'
-            ):
-                self.typing_cast_aliases.add(name_node.asname or name_node.name)
-
-            elif (isinstance(node, ast.ImportFrom) and node.module == self.typing_module_name) or (
-                isinstance(node, ast.Import) and name_node.name == self.typing_module_name
-            ):
-                # Skip all remaining typing imports, since we already assume
-                # TYPE_CHECKING will be imported at runtime, and guarding the
-                # remaining imports probably won't have any tangible benefit
+            if name_node.name == '*':
+                # don't record * imports
                 continue
 
             # Classify and map imports
-            if name_node.name not in self.exempt_imports:
-                imp = ImportName(
-                    _module=f'{node.module}.' if isinstance(node, ast.ImportFrom) else '',
-                    _alias=name_node.asname,
-                    _name=name_node.name,
-                )
+            if isinstance(node, ast.ImportFrom):
+                module = f'{node.module}.' if node.module else ''
+                if node.level != 0:
+                    module = '.' * node.level + module
+            else:
+                module = ''
+            imp = ImportName(
+                _module=module,
+                _alias=name_node.asname,
+                _name=name_node.name,
+                exempt=exempt,
+            )
 
+            # Add to import names map. This is what we use to match imports to uses
+            self.imports[imp.name] = imp
+
+            if not exempt:
                 if imp.import_type == Classified.APPLICATION:
                     self.application_imports[imp.import_name] = node
                 elif imp.import_type == Classified.THIRD_PARTY:
@@ -1311,17 +1264,12 @@ class ImportVisitor(
                             # in a file, so we should only need to check this once
                             self.futures_annotation = False
 
-                # Add to import names map. This is what we use to match imports to uses
-                self.imports[imp.name] = imp
-
     def visit_Import(self, node: ast.Import) -> None:
         """Append objects to our import map."""
-        super().visit_Import(node)
         self.add_import(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Append objects to our import map."""
-        super().visit_ImportFrom(node)
         self.add_import(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
@@ -1799,16 +1747,7 @@ class ImportVisitor(
         """Find typing.cast() calls with the type argument unquoted."""
         func = node.func
 
-        # Determine whether this is a call to typing.cast() or an alias of it.
-        via_name = isinstance(func, ast.Name) and func.id in self.typing_cast_aliases
-        via_attr = (
-            isinstance(func, ast.Attribute)
-            and isinstance(func.value, ast.Name)
-            and func.value.id == self.typing_module_name
-            and func.attr == 'cast'
-        )
-
-        if not via_name and not via_attr or len(node.args) != 2:
+        if not self.is_typing(func, 'cast') or len(node.args) != 2:
             return  # Not typing.cast() (or an alias) or incorrect number of arguments.
 
         arg = node.args[0]
@@ -1851,6 +1790,7 @@ class TypingOnlyImportsChecker:
 
         self.used_type_checking_names: set[str] = set()
 
+        typing_modules = getattr(options, 'type_checking_typing_modules', [])
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
         pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
@@ -1875,6 +1815,7 @@ class TypingOnlyImportsChecker:
             pydantic_enabled=pydantic_enabled,
             fastapi_enabled=fastapi_enabled,
             cattrs_enabled=cattrs_enabled,
+            typing_modules=typing_modules,
             exempt_modules=exempt_modules,
             sqlalchemy_enabled=sqlalchemy_enabled,
             sqlalchemy_mapped_dotted_names=sqlalchemy_mapped_dotted_names,
@@ -1911,8 +1852,9 @@ class TypingOnlyImportsChecker:
             Classified.BUILTIN: (self.visitor.built_in_imports, TC003),
         }
 
-        unused_imports = set(self.visitor.imports) - self.visitor.names - self.visitor.mapped_names
-        used_imports = set(self.visitor.imports) - unused_imports
+        all_imports = {name for name, imp in self.visitor.imports.items() if not imp.exempt}
+        unused_imports = all_imports - self.visitor.names - self.visitor.mapped_names
+        used_imports = all_imports - unused_imports
         already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
         annotation_names = (
             [n for i in self.visitor.wrapped_annotations for n in i.names]

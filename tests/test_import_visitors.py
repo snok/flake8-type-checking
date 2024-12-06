@@ -54,6 +54,9 @@ application_imports = [
     # ast.ImportFrom
     (f'from {mod} import codes', [f'{mod}.codes'], f),
     (f'\nfrom {mod}.codes import TC001', [f'{mod}.codes.TC001'], f),
+    # relative imports
+    ('from . import codes', ['.codes'], f),
+    ('\nfrom .codes import TC001', ['.codes.TC001'], f),
 ]
 
 f = _get_built_in_imports

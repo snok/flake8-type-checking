@@ -100,10 +100,39 @@ examples = [
     """),
         {'4:7 ' + TC006.format(annotation='int')},
     ),
-    # TODO: What about importing typing.cast() from another module, e.g. a compat module?
+    # re-export of cast using a registered compat module
+    (
+        textwrap.dedent("""
+    from mylib import compat
+
+    compat.cast(int, 3.0)
+    """),
+        {'4:12 ' + TC006.format(annotation='int')},
+    ),
+    (
+        textwrap.dedent("""
+    from .compat import cast
+
+    cast(int, 3.0)
+    """),
+        {'4:5 ' + TC006.format(annotation='int')},
+    ),
+    (
+        textwrap.dedent("""
+    from ..compat import cast
+
+    cast(int, 3.0)
+    """),
+        {'4:5 ' + TC006.format(annotation='int')},
+    ),
 ]
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC006_errors(example, expected):
-    assert _get_error(example, error_code_filter='TC006') == expected
+    assert (
+        _get_error(
+            example, error_code_filter='TC006', type_checking_typing_modules=['mylib.compat', '.compat', '..compat']
+        )
+        == expected
+    )
