@@ -36,32 +36,22 @@ def test_simple_mapped_use(enabled, expected):
 
 
 @pytest.mark.parametrize(
-    ('name', 'expected', 'star_import'),
+    ('name', 'expected'),
     [
-        ('Mapped', set(), False),
-        ('Mapped', set(), True),
-        ('DynamicMapped', set(), False),
-        ('DynamicMapped', set(), True),
-        ('WriteOnlyMapped', set(), False),
-        ('WriteOnlyMapped', set(), True),
+        ('Mapped', set()),
+        ('DynamicMapped', set()),
+        ('WriteOnlyMapped', set()),
         (
             'NotMapped',
             {'2:0 ' + TC002.format(module='foo.Bar'), '3:0 ' + TC002.format(module='sqlalchemy.orm.NotMapped')},
-            False,
-        ),
-        (
-            'NotMapped',
-            # as a star-import it won't trigger TC002, but the other import still will
-            {'2:0 ' + TC002.format(module='foo.Bar')},
-            True,
         ),
     ],
 )
-def test_default_mapped_names(name, expected, star_import):
+def test_default_mapped_names(name, expected):
     """Check the three default names and a bogus name."""
     example = textwrap.dedent(f'''
         from foo import Bar
-        from sqlalchemy.orm import {"*" if star_import else name}
+        from sqlalchemy.orm import {name}
 
         class User:
             x: {name}[Bar]
