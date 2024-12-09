@@ -203,6 +203,7 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                 '''),
             set(),
         ),
+        # Annotated soft use
         (
             textwrap.dedent(f'''
                 from typing import Annotated
@@ -210,9 +211,11 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                 from {import_} import Depends
 
                 x: Annotated[str, Depends]
+                y: Depends
             '''),
             set(),
         ),
+        # This is not a soft-use, it's just a plain string
         (
             textwrap.dedent(f'''
                 from typing import Annotated
@@ -220,8 +223,9 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                 from {import_} import Depends
 
                 x: Annotated[str, "Depends"]
+                y: Depends
             '''),
-            set(),
+            {'4:0 ' + ERROR.format(module=f'{import_}.Depends')},
         ),
     ]
 

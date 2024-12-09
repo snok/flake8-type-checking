@@ -66,11 +66,16 @@ if TYPE_CHECKING:
         Import,
         ImportTypeValue,
         Name,
+        SupportsIsTyping,
     )
 
 
 class AnnotationVisitor(ABC):
     """Simplified node visitor for traversing annotations."""
+
+    @abstractmethod
+    def is_typing(self, node: ast.AST, symbol: str) -> bool:
+        """Check if the given node matches the given typing symbol."""
 
     @abstractmethod
     def visit_annotation_name(self, node: ast.Name) -> None:
@@ -79,6 +84,10 @@ class AnnotationVisitor(ABC):
     @abstractmethod
     def visit_annotation_string(self, node: ast.Constant) -> None:
         """Visit a string constant inside an annotation."""
+
+    def visit_annotated_value(self, node: ast.expr) -> None:
+        """Visit a value expression of `typing.Annotated[type, value]`."""
+        return
 
     def visit(self, node: ast.AST) -> None:
         """Visit relevant child nodes on an annotation."""
@@ -95,15 +104,19 @@ class AnnotationVisitor(ABC):
             self.visit(node.value)
         elif isinstance(node, ast.Subscript):
             self.visit(node.value)
-            if getattr(node.value, 'id', '') == 'Annotated' and isinstance(
+            if self.is_typing(node.value, 'Literal'):
+                return
+            elif self.is_typing(node.value, 'Annotated') and isinstance(
                 (elts_node := node.slice.value if py38 and isinstance(node.slice, Index) else node.slice),
                 (ast.Tuple, ast.List),
             ):
                 if elts_node.elts:
-                    # only visit the first element
-                    self.visit(elts_node.elts[0])
-                    # TODO: We may want to visit the rest as a soft-runtime use
-            elif getattr(node.value, 'id', '') != 'Literal':
+                    elts_iter = iter(elts_node.elts)
+                    # only visit the first element like a type expression
+                    self.visit(next(elts_iter))
+                    for value_node in elts_iter:
+                        self.visit_annotated_value(value_node)
+            else:
                 self.visit(node.slice)
         elif isinstance(node, (ast.Tuple, ast.List)):
             for n in node.elts:
@@ -300,18 +313,29 @@ class PydanticMixin:
 class SQLAlchemyAnnotationVisitor(AnnotationVisitor):
     """Adds any names in the annotation to mapped names."""
 
-    def __init__(self, mapped_names: set[str]) -> None:
-        self.mapped_names = mapped_names
+    def __init__(self, sqlalchemy_plugin: SQLAlchemyMixin) -> None:
+        self.plugin = sqlalchemy_plugin
+
+    def is_typing(self, node: ast.AST, symbol: str) -> bool:
+        """Check if the given node matches the given typing symbol."""
+        return self.plugin.is_typing(node, symbol)
+
+    def visit_annotated_value(self, node: ast.expr) -> None:
+        """Visit a value expression of `typing.Annotated[type, value]`."""
+        previous_context = self.plugin.in_soft_use_context
+        self.plugin.in_soft_use_context = True
+        self.plugin.visit(node)
+        self.plugin.in_soft_use_context = previous_context
 
     def visit_annotation_name(self, node: ast.Name) -> None:
         """Add name to mapped names."""
-        self.mapped_names.add(node.id)
+        self.plugin.soft_uses.add(node.id)
 
     def visit_annotation_string(self, node: ast.Constant) -> None:
         """Add all the names in the string to mapped names."""
-        visitor = StringAnnotationVisitor()
+        visitor = StringAnnotationVisitor(self.plugin)
         visitor.parse_and_visit_string_annotation(node.value)
-        self.mapped_names.update(visitor.names)
+        self.plugin.soft_uses.update(visitor.names)
 
 
 class SQLAlchemyMixin:
@@ -333,6 +357,8 @@ class SQLAlchemyMixin:
         sqlalchemy_mapped_dotted_names: set[str]
         current_scope: Scope
         uses: dict[str, list[tuple[ast.AST, Scope]]]
+        soft_uses: set[str]
+        in_soft_use_context: bool
 
         def in_type_checking_block(self, lineno: int, col_offset: int) -> bool:  # noqa: D102
             ...
@@ -340,16 +366,17 @@ class SQLAlchemyMixin:
         def lookup_full_name(self, node: ast.AST) -> str | None:  # noqa: D102
             ...
 
+        def is_typing(self, node: ast.AST, symbol: str) -> bool:  # noqa: D102
+            ...
+
+        def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+            ...
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
-        #: Contains a set of all names used inside `Mapped[...]` annotations
-        # These are treated like soft-uses, i.e. we don't know if it will be
-        # used at runtime or not
-        self.mapped_names: set[str] = set()
-
         #: Used for visiting annotations
-        self.sqlalchemy_annotation_visitor = SQLAlchemyAnnotationVisitor(self.mapped_names)
+        self.sqlalchemy_annotation_visitor = SQLAlchemyAnnotationVisitor(self)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Remove all annotations assigments."""
@@ -403,9 +430,9 @@ class SQLAlchemyMixin:
             # add all names contained in the inner part of the annotation
             # since this is not as strict as an actual runtime use, we don't
             # care if we record too much here
-            visitor = StringAnnotationVisitor()
+            visitor = StringAnnotationVisitor(self)
             visitor.parse_and_visit_string_annotation(inner)
-            self.mapped_names.update(visitor.names)
+            self.soft_uses.update(visitor.names)
             return
 
         # we only need to handle annotations like `Mapped[...]`
@@ -780,9 +807,14 @@ class Scope:
 class StringAnnotationVisitor(AnnotationVisitor):
     """Visit a parsed string annotation and collect all the names."""
 
-    def __init__(self) -> None:
+    def __init__(self, typing_lookup: SupportsIsTyping) -> None:
         #: All the names referenced inside the annotation
         self.names: set[str] = set()
+        self._typing_lookup = typing_lookup
+
+    def is_typing(self, node: ast.AST, symbol: str) -> bool:
+        """Check if the given node matches the given typing symbol."""
+        return self._typing_lookup.is_typing(node, symbol)
 
     def parse_and_visit_string_annotation(self, annotation: str) -> None:
         """Parse and visit the given string as an annotation expression."""
@@ -814,7 +846,7 @@ class StringAnnotationVisitor(AnnotationVisitor):
 class ImportAnnotationVisitor(AnnotationVisitor):
     """Map all annotations on an AST node."""
 
-    def __init__(self) -> None:
+    def __init__(self, import_visitor: ImportVisitor) -> None:
         #: All type annotations in the file, without quotes around them
         self.unwrapped_annotations: list[UnwrappedAnnotation] = []
 
@@ -830,6 +862,12 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         #: Whether or not this annotation ever gets evaluated
         # e.g. AnnAssign.annotation within a function body will never evaluate
         self.never_evaluates = False
+
+        self.import_visitor = import_visitor
+
+    def is_typing(self, node: ast.AST, symbol: str) -> bool:
+        """Check if the given node matches the given typing symbol."""
+        return self.import_visitor.is_typing(node, symbol)
 
     def visit(
         self,
@@ -864,11 +902,18 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         if getattr(node, BINOP_OPERAND_PROPERTY, False):
             self.invalid_binop_literals.append(node)
         else:
-            visitor = StringAnnotationVisitor()
+            visitor = StringAnnotationVisitor(self.import_visitor)
             visitor.parse_and_visit_string_annotation(node.value)
             (self.excess_wrapped_annotations if self.never_evaluates else self.wrapped_annotations).append(
                 WrappedAnnotation(node.lineno, node.col_offset, node.value, visitor.names, self.scope, self.type)
             )
+
+    def visit_annotated_value(self, node: ast.expr) -> None:
+        """Visit a value expression of `typing.Annotated[type, value]`."""
+        previous_context = self.import_visitor.in_soft_use_context
+        self.import_visitor.in_soft_use_context = True
+        self.import_visitor.visit(node)
+        self.import_visitor.in_soft_use_context = previous_context
 
 
 class ImportVisitor(
@@ -932,8 +977,12 @@ class ImportVisitor(
         #: List of all names and ids, except type declarations
         self.uses: dict[str, list[tuple[ast.AST, Scope]]] = defaultdict(list)
 
+        #: Contains a set of all names to be treated like soft-uses.
+        # i.e. we don't know if it will be used at runtime or not
+        self.soft_uses: set[str] = set()
+
         #: Handles logic of visiting annotation nodes
-        self.annotation_visitor = ImportAnnotationVisitor()
+        self.annotation_visitor = ImportAnnotationVisitor(self)
 
         #: Whether there is a `from __futures__ import annotations` is present in the file
         self.futures_annotation: Optional[bool] = None
@@ -950,6 +999,10 @@ class ImportVisitor(
 
         #: For tracking which comprehension/IfExp we're currently inside of
         self.active_context: Optional[Comprehension | ast.IfExp] = None
+
+        #: Whether or not we're in a context where uses count as soft-uses.
+        # E.g. the value expression of `typing.Annotated[type, value]`
+        self.in_soft_use_context: bool = False
 
     @contextmanager
     def create_scope(self, node: ast.ClassDef | Function, is_head: bool = True) -> Iterator[Scope]:
@@ -1853,7 +1906,7 @@ class TypingOnlyImportsChecker:
         }
 
         all_imports = {name for name, imp in self.visitor.imports.items() if not imp.exempt}
-        unused_imports = all_imports - self.visitor.names - self.visitor.mapped_names
+        unused_imports = all_imports - self.visitor.names - self.visitor.soft_uses
         used_imports = all_imports - unused_imports
         already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
         annotation_names = (

@@ -24,5 +24,9 @@ if TYPE_CHECKING:
         def col_offset(self) -> int:
             pass
 
+    class SupportsIsTyping(Protocol):
+        def is_typing(self, node: ast.AST, symbol: str) -> bool:
+            pass
+
 
 ImportTypeValue = Literal['APPLICATION', 'THIRD_PARTY', 'BUILTIN', 'FUTURE']
