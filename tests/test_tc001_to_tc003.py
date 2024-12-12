@@ -293,6 +293,36 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
             ),
             {'4:0 ' + ERROR.format(module=f'{import_}.Depends')},
         ),
+        # global
+        (
+            textwrap.dedent(
+                f'''
+                from {import_} import Dict
+
+                def example() -> Any:
+                    global Dict
+                    x = Dict[int]  # runtime use of Dict import
+
+                x: Dict[int] = 20
+                '''
+            ),
+            set(),
+        ),
+        # nonlocal
+        (
+            textwrap.dedent(
+                f'''
+                from {import_} import Dict
+
+                def example() -> Any:
+                    nonlocal Dict
+                    x = Dict[int]  # runtime use of Dict import
+
+                x: Dict[int] = 20
+                '''
+            ),
+            set(),
+        ),
     ]
 
     return [
