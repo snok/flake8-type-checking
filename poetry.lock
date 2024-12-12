@@ -546,13 +546,13 @@ dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "pygments
 
 [[package]]
 name = "pytest-flake8-path"
-version = "1.5.0"
+version = "1.6.0"
 description = "A pytest fixture for testing flake8 plugins."
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "pytest_flake8_path-1.5.0-py3-none-any.whl", hash = "sha256:8766879344883e67762fc3f4f8f0d624a0d143de71f6488788599b3583e279a9"},
-    {file = "pytest_flake8_path-1.5.0.tar.gz", hash = "sha256:2c144a3127995d34e82df397350dbef7780c9920c5b7e9ebc81f63299011381e"},
+    {file = "pytest_flake8_path-1.6.0-py3-none-any.whl", hash = "sha256:dafc81dc8f2ba49060a45139caa153fba291163d670c00ae20e194989b73a34e"},
+    {file = "pytest_flake8_path-1.6.0.tar.gz", hash = "sha256:40bb85c806630e37097a45c4e67130b9655efbb81904a9bfa89b1e23bc2529a5"},
 ]
 
 [package.dependencies]
@@ -741,4 +741,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9"
-content-hash = "6ea24658d3f8e5c9346830f1b57e3ff0c5097b6c740d3a4641637719385d20cc"
+content-hash = "bdbc7df6445c077ca6561713374ce9544f3be73d77cbaed68b990c8b3a9e204b"
