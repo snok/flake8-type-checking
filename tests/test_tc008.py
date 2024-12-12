@@ -33,51 +33,60 @@ examples = [
         {'4:20 ' + TC008.format(alias='int')},
     ),
     (
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         from __future__ import annotations
 
         if TYPE_CHECKING:
             import something
 
         x: TypeAlias = "something"
-        '''),
+        '''
+        ),
         set(),
     ),
     (
         # Regression test for Issue #164
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         from wtforms import Field
         from wtforms.fields.core import UnboundField
 
         foo: TypeAlias = 'UnboundField[Field]'
-        '''),
+        '''
+        ),
         set(),
     ),
     (
         # this used to yield false negatives but works now, yay
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         class Foo(Protocol):
             pass
 
         x: TypeAlias = 'Foo | None'
-        '''),
+        '''
+        ),
         {'5:15 ' + TC008.format(alias='Foo | None')},
     ),
     (
         # Regression test for Issue #168
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         if TYPE_CHECKING:
             Foo: TypeAlias = str | int
 
         Bar: TypeAlias = 'Foo'
-        '''),
+        '''
+        ),
         set(),
     ),
     (
         # Regression test for Issue #168
         # The runtime declaration are inside a Protocol so they should not
         # affect the outcome
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         if TYPE_CHECKING:
             Foo: TypeAlias = str | int
         else:
@@ -85,27 +94,32 @@ examples = [
                 Foo: str | int
 
         Bar: TypeAlias = 'Foo'
-        '''),
+        '''
+        ),
         set(),
     ),
 ]
 
 if sys.version_info >= (3, 12):
-    examples.extend([
-        (
-            # new style type alias should never be wrapped
-            textwrap.dedent('''
+    examples.extend(
+        [
+            (
+                # new style type alias should never be wrapped
+                textwrap.dedent(
+                    '''
                 if TYPE_CHECKING:
                     type Foo = 'str'
 
                 type Bar = 'Foo'
-                '''),
-            {
-                '3:15 ' + TC008.format(alias='str'),
-                '5:11 ' + TC008.format(alias='Foo'),
-            },
-        )
-    ])
+                '''
+                ),
+                {
+                    '3:15 ' + TC008.format(alias='str'),
+                    '5:11 ' + TC008.format(alias='Foo'),
+                },
+            )
+        ]
+    )
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)

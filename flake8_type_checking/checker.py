@@ -11,7 +11,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from classify_imports import Classified, classify_base
 
@@ -43,7 +43,6 @@ if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
     from argparse import Namespace
     from collections.abc import Iterator
-    from typing import Any, Optional, Union
 
     from flake8_type_checking.types import (
         Comprehension,
@@ -131,9 +130,9 @@ class AttrsMixin:
     if TYPE_CHECKING:
         third_party_imports: dict[str, Import]
 
-    def get_all_attrs_imports(self) -> dict[Optional[str], str]:
+    def get_all_attrs_imports(self) -> dict[str | None, str]:
         """Return a map of all attrs/attr imports."""
-        attrs_imports: dict[Optional[str], str] = {}  # map of alias to full import name
+        attrs_imports: dict[str | None, str] = {}  # map of alias to full import name
 
         for node in self.third_party_imports.values():
             module = getattr(node, 'module', '')
@@ -153,7 +152,7 @@ class AttrsMixin:
         attrs_imports = self.get_all_attrs_imports()
         return any(self.is_attrs_decorator(decorator, attrs_imports) for decorator in class_node.decorator_list)
 
-    def is_attrs_decorator(self, decorator: Any, attrs_imports: dict[Optional[str], str]) -> bool:
+    def is_attrs_decorator(self, decorator: Any, attrs_imports: dict[str | None, str]) -> bool:
         """Check whether a class decorator is an attrs decorator or not."""
         if isinstance(decorator, ast.Call):
             return self.is_attrs_decorator(decorator.func, attrs_imports)
@@ -172,7 +171,7 @@ class AttrsMixin:
         return any(e for e in actual if e in ATTRS_DECORATORS)
 
     @staticmethod
-    def is_attrs_str(attribute: Union[str, ast.expr], attrs_imports: dict[Optional[str], str]) -> bool:
+    def is_attrs_str(attribute: str | ast.expr, attrs_imports: dict[str | None, str]) -> bool:
         """Check whether an ast.expr or string is an attrs string or not."""
         actual = attrs_imports.get(str(attribute), '')
         return actual in ATTRS_DECORATORS
@@ -272,12 +271,12 @@ class PydanticMixin:
 
     if TYPE_CHECKING:
         pydantic_enabled: bool
-        pydantic_validate_arguments_import_name: Optional[str]
+        pydantic_validate_arguments_import_name: str | None
 
         def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
             ...
 
-    def _function_is_wrapped_by_validate_arguments(self, node: Union[FunctionDef, AsyncFunctionDef]) -> bool:
+    def _function_is_wrapped_by_validate_arguments(self, node: FunctionDef | AsyncFunctionDef) -> bool:
         if self.pydantic_enabled and node.decorator_list:
             for decorator_node in node.decorator_list:
                 if getattr(decorator_node, 'id', '') == self.pydantic_validate_arguments_import_name:
@@ -491,7 +490,7 @@ class InjectorMixin:
         if self.injector_enabled:
             self.handle_injector_declaration(node)
 
-    def handle_injector_declaration(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+    def handle_injector_declaration(self, node: AsyncFunctionDef | FunctionDef) -> None:
         """
         Adjust for injector declaration setting.
 
@@ -540,7 +539,7 @@ class FastAPIMixin:
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
 
-    def handle_fastapi_decorator(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+    def handle_fastapi_decorator(self, node: AsyncFunctionDef | FunctionDef) -> None:
         """
         Adjust for FastAPI decorator setting.
 
@@ -635,7 +634,7 @@ class ImportName:
 
     _module: str
     _name: str
-    _alias: Optional[str]
+    _alias: str | None
 
     #: Whether or not this import is exempt from TC001-004 checks.
     exempt: bool
@@ -1021,8 +1020,8 @@ class ImportVisitor(
         injector_enabled: bool,
         cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
-        typing_modules: Optional[list[str]] = None,
-        exempt_modules: Optional[list[str]] = None,
+        typing_modules: list[str] | None = None,
+        exempt_modules: list[str] | None = None,
     ) -> None:
         super().__init__()
 
@@ -1072,7 +1071,7 @@ class ImportVisitor(
         self.annotation_visitor = ImportAnnotationVisitor(self)
 
         #: Whether there is a `from __futures__ import annotations` present in the file
-        self.futures_annotation: Optional[bool] = None
+        self.futures_annotation: bool | None = None
 
         #: Where the type checking block exists (line_start, line_end, col_offset)
         # Empty type checking blocks are used for TC005 errors, while the type
@@ -1085,7 +1084,7 @@ class ImportVisitor(
         self.unquoted_types_in_casts: list[tuple[int, int, str]] = []
 
         #: For tracking which comprehension/IfExp we're currently inside of
-        self.active_context: Optional[Comprehension | ast.IfExp] = None
+        self.active_context: Comprehension | ast.IfExp | None = None
 
         #: Whether or not we're in a context where uses count as soft-uses.
         # E.g. the type expression of `typing.Annotated[type, value]`
@@ -1924,7 +1923,7 @@ class TypingOnlyImportsChecker:
         'future_option_enabled',
     ]
 
-    def __init__(self, node: ast.Module, options: Optional[Namespace]) -> None:
+    def __init__(self, node: ast.Module, options: Namespace | None) -> None:
         self.cwd = Path(os.getcwd())
         self.strict_mode = getattr(options, 'type_checking_strict', False)
 

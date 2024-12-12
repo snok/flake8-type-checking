@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import sys
 import textwrap
-from typing import List, Set, Tuple
 
 import pytest
 
 from flake8_type_checking.constants import TC001, TC002, TC003
 from tests.conftest import _get_error, mod
 
-L = List[Tuple[str, Set[str]]]
+L = list[tuple[str, set[str]]]
 
 
 def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
@@ -43,11 +42,13 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
 
     if ERROR == TC001:
         # test relative imports
-        no_use.extend([
-            ('from .. import Plugin\nx:Plugin', {'1:0 ' + ERROR.format(module='..Plugin')}),
-            ('\n\nfrom .foo import constants\nx:constants', {'3:0 ' + ERROR.format(module='.foo.constants')}),
-            ('from . import constants as x\ny:x', {'1:0 ' + ERROR.format(module='x')}),
-        ])
+        no_use.extend(
+            [
+                ('from .. import Plugin\nx:Plugin', {'1:0 ' + ERROR.format(module='..Plugin')}),
+                ('\n\nfrom .foo import constants\nx:constants', {'3:0 ' + ERROR.format(module='.foo.constants')}),
+                ('from . import constants as x\ny:x', {'1:0 ' + ERROR.format(module='x')}),
+            ]
+        )
 
     # These imports are all used. None should generate errors.
     used: L = [
@@ -123,7 +124,8 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
     # Imports used for `functools.singledispatch`. None of these should generate errors.
     used_for_singledispatch: L = [
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 import functools
 
                 from {import_} import Dict, Any
@@ -131,11 +133,13 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                 @functools.singledispatch
                 def foo(arg: Dict[str, Any]) -> Any:
                     return 1
-                '''),
+                '''
+            ),
             set(),
         ),
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 from functools import singledispatch
 
                 from {import_} import Dict, Any
@@ -143,11 +147,13 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                 @singledispatch
                 def foo(arg: Dict[str, Any]) -> Any:
                     return 1
-                '''),
+                '''
+            ),
             set(),
         ),
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 from functools import singledispatchmethod
 
                 from {import_} import Dict, Any
@@ -156,36 +162,42 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                     @singledispatchmethod
                     def foo(self, arg: Dict[str, Any]) -> Any:
                         return 1
-                '''),
+                '''
+            ),
             set(),
         ),
     ]
 
     other_useful_test_cases: L = [
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 from {import_} import Dict, Any
 
                 def example() -> Any:
                     return 1
 
                 x: Dict[int] = 20
-                '''),
+                '''
+            ),
             {'2:0 ' + ERROR.format(module=f'{import_}.Dict'), '2:0 ' + ERROR.format(module=f'{import_}.Any')},
         ),
         (
-            textwrap.dedent('''
+            textwrap.dedent(
+                '''
                 from typing import TYPE_CHECKING
 
                 if TYPE_CHECKING:
                     from typing import Dict
 
                 x: Dict[int] = 20
-                '''),
+                '''
+            ),
             set(),
         ),
         (
-            textwrap.dedent('''
+            textwrap.dedent(
+                '''
                 from pathlib import Path
 
                 class ImportVisitor(ast.NodeTransformer):
@@ -199,73 +211,86 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
 
                     def __init__(self):
                         self.cwd = Path(pandas.getcwd())
-                '''),
+                '''
+            ),
             set(),
         ),
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 import {import_}
 
 
                 class Migration:
                     enum={import_}
-                '''),
+                '''
+            ),
             set(),
         ),
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 import {import_}
 
 
                 class Migration:
                     enum={import_}.EnumClass
-                '''),
+                '''
+            ),
             set(),
         ),
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 from {import_} import y
 
                 if TYPE_CHECKING:
                     _type = x
                 else:
                     _type = y
-                '''),
+                '''
+            ),
             set(),
         ),
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 from {import_} import y
 
                 if TYPE_CHECKING:
                     _type = x
                 elif True:
                     _type = y
-                '''),
+                '''
+            ),
             set(),
         ),
         # Annotated soft use
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 from typing import Annotated
 
                 from {import_} import Depends
 
                 x: Annotated[str, Depends]
                 y: Depends
-            '''),
+            '''
+            ),
             set(),
         ),
         # This is not a soft-use, it's just a plain string
         (
-            textwrap.dedent(f'''
+            textwrap.dedent(
+                f'''
                 from typing import Annotated
 
                 from {import_} import Depends
 
                 x: Annotated[str, "Depends"]
                 y: Depends
-            '''),
+            '''
+            ),
             {'4:0 ' + ERROR.format(module=f'{import_}.Depends')},
         ),
     ]

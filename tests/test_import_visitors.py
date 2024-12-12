@@ -9,7 +9,7 @@ from flake8_type_checking.checker import ImportVisitor
 from tests.conftest import REPO_ROOT
 
 if TYPE_CHECKING:
-    from typing import Callable, List, Tuple
+    from typing import Callable
 
 
 def _visit(example: str) -> ImportVisitor:
@@ -83,7 +83,7 @@ venv_imports = [
     ('\nfrom _pytest.config import argparsing', ['_pytest.config.argparsing'], f),
 ]
 
-typing_block_imports: List[Tuple[str, list[str], Callable[[str], list[str]]]] = [
+typing_block_imports: list[tuple[str, list[str], Callable[[str], list[str]]]] = [
     (f'if TYPE_CHECKING:\n\t{example}', [], f)
     for _list in [stdlib_imports, venv_imports]
     for example, expected, f in _list[:-1]

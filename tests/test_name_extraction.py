@@ -28,9 +28,11 @@ examples = [
 ]
 
 if sys.version_info >= (3, 11):
-    examples.extend([
-        ('*Ts', {'Ts'}),
-    ])
+    examples.extend(
+        [
+            ('*Ts', {'Ts'}),
+        ]
+    )
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
