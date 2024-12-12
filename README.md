@@ -128,6 +128,24 @@ pip install flake8-type-checking
 
 These options are configurable, and can be set in your flake8 config.
 
+### Typing modules
+
+If you re-export `typing` or `typing_extensions` members from a compatibility
+module, you will need to specify them here in order for inference to work
+correctly for special forms like `Literal` or `Annotated`.
+
+If you use relative imports for the compatibility module in your code-base
+you will need to add separate entries for each kind of relative import you
+use.
+
+- **setting name**: `type-checking-typing-modules`
+- **type**: `list`
+
+```ini
+[flake8]
+type-checking-typing-modules = mylib.compat, .compat, ..compat  # default []
+```
+
 ### Exempt modules
 
 If you wish to exempt certain modules from
