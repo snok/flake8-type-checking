@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import ast
+import sys
 import textwrap
-from typing import TYPE_CHECKING
 
 import pytest
 
 from flake8_type_checking.checker import ImportVisitor
 
-if TYPE_CHECKING:
-    from typing import Set
 
-
-def _get_names(example: str) -> Set[str]:
+def _get_names_and_soft_uses(example: str) -> tuple[set[str], set[str]]:
     visitor = ImportVisitor(
         cwd='fake cwd',  # type: ignore[arg-type]
         pydantic_enabled=False,
@@ -25,56 +22,59 @@ def _get_names(example: str) -> Set[str]:
         pydantic_enabled_baseclass_passlist=[],
     )
     visitor.visit(ast.parse(example))
-    return visitor.names
+    return visitor.names, visitor.soft_uses
 
 
 examples = [
     # ast.Import
-    ('import x', set()),
-    ('import pytest', set()),
-    ('import flake8_type_checking', set()),
+    ('import x', set(), set()),
+    ('import pytest', set(), set()),
+    ('import flake8_type_checking', set(), set()),
     # ast.ImportFrom
-    ('from x import y', set()),
-    ('from _pytest import fixtures', set()),
-    ('from flake8_type_checking import constants', set()),
+    ('from x import y', set(), set()),
+    ('from _pytest import fixtures', set(), set()),
+    ('from flake8_type_checking import constants', set(), set()),
     # Assignments
-    ('x = y', {'x', 'y'}),
-    ('x, y = z', {'x', 'y', 'z'}),
-    ('x, y, z = a, b, c()', {'x', 'y', 'z', 'a', 'b', 'c'}),
+    ('x = y', {'x', 'y'}, set()),
+    ('x, y = z', {'x', 'y', 'z'}, set()),
+    ('x, y, z = a, b, c()', {'x', 'y', 'z', 'a', 'b', 'c'}, set()),
     # Calls
-    ('x()', {'x'}),
-    ('x = y()', {'x', 'y'}),
-    ('def example(): x = y(); z()', {'x', 'y', 'z'}),
+    ('x()', {'x'}, set()),
+    ('x = y()', {'x', 'y'}, set()),
+    ('def example(): x = y(); z()', {'x', 'y', 'z'}, set()),
     # Attribute
-    ('x.y', {'x.y', 'x'}),
+    ('x.y', {'x.y', 'x'}, set()),
     (
         textwrap.dedent("""
-    def example(c):
-        a = 2
-        b = c * 2
-    """),
+        def example(c):
+            a = 2
+            b = c * 2
+        """),
         {'a', 'b', 'c'},
+        set(),
     ),
     (
         textwrap.dedent("""
-    class Test:
-        x = 13
+        class Test:
+            x = 13
 
-        def __init__(self, z):
-            self.y = z
+            def __init__(self, z):
+                self.y = z
 
-    a = Test()
-    b = a.y
-    """),
+        a = Test()
+        b = a.y
+        """),
         {'self.y', 'z', 'Test', 'self', 'a', 'b', 'x', 'a.y'},
+        set(),
     ),
     (
         textwrap.dedent("""
-    import ast
+        import ast
 
-    ImportType = Union[Import, ImportFrom]
-    """),  # ast should not be a part of this
+        ImportType = Union[Import, ImportFrom]
+        """),  # ast should not be a part of this
         {'Union', 'Import', 'ImportFrom', 'ImportType'},
+        set(),
     ),
     (
         textwrap.dedent("""
@@ -85,13 +85,53 @@ examples = [
             return visitor.usage_names
         """),
         {'UnusedImportVisitor', 'example', 'parse', 'visitor', 'visitor.usage_names', 'visitor.visit'},
+        set(),
+    ),
+    (
+        textwrap.dedent("""
+        from typing import Annotated
+
+        from foo import Gt
+
+        x: Annotated[int, Gt(5)]
+        """),
+        {'Gt'},
+        {'int'},
+    ),
+    (
+        textwrap.dedent("""
+        from __future__ import annotations
+
+        from typing import Annotated
+
+        from foo import Gt
+
+        x: Annotated[int, Gt(5)]
+        """),
+        set(),
+        {'Gt', 'int'},
     ),
 ]
 
+if sys.version_info >= (3, 12):
+    examples.extend([
+        (
+            textwrap.dedent("""
+            from typing import Annotated
 
-@pytest.mark.parametrize(('example', 'result'), examples)
-def test_basic_annotations_are_removed(example, result):
-    assert _get_names(example) == result
+            from foo import Gt
+
+            type x = Annotated[int, Gt(5)]
+            """),
+            set(),
+            {'Gt', 'int'},
+        ),
+    ])
+
+
+@pytest.mark.parametrize(('example', 'result', 'soft_uses'), examples)
+def test_basic_annotations_are_removed(example, result, soft_uses):
+    assert _get_names_and_soft_uses(example) == (result, soft_uses)
 
 
 def test_model_declarations_are_included_in_names():
@@ -106,4 +146,7 @@ def test_model_declarations_are_included_in_names():
             on_delete=models.CASCADE,
         )
     """)
-    assert _get_names(example) == {'SomeModel', 'fk', 'models', 'models.CASCADE', 'models.ForeignKey', 'models.Model'}
+    assert _get_names_and_soft_uses(example) == (
+        {'SomeModel', 'fk', 'models', 'models.CASCADE', 'models.ForeignKey', 'models.Model'},
+        set(),
+    )

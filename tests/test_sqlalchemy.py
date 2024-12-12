@@ -75,6 +75,25 @@ def test_mapped_with_circular_forward_reference():
     assert _get_error(example, error_code_filter='TC002', type_checking_sqlalchemy_enabled=True) == set()
 
 
+def test_mapped_soft_uses():
+    """
+    Everything inside Mapped is a soft-use, including `Annotated` value expresions
+    as such we can't trigger a TC002 here, despite the only uses being inside
+    type annotations.
+    """
+    example = textwrap.dedent('''
+        from foo import Bar, Gt
+        from sqlalchemy.orm import Mapped
+        from typing import Annotated
+
+        class User:
+            number: Mapped[Annotated[Bar, Gt(2)]]
+            bar: Bar
+            validator: Gt
+        ''')
+    assert _get_error(example, error_code_filter='TC002', type_checking_sqlalchemy_enabled=True) == set()
+
+
 def test_mapped_use_without_runtime_import():
     """
     Mapped must be available at runtime, so even if it is inside a wrapped annotation
