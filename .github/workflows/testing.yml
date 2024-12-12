@@ -72,9 +72,9 @@ jobs:
           coverage run -m pytest tests
           coverage xml
           coverage report
-      - uses: codecov/codecov-action@v2
+      - uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
         if: matrix.python-version == '3.10'
