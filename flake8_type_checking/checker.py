@@ -85,6 +85,10 @@ class AnnotationVisitor(ABC):
     def visit_annotation_string(self, node: ast.Constant) -> None:
         """Visit a string constant inside an annotation."""
 
+    def visit_annotated_type(self, node: ast.expr) -> None:
+        """Visit a type expression of `typing.Annotated[type, value]`."""
+        self.visit(node)
+
     def visit_annotated_value(self, node: ast.expr) -> None:
         """Visit a value expression of `typing.Annotated[type, value]`."""
         return
@@ -113,7 +117,7 @@ class AnnotationVisitor(ABC):
                 if elts_node.elts:
                     elts_iter = iter(elts_node.elts)
                     # only visit the first element like a type expression
-                    self.visit(next(elts_iter))
+                    self.visit_annotated_type(next(elts_iter))
                     for value_node in elts_iter:
                         self.visit_annotated_value(value_node)
             else:
@@ -863,6 +867,10 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         # e.g. AnnAssign.annotation within a function body will never evaluate
         self.never_evaluates = False
 
+        #: Whether or not we're currently in a soft-use context
+        # e.g. the type expression of `Annotated[type, value]
+        self.in_soft_use_context = False
+
         self.import_visitor = import_visitor
 
     def is_typing(self, node: ast.AST, symbol: str) -> bool:
@@ -891,6 +899,9 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         if self.never_evaluates:
             return
 
+        if self.in_soft_use_context:
+            self.import_visitor.soft_uses.add(node.id)
+
         self.unwrapped_annotations.append(
             UnwrappedAnnotation(node.lineno, node.col_offset, node.id, self.scope, self.type)
         )
@@ -904,12 +915,33 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         else:
             visitor = StringAnnotationVisitor(self.import_visitor)
             visitor.parse_and_visit_string_annotation(node.value)
+            if self.in_soft_use_context:
+                self.import_visitor.soft_uses.update(visitor.names)
             (self.excess_wrapped_annotations if self.never_evaluates else self.wrapped_annotations).append(
                 WrappedAnnotation(node.lineno, node.col_offset, node.value, visitor.names, self.scope, self.type)
             )
 
+    def visit_annotated_type(self, node: ast.expr) -> None:
+        """Visit a type expression of `typing.Annotated[type, value]`."""
+        if self.never_evaluates:
+            return
+
+        previous_context = self.in_soft_use_context
+        self.in_soft_use_context = True
+        self.visit(node)
+        self.in_soft_use_context = previous_context
+
     def visit_annotated_value(self, node: ast.expr) -> None:
         """Visit a value expression of `typing.Annotated[type, value]`."""
+        if self.never_evaluates:
+            return
+
+        if self.type == 'alias' or (self.type == 'annotation' and not self.import_visitor.futures_annotation):
+            # visit nodes in regular runtime context
+            self.import_visitor.visit(node)
+            return
+
+        # visit nodes in soft use context
         previous_context = self.import_visitor.in_soft_use_context
         self.import_visitor.in_soft_use_context = True
         self.import_visitor.visit(node)
@@ -978,13 +1010,14 @@ class ImportVisitor(
         self.uses: dict[str, list[tuple[ast.AST, Scope]]] = defaultdict(list)
 
         #: Contains a set of all names to be treated like soft-uses.
-        # i.e. we don't know if it will be used at runtime or not
+        # i.e. we don't know if it will be used at runtime or not, so
+        # we should assume the imports are currently correct
         self.soft_uses: set[str] = set()
 
         #: Handles logic of visiting annotation nodes
         self.annotation_visitor = ImportAnnotationVisitor(self)
 
-        #: Whether there is a `from __futures__ import annotations` is present in the file
+        #: Whether there is a `from __futures__ import annotations` present in the file
         self.futures_annotation: Optional[bool] = None
 
         #: Where the type checking block exists (line_start, line_end, col_offset)
@@ -1000,8 +1033,7 @@ class ImportVisitor(
         #: For tracking which comprehension/IfExp we're currently inside of
         self.active_context: Optional[Comprehension | ast.IfExp] = None
 
-        #: Whether or not we're in a context where uses count as soft-uses.
-        # E.g. the value expression of `typing.Annotated[type, value]`
+        #: Whether we're in a value expression of `typing.Annotated[type, value]`.
         self.in_soft_use_context: bool = False
 
     @contextmanager
@@ -1387,10 +1419,16 @@ class ImportVisitor(
         if self.in_type_checking_block(node.lineno, node.col_offset):
             return node
 
+        names = [node.id]
         if hasattr(node, ATTRIBUTE_PROPERTY):
-            self.uses[f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}'].append((node, self.current_scope))
+            names.append(f'{node.id}.{getattr(node, ATTRIBUTE_PROPERTY)}')
 
-        self.uses[node.id].append((node, self.current_scope))
+        if self.in_soft_use_context:
+            self.soft_uses.update(names)
+        else:
+            for name in names:
+                self.uses[name].append((node, self.current_scope))
+
         return node
 
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
