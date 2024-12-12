@@ -227,6 +227,47 @@ examples = [
             '3:0 ' + TC004.format(module='z'),
         },
     ),
+    # functools.singledispatch
+    (
+        textwrap.dedent("""
+            import functools
+
+            if TYPE_CHECKING:
+                from foo import FooType
+
+            @functools.singledispatch
+            def foo(arg: FooType) -> int:
+                return 1
+            """),
+        {'5:0 ' + TC004.format(module='FooType')},
+    ),
+    (
+        textwrap.dedent("""
+            from functools import singledispatch
+
+            if TYPE_CHECKING:
+                from foo import FooType
+
+            @functools.singledispatch
+            def foo(arg: FooType) -> int:
+                return 1
+            """),
+        {'5:0 ' + TC004.format(module='FooType')},
+    ),
+    (
+        textwrap.dedent("""
+            from functools import singledispatchmethod
+
+            if TYPE_CHECKING:
+                from foo import FooType
+
+            class Foo:
+                @functools.singledispatch
+                def foo(self, arg: FooType) -> int:
+                    return 1
+            """),
+        {'5:0 ' + TC004.format(module='FooType')},
+    ),
 ]
 
 

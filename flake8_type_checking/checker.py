@@ -582,6 +582,66 @@ class FastAPIMixin:
             self.visit(node.args.vararg.annotation)
 
 
+class FunctoolsSingledispatchMixin:
+    """
+    Contains the necessary logic for `functools.singledispatch` support.
+
+    `functools.singledispatch` and `functools.singledispatchmethod` require
+    runtime access to all annotations.
+
+    ```python
+    from functools import singledispatch
+
+    from mylib import Foo
+
+    @singledispatch
+    def foo(arg: Foo) -> str:
+        return arg.name
+    ```
+
+    Since the only use of `Foo` is within an annotation, we would usually emit
+    a TC003 for the `mylib` import. But since `singledispatch` requires runtime
+    access to `Foo`, that would be a false positive.
+    """
+
+    if TYPE_CHECKING:
+
+        def in_type_checking_block(self, lineno: int, col_offset: int) -> bool:  # noqa: D102
+            ...
+
+        def lookup_full_name(self, node: ast.AST) -> str | None:  # noqa: D102
+            ...
+
+        def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+            ...
+
+    def visit_FunctionDef(self, node: FunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        super().visit_FunctionDef(node)  # type: ignore[misc]
+        if self.has_singledispatch_decorator(node):
+            self.handle_singledispatch_decorator(node)
+
+    def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
+        """Remove and map function arguments and returns."""
+        super().visit_AsyncFunctionDef(node)  # type: ignore[misc]
+        if self.has_singledispatch_decorator(node):
+            self.handle_singledispatch_decorator(node)
+
+    def has_singledispatch_decorator(self, node: FunctionDef | AsyncFunctionDef) -> bool:
+        """Determine whether this function is decorated with `functools.singledispatch`."""
+        return any(
+            self.lookup_full_name(decorator_node) in ('functools.singledispatch', 'functools.singledispatchmethod')
+            for decorator_node in node.decorator_list
+        )
+
+    def handle_singledispatch_decorator(self, node: FunctionDef | AsyncFunctionDef) -> None:
+        """Walk all the annotations to register them as runtime uses."""
+        for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
+            for argument in path:
+                if hasattr(argument, 'annotation') and argument.annotation:
+                    self.visit(argument.annotation)
+
+
 @dataclass
 class ImportName:
     """DTO for representing an import in different string-formats."""
@@ -949,7 +1009,14 @@ class ImportAnnotationVisitor(AnnotationVisitor):
 
 
 class ImportVisitor(
-    DunderAllMixin, AttrsMixin, InjectorMixin, FastAPIMixin, PydanticMixin, SQLAlchemyMixin, ast.NodeVisitor
+    DunderAllMixin,
+    FunctoolsSingledispatchMixin,
+    AttrsMixin,
+    InjectorMixin,
+    FastAPIMixin,
+    PydanticMixin,
+    SQLAlchemyMixin,
+    ast.NodeVisitor,
 ):
     """Map all imports outside of type-checking blocks."""
 
