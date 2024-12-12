@@ -10,25 +10,25 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.10.7"
-      - uses: actions/cache@v3
+          python-version: "3.10"
+      - uses: actions/cache@v4
         id: cache-venv
         with:
           path: .venv
-          key: venv-5  # increment to reset
+          key: venv-6  # increment to reset
       - run: |
           python -m venv .venv --upgrade-deps
           source .venv/bin/activate
           pip install pre-commit
         if: steps.cache-venv.outputs.cache-hit != 'true'
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: pre-commit-cache
         with:
           path: ~/.cache/pre-commit
-          key: ${{ hashFiles('**/pre-commit-config.yaml') }}-4
+          key: ${{ hashFiles('**/pre-commit-config.yaml') }}-5
       - run: |
           source .venv/bin/activate
           pre-commit run --all-files
@@ -38,19 +38,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.8.18", "3.9.18", "3.10.13", "3.11.6", "3.12.0" ]
+        python-version: [ "3.9", "3.10", "3.11", "3.12", "3.13" ]
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "${{ matrix.python-version }}"
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: poetry-cache
         with:
           path: |
             ~/.local
             .venv
-          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-8
+          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-9
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
@@ -77,4 +77,4 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
-        if: matrix.python-version == '3.10.7'
+        if: matrix.python-version == '3.10'

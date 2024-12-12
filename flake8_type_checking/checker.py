@@ -5,7 +5,7 @@ import fnmatch
 import os
 import sys
 from abc import ABC, abstractmethod
-from ast import Index, literal_eval
+from ast import literal_eval
 from collections import defaultdict
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
@@ -36,21 +36,8 @@ from flake8_type_checking.constants import (
     TC200,
     TC201,
     builtin_names,
-    py38,
     sqlalchemy_default_mapped_dotted_names,
 )
-
-try:
-    ast_unparse = ast.unparse  # type: ignore[attr-defined]
-except AttributeError:  # pragma: no cover
-    # Python < 3.9
-
-    import astor
-
-    def ast_unparse(node: ast.AST) -> str:
-        """AST unparsing helper for Python < 3.9."""
-        return cast('str', astor.to_source(node)).strip()
-
 
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
@@ -104,18 +91,18 @@ class AnnotationVisitor(ABC):
             setattr(node.right, BINOP_OPERAND_PROPERTY, True)
             self.visit(node.left)
             self.visit(node.right)
-        elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
+        elif isinstance(node, ast.Attribute):
             self.visit(node.value)
         elif isinstance(node, ast.Subscript):
             self.visit(node.value)
             if self.is_typing(node.value, 'Literal'):
                 return
             elif self.is_typing(node.value, 'Annotated') and isinstance(
-                (elts_node := node.slice.value if py38 and isinstance(node.slice, Index) else node.slice),
+                node.slice,
                 (ast.Tuple, ast.List),
             ):
-                if elts_node.elts:
-                    elts_iter = iter(elts_node.elts)
+                if node.slice.elts:
+                    elts_iter = iter(node.slice.elts)
                     # only visit the first element like a type expression
                     self.visit_annotated_type(next(elts_iter))
                     for value_node in elts_iter:
@@ -211,7 +198,7 @@ class DunderAllMixin:
     """
 
     if TYPE_CHECKING:
-        uses: dict[str, list[tuple[ast.AST, Scope]]]
+        uses: dict[str, list[tuple[ast.expr, Scope]]]
         current_scope: Scope
 
         def generic_visit(self, node: ast.AST) -> None:  # noqa: D102
@@ -360,7 +347,7 @@ class SQLAlchemyMixin:
         sqlalchemy_enabled: bool
         sqlalchemy_mapped_dotted_names: set[str]
         current_scope: Scope
-        uses: dict[str, list[tuple[ast.AST, Scope]]]
+        uses: dict[str, list[tuple[ast.expr, Scope]]]
         soft_uses: set[str]
         in_soft_use_context: bool
 
@@ -1074,7 +1061,7 @@ class ImportVisitor(
         self.scopes: list[Scope] = []
 
         #: List of all names and ids, except type declarations
-        self.uses: dict[str, list[tuple[ast.AST, Scope]]] = defaultdict(list)
+        self.uses: dict[str, list[tuple[ast.expr, Scope]]] = defaultdict(list)
 
         #: Contains a set of all names to be treated like soft-uses.
         # i.e. we don't know if it will be used at runtime or not, so
@@ -1914,7 +1901,7 @@ class ImportVisitor(
         if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
             return  # Type argument is already a string literal.
 
-        self.unquoted_types_in_casts.append((arg.lineno, arg.col_offset, ast_unparse(arg)))
+        self.unquoted_types_in_casts.append((arg.lineno, arg.col_offset, ast.unparse(arg)))
 
     def visit_Call(self, node: ast.Call) -> None:
         """Check arguments of calls, e.g. typing.cast()."""

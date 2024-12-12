@@ -1,5 +1,4 @@
 import builtins
-import sys
 
 import flake8
 
@@ -18,7 +17,6 @@ ATTRS_DECORATORS = [
 ]
 ATTRS_IMPORTS = {'attrs', 'attr'}
 
-py38 = sys.version_info.major == 3 and sys.version_info.minor == 8
 flake_version_gt_v4 = tuple(int(i) for i in flake8.__version__.split('.')) >= (4, 0, 0)
 
 # Based off of what pyflakes does
