@@ -120,6 +120,47 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
             (f'import {import_}\ntype x = {import_}', {f"1:0 {ERROR.format(module=f'{import_}')}"})
         )
 
+    # Imports used for `functools.singledispatch`. None of these should generate errors.
+    used_for_singledispatch: L = [
+        (
+            textwrap.dedent(f'''
+                import functools
+
+                from {import_} import Dict, Any
+
+                @functools.singledispatch
+                def foo(arg: Dict[str, Any]) -> Any:
+                    return 1
+                '''),
+            set(),
+        ),
+        (
+            textwrap.dedent(f'''
+                from functools import singledispatch
+
+                from {import_} import Dict, Any
+
+                @singledispatch
+                def foo(arg: Dict[str, Any]) -> Any:
+                    return 1
+                '''),
+            set(),
+        ),
+        (
+            textwrap.dedent(f'''
+                from functools import singledispatchmethod
+
+                from {import_} import Dict, Any
+
+                class Foo:
+                    @singledispatchmethod
+                    def foo(self, arg: Dict[str, Any]) -> Any:
+                        return 1
+                '''),
+            set(),
+        ),
+    ]
+
     other_useful_test_cases: L = [
         (
             textwrap.dedent(f'''
@@ -237,6 +278,7 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
         *used_for_arg_annotations_only,
         *used_for_return_annotations_only,
         *used_for_type_alias_only,
+        *used_for_singledispatch,
         *other_useful_test_cases,
     ]
 
