@@ -1033,7 +1033,8 @@ class ImportVisitor(
         #: For tracking which comprehension/IfExp we're currently inside of
         self.active_context: Optional[Comprehension | ast.IfExp] = None
 
-        #: Whether we're in a value expression of `typing.Annotated[type, value]`.
+        #: Whether or not we're in a context where uses count as soft-uses.
+        # E.g. the type expression of `typing.Annotated[type, value]`
         self.in_soft_use_context: bool = False
 
     @contextmanager
