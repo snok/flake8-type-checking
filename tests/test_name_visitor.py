@@ -45,16 +45,19 @@ examples = [
     # Attribute
     ('x.y', {'x.y', 'x'}, set()),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         def example(c):
             a = 2
             b = c * 2
-        """),
+        """
+        ),
         {'a', 'b', 'c'},
         set(),
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         class Test:
             x = 13
 
@@ -63,43 +66,51 @@ examples = [
 
         a = Test()
         b = a.y
-        """),
+        """
+        ),
         {'self.y', 'z', 'Test', 'self', 'a', 'b', 'x', 'a.y'},
         set(),
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         import ast
 
         ImportType = Union[Import, ImportFrom]
-        """),  # ast should not be a part of this
+        """
+        ),  # ast should not be a part of this
         {'Union', 'Import', 'ImportFrom', 'ImportType'},
         set(),
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         import ast
         def _get_usages(example):
             visitor = UnusedImportVisitor()
             visitor.visit(parse(example))
             return visitor.usage_names
-        """),
+        """
+        ),
         {'UnusedImportVisitor', 'example', 'parse', 'visitor', 'visitor.usage_names', 'visitor.visit'},
         set(),
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from typing import Annotated
 
         from foo import Gt
 
         x: Annotated[int, Gt(5)]
-        """),
+        """
+        ),
         {'Gt'},
         {'int'},
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from __future__ import annotations
 
         from typing import Annotated
@@ -107,26 +118,31 @@ examples = [
         from foo import Gt
 
         x: Annotated[int, Gt(5)]
-        """),
+        """
+        ),
         set(),
         {'Gt', 'int'},
     ),
 ]
 
 if sys.version_info >= (3, 12):
-    examples.extend([
-        (
-            textwrap.dedent("""
+    examples.extend(
+        [
+            (
+                textwrap.dedent(
+                    """
             from typing import Annotated
 
             from foo import Gt
 
             type x = Annotated[int, Gt(5)]
-            """),
-            set(),
-            {'Gt', 'int'},
-        ),
-    ])
+            """
+                ),
+                set(),
+                {'Gt', 'int'},
+            ),
+        ]
+    )
 
 
 @pytest.mark.parametrize(('example', 'result', 'soft_uses'), examples)
@@ -136,7 +152,8 @@ def test_basic_annotations_are_removed(example, result, soft_uses):
 
 def test_model_declarations_are_included_in_names():
     """Class definition arguments need to be included in our "names"."""
-    example = textwrap.dedent("""
+    example = textwrap.dedent(
+        """
     from django.db import models
     from app.models import SomeModel
 
@@ -145,7 +162,8 @@ def test_model_declarations_are_included_in_names():
             SomeModel,
             on_delete=models.CASCADE,
         )
-    """)
+    """
+    )
     assert _get_names_and_soft_uses(example) == (
         {'SomeModel', 'fk', 'models', 'models.CASCADE', 'models.ForeignKey', 'models.Model'},
         set(),

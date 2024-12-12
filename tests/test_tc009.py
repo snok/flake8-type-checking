@@ -18,19 +18,22 @@ examples = [
     ('', set()),
     # Used in file
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from typing import TYPE_CHECKING
 
         if TYPE_CHECKING:
             datetime = Any
 
         x = datetime
-        """),
+        """
+        ),
         {'5:4 ' + TC009.format(name='datetime')},
     ),
     # Used in function
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from typing import TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -38,22 +41,26 @@ examples = [
 
         def example():
             return date()
-        """),
+        """
+        ),
         {'5:4 ' + TC009.format(name='date')},
     ),
     # Used, but only used inside the type checking block
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         if TYPE_CHECKING:
             class date: ...
 
             CustomType = date
-        """),
+        """
+        ),
         set(),
     ),
     # Used for typing only
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         if TYPE_CHECKING:
             class date: ...
 
@@ -61,11 +68,13 @@ examples = [
             return
 
         my_type: Type[date] | date
-        """),
+        """
+        ),
         set(),
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from __future__ import annotations
 
         from typing import TYPE_CHECKING
@@ -78,11 +87,13 @@ examples = [
 
             async def example(self) -> AsyncIterator[list[str]]:
                 yield 0
-        """),
+        """
+        ),
         set(),
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from typing import TYPE_CHECKING
         from weakref import WeakKeyDictionary
 
@@ -91,11 +102,13 @@ examples = [
 
 
         d = WeakKeyDictionary["Any", "Any"]()
-        """),
+        """
+        ),
         set(),
     ),
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         if TYPE_CHECKING:
             a = int
             b: TypeAlias = str
@@ -104,13 +117,15 @@ examples = [
 
         def test_function(a, /, b, *, c, **d):
             print(a, b, c, d)
-        """),
+        """
+        ),
         set(),
     ),
     # Regression test for #131
     # handle scopes correctly
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         if TYPE_CHECKING:
             Foo: something
 
@@ -132,13 +147,15 @@ examples = [
 
             bar: Foo = Foo()
 
-        """),
+        """
+        ),
         set(),
     ),
     # regression test for #131
     # a common pattern for inheriting from generics that aren't runtime subscriptable
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from wtforms import Field
 
         if TYPE_CHECKING:
@@ -148,13 +165,15 @@ examples = [
 
         class IntegerField(BaseField):
             pass
-        """),
+        """
+        ),
         set(),
     ),
     # inverse regression test for #131
     # here we forgot the else so it will complain about BaseField
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         from wtforms import Field
 
         if TYPE_CHECKING:
@@ -162,7 +181,8 @@ examples = [
 
         class IntegerField(BaseField):
             pass
-        """),
+        """
+        ),
         {'5:4 ' + TC009.format(name='BaseField')},
     ),
 ]
@@ -170,23 +190,27 @@ examples = [
 if sys.version_info >= (3, 12):
     examples.append(
         (
-            textwrap.dedent("""
+            textwrap.dedent(
+                """
             if TYPE_CHECKING:
                 type Foo = int
 
             x = Foo
-            """),
+            """
+            ),
             {'3:4 ' + TC009.format(name='Foo')},
         )
     )
     examples.append(
         (
-            textwrap.dedent("""
+            textwrap.dedent(
+                """
             if TYPE_CHECKING:
                 type Foo = int
 
             x: Foo
-            """),
+            """
+            ),
             set(),
         )
     )

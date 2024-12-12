@@ -25,12 +25,14 @@ def test_non_pydantic_model(enabled, expected):
     A class cannot be a pydantic model if it doesn't have a base class,
     so we should raise the same error here in both cases.
     """
-    example = textwrap.dedent('''
+    example = textwrap.dedent(
+        '''
         from pandas import DataFrame
 
         class X:
             x: DataFrame
-        ''')
+        '''
+    )
     assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=enabled) == expected
 
 
@@ -40,18 +42,21 @@ def test_class_with_base_class():
     to assume it might be a pydantic model, for which
     we need to register annotations as uses.
     """
-    example = textwrap.dedent('''
+    example = textwrap.dedent(
+        '''
         from pandas import DataFrame
 
         class X(Y):
             x: DataFrame
-        ''')
+        '''
+    )
     assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
 
 
 def test_complex_pydantic_model():
     """Test actual Pydantic models, with different annotation types."""
-    example = textwrap.dedent('''
+    example = textwrap.dedent(
+        '''
         from __future__ import annotations
 
         from datetime import datetime
@@ -95,21 +100,24 @@ def test_complex_pydantic_model():
             f: NestedModel
             g: condecimal(ge=Decimal(0)) = Decimal(0)
 
-        ''')
+        '''
+    )
     assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
 
 
 @pytest.mark.parametrize('c', ['NamedTuple', 'TypedDict'])
 def test_type_checking_pydantic_enabled_baseclass_passlist(c):
     """Test that named tuples are not ignored."""
-    example = textwrap.dedent(f'''
+    example = textwrap.dedent(
+        f'''
         from typing import {c}
         from x import Y, Z
 
         class ModelBase({c}):
             a: Y[str]
             b: Z[int]
-        ''')
+        '''
+    )
     assert _get_error(
         example,
         error_code_filter='TC002',
@@ -124,33 +132,38 @@ def test_type_checking_pydantic_enabled_baseclass_passlist(c):
 @pytest.mark.parametrize('f', ['def', 'async def'])
 def test_type_checking_pydantic_enabled_validate_arguments_decorator(f):
     """Test that @validate_argument-decorated functions have their annotations ignored."""
-    example = textwrap.dedent(f'''
+    example = textwrap.dedent(
+        f'''
         from pydantic import validate_arguments
         from x import Y, Z
 
         @validate_arguments
         {f} f(y: Y) -> Z:
             pass
-        ''')
+        '''
+    )
     assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
 
 
 @pytest.mark.parametrize('f', ['def', 'async def'])
 def test_type_checking_pydantic_enabled_validate_arguments_decorator_alias(f):
-    example = textwrap.dedent(f'''
+    example = textwrap.dedent(
+        f'''
         from pydantic import validate_arguments as va
         from x import Y, Z
 
         @va
         {f} f(y: Y) -> Z:
             pass
-        ''')
+        '''
+    )
     assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
 
 
 @pytest.mark.parametrize('f', ['def', 'async def'])
 def test_type_checking_pydantic_enabled_validate_arguments_decorator_method(f):
-    example = textwrap.dedent(f'''
+    example = textwrap.dedent(
+        f'''
         from pydantic import validate_arguments
         from x import Y, Z
 
@@ -158,5 +171,6 @@ def test_type_checking_pydantic_enabled_validate_arguments_decorator_method(f):
             @validate_arguments
             {f} f(self, y: Y) -> Z:
                 pass
-        ''')
+        '''
+    )
     assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()

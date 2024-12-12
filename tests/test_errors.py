@@ -10,13 +10,15 @@ from tests.conftest import _get_error, mod
 
 class TestFoundBugs:
     def test_mixed_errors(self):
-        example = textwrap.dedent(f"""
+        example = textwrap.dedent(
+            f"""
         import {mod}
         import pytest
         from x import y
 
         x: {mod} | pytest | y
-        """)
+        """
+        )
         assert _get_error(example) == {
             f"2:0 {TC001.format(module=f'{mod}')}",
             '3:0 ' + TC002.format(module='pytest'),
@@ -24,7 +26,8 @@ class TestFoundBugs:
         }
 
     def test_type_checking_block_imports_dont_generate_errors(self):
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         import x
         from y import z
 
@@ -37,7 +40,8 @@ class TestFoundBugs:
 
         def test(foo: z, bar: x):
             pass
-        """)
+        """
+        )
         assert _get_error(example) == {
             '2:0 ' + TC002.format(module='x'),
             '3:0 ' + TC002.format(module='y.z'),
@@ -48,7 +52,8 @@ class TestFoundBugs:
         Initially found false positives in Django project, because name
         visitor did not capture the SomeModel usage in the example below.
         """
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         from django.db import models
         from app.models import SomeModel
 
@@ -57,12 +62,14 @@ class TestFoundBugs:
                 SomeModel,
                 on_delete=models.CASCADE,
             )
-        """)
+        """
+        )
         assert _get_error(example) == set()
 
     def test_all_list_declaration(self):
         """__all__ declarations originally generated false positives."""
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         from app.models import SomeModel
         from another_app.models import AnotherModel
 
@@ -70,12 +77,14 @@ class TestFoundBugs:
             'SomeModel',
             'AnotherModel'
         ]
-        """)
+        """
+        )
         assert _get_error(example) == set()
 
     def test_all_tuple_declaration(self):
         """__all__ declarations originally generated false positives."""
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         from app.models import SomeModel
         from another_app.models import AnotherModel
 
@@ -83,12 +92,14 @@ class TestFoundBugs:
             'SomeModel',
             'AnotherModel'
         )
-        """)
+        """
+        )
         assert _get_error(example) == set()
 
     def test_callable_import(self):
         """__all__ declarations originally generated false positives."""
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         from x import y
 
         class X:
@@ -96,25 +107,31 @@ class TestFoundBugs:
                 self.all_sellable_models: list[CostModel] = y(
                     country=self.country
                 )
-        """)
+        """
+        )
         assert _get_error(example) == set()
 
     def test_ellipsis(self):
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         x: Tuple[str, ...]
-        """)
+        """
+        )
         assert _get_error(example) == set()
 
     def test_literal(self):
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         from __future__ import annotations
 
         x: Literal['string']
-        """)
+        """
+        )
         assert _get_error(example) == set()
 
     def test_conditional_import(self):
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
         version = 2
 
         if version == 2:
@@ -123,7 +140,8 @@ class TestFoundBugs:
             import y as x
 
         var: x
-        """)
+        """
+        )
         assert _get_error(example) == {"7:4 TC002 Move third-party import 'x' into a type-checking block"}
 
     def test_type_checking_block_formats_detected(self):
@@ -309,7 +327,8 @@ class TestFoundBugs:
 
     def test_tc002_false_positive(self):
         """Re https://github.com/snok/flake8-type-checking/issues/120."""
-        example = textwrap.dedent("""
+        example = textwrap.dedent(
+            """
             from logging import INFO
 
             from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
@@ -317,7 +336,8 @@ class TestFoundBugs:
             class C:
                 level: int = INFO
                 status: int = HTTP_500_INTERNAL_SERVER_ERROR
-        """)
+        """
+        )
         assert _get_error(example) == set()
 
     def test_tc001_false_positive(self):
@@ -326,19 +346,27 @@ class TestFoundBugs:
 
     def test_works_with_other_plugins(self, flake8_path):
         """Re https://github.com/snok/flake8-type-checking/issues/139."""
-        (flake8_path / 'example.py').write_text(textwrap.dedent('''
-                import os
-
-                t = os.path.dirname(os.path.realpath(__file__))
-            '''))
+        (flake8_path / 'example.py').write_text(
+            textwrap.dedent(
+                '''
+                def this_is_buggy(n):
+                    x = ++n
+                    return x
+            '''
+            )
+        )
         result = flake8_path.run_flake8()
         assert result.out_lines == [
-            './example.py:4:5: PL120 os.path.dirname("foo/bar") should be replaced by bar_path.parent',
+            './example.py:3:9: B002 Python does not support the unary prefix increment. '
+            'Writing ++n is equivalent to +(+(n)), which equals n. You meant n += 1.',
         ]
 
     def test_shadowed_function_arg(self):
         """Re https://github.com/snok/flake8-type-checking/issues/160."""
-        assert _get_error(textwrap.dedent('''
+        assert (
+            _get_error(
+                textwrap.dedent(
+                    '''
             from __future__ import annotations
 
             from typing import TYPE_CHECKING
@@ -348,4 +376,8 @@ class TestFoundBugs:
 
             def create(request: request.Request) -> None:
                 str(request)
-            ''')) == set()
+            '''
+                )
+            )
+            == set()
+        )

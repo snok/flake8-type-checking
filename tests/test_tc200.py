@@ -46,7 +46,8 @@ examples = [
         set(),
     ),
     (
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         from typing import Dict, TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -54,11 +55,13 @@ examples = [
 
         def example(x: Dict[something]) -> Dict["something"]:
             pass
-        '''),
+        '''
+        ),
         {'7:20 ' + TC200.format(annotation='something')},
     ),
     (
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         from typing import TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -66,12 +69,14 @@ examples = [
 
         def example(x: ast.If):
             pass
-        '''),
+        '''
+        ),
         {'7:15 ' + TC200.format(annotation='ast')},
     ),
     # Regression test for issue #163
     (
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         from typing import TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -89,12 +94,14 @@ examples = [
 
             class FooDict(TypedDict):
                 seq: Sequence[int]
-        '''),
+        '''
+        ),
         set(),
     ),
     # Inverse regression test for issue #163
     (
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         from typing import TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -118,7 +125,8 @@ examples = [
                 Bar: int
 
         x: Bar
-        '''),
+        '''
+        ),
         {
             '9:5 ' + TC200.format(annotation='TypeAlias'),
             '12:9 ' + TC200.format(annotation='Sequence'),
@@ -128,13 +136,15 @@ examples = [
     ),
     (
         # Regression test for #186
-        textwrap.dedent('''
+        textwrap.dedent(
+            '''
         if TYPE_CHECKING:
             from baz import Bar
 
         def foo(self) -> None:
             x: Bar
-        '''),
+        '''
+        ),
         set(),
     ),
 ]
@@ -143,12 +153,14 @@ if sys.version_info >= (3, 11):
     # PEP646 tests
     examples += [
         (
-            textwrap.dedent("""
+            textwrap.dedent(
+                """
             if TYPE_CHECKING:
                 Ts = TypeVarTuple("Ts")
 
             x: tuple[*Ts]
-            """),
+            """
+            ),
             {'5:10 ' + TC200.format(annotation='Ts')},
         )
     ]
@@ -157,7 +169,8 @@ if sys.version_info >= (3, 12):
     # PEP695 tests
     examples += [
         (
-            textwrap.dedent("""
+            textwrap.dedent(
+                """
             if TYPE_CHECKING:
                 from .types import T
 
@@ -167,7 +180,8 @@ if sys.version_info >= (3, 12):
 
             class Bar[T](Sequence[T]):
                 x: T
-            """),
+            """
+            ),
             set(),
         )
     ]
