@@ -42,6 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        id: setup-python
         with:
           python-version: "${{ matrix.python-version }}"
       - uses: actions/cache@v4
@@ -50,7 +51,7 @@ jobs:
           path: |
             ~/.local
             .venv
-          key: ${{ hashFiles('**/poetry.lock') }}-${{ matrix.python-version }}-9
+          key: ${{ hashFiles('**/poetry.lock') }}-${{ steps.setup-python.outputs.python-version }}-9
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
