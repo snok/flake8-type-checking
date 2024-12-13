@@ -291,6 +291,9 @@ class PydanticMixin:
                     if hasattr(argument, 'annotation') and argument.annotation:
                         self.visit(argument.annotation)
 
+            if node.returns:
+                self.visit(node.returns)
+
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
         if self._function_is_wrapped_by_validate_arguments(node):
@@ -298,6 +301,9 @@ class PydanticMixin:
                 for argument in path:
                     if hasattr(argument, 'annotation') and argument.annotation:
                         self.visit(argument.annotation)
+
+            if node.returns:
+                self.visit(node.returns)
 
 
 class SQLAlchemyAnnotationVisitor(AnnotationVisitor):
@@ -548,24 +554,13 @@ class FastAPIMixin:
 
         To achieve this, we just visit the annotations to register them as "uses".
         """
-        for path in [node.args.args, node.args.kwonlyargs]:
+        for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
             for argument in path:
                 if hasattr(argument, 'annotation') and argument.annotation:
                     self.visit(argument.annotation)
-        if (
-            hasattr(node.args, 'kwarg')
-            and node.args.kwarg
-            and hasattr(node.args.kwarg, 'annotation')
-            and node.args.kwarg.annotation
-        ):
-            self.visit(node.args.kwarg.annotation)
-        if (
-            hasattr(node.args, 'vararg')
-            and node.args.vararg
-            and hasattr(node.args.vararg, 'annotation')
-            and node.args.vararg.annotation
-        ):
-            self.visit(node.args.vararg.annotation)
+
+        if node.returns:
+            self.visit(node.returns)
 
 
 class FunctoolsSingledispatchMixin:
@@ -626,6 +621,9 @@ class FunctoolsSingledispatchMixin:
             for argument in path:
                 if hasattr(argument, 'annotation') and argument.annotation:
                     self.visit(argument.annotation)
+
+        if node.returns:
+            self.visit(node.returns)
 
 
 @dataclass
