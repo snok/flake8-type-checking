@@ -9,7 +9,6 @@ import textwrap
 
 import pytest
 
-from flake8_type_checking.constants import TC002
 from tests.conftest import _get_error
 
 defaults = {'type_checking_fastapi_enabled': True}
@@ -56,9 +55,7 @@ def test_api_router_decorated_function_return_type(fdef):
             return None
         '''
     )
-    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == {
-        '5:0 ' + TC002.format(module='app.types.CustomType')
-    }
+    assert _get_error(example, error_code_filter='TC001,TC002,TC003', **defaults) == set()
 
 
 @pytest.mark.parametrize('fdef', ['def', 'async def'])
