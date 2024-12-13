@@ -323,6 +323,30 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
             ),
             set(),
         ),
+        # Issue #127
+        (
+            textwrap.dedent(
+                f'''
+                from {import_} import Foo
+                from typing import Any, cast
+
+                a = cast('Foo', 1)
+                '''
+            ),
+            {'2:0 ' + ERROR.format(module=f'{import_}.Foo')},
+        ),
+        # forward reference in sub-expression of cast type
+        (
+            textwrap.dedent(
+                f'''
+                from {import_} import Foo
+                from typing import Any, cast
+
+                a = cast(list['Foo'], 1)
+                '''
+            ),
+            {'2:0 ' + ERROR.format(module=f'{import_}.Foo')},
+        ),
     ]
 
     return [

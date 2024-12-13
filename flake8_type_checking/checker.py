@@ -992,6 +992,31 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         self.import_visitor.in_soft_use_context = previous_context
 
 
+class CastTypeExpressionVisitor(AnnotationVisitor):
+    """Visit a cast type expression and collect all the quoted names."""
+
+    def __init__(self, typing_lookup: SupportsIsTyping) -> None:
+        #: All the quoted_names referenced inside the type expression
+        self.quoted_names: set[str] = set()
+        self._typing_lookup = typing_lookup
+
+    def is_typing(self, node: ast.AST, symbol: str) -> bool:
+        """Check if the given node matches the given typing symbol."""
+        return self._typing_lookup.is_typing(node, symbol)
+
+    def visit_annotation_name(self, node: ast.Name) -> None:
+        """Ignore visited names."""
+        # We could either record them as quoted names pre-emptively or
+        # as uses, but neither seems ideal, let's just skip these names
+        # as we have previously.
+
+    def visit_annotation_string(self, node: ast.Constant) -> None:
+        """Collect all the names referenced inside the forward reference."""
+        visitor = StringAnnotationVisitor(self._typing_lookup)
+        visitor.parse_and_visit_string_annotation(node.value)
+        self.quoted_names.update(visitor.names)
+
+
 class ImportVisitor(
     DunderAllMixin,
     FunctoolsSingledispatchMixin,
@@ -1080,6 +1105,10 @@ class ImportVisitor(
 
         #: Where typing.cast() is called with an unquoted type.
         self.unquoted_types_in_casts: list[tuple[int, int, str]] = []
+
+        #: All forward referenced names used in cast type expressions
+        # we need to track this in order to avoid false negatives for TC001-003
+        self.quoted_type_names_in_casts: set[str] = set()
 
         #: For tracking which comprehension/IfExp we're currently inside of
         self.active_context: Comprehension | ast.IfExp | None = None
@@ -1895,6 +1924,10 @@ class ImportVisitor(
 
         arg = node.args[0]
 
+        visitor = CastTypeExpressionVisitor(self)
+        visitor.visit(arg)
+        self.quoted_type_names_in_casts.update(visitor.quoted_names)
+
         if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
             return  # Type argument is already a string literal.
 
@@ -1999,10 +2032,13 @@ class TypingOnlyImportsChecker:
         unused_imports = all_imports - self.visitor.names - self.visitor.soft_uses
         used_imports = all_imports - unused_imports
         already_imported_modules = [self.visitor.imports[name].module for name in used_imports]
-        annotation_names = (
-            [n for i in self.visitor.wrapped_annotations for n in i.names]
-            + [i.annotation for i in self.visitor.unwrapped_annotations]
-            + [n for i in self.visitor.excess_wrapped_annotations for n in i.names]
+        annotation_names = list(
+            chain(
+                (n for i in self.visitor.wrapped_annotations for n in i.names),
+                (i.annotation for i in self.visitor.unwrapped_annotations),
+                (n for i in self.visitor.excess_wrapped_annotations for n in i.names),
+                self.visitor.quoted_type_names_in_casts,
+            )
         )
 
         for name in unused_imports:
