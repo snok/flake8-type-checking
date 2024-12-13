@@ -272,15 +272,17 @@ class PydanticMixin:
 
     if TYPE_CHECKING:
         pydantic_enabled: bool
-        pydantic_validate_arguments_import_name: str | None
 
         def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
+            ...
+
+        def lookup_full_name(self, node: ast.AST) -> str | None:  # noqa: D102
             ...
 
     def _function_is_wrapped_by_validate_arguments(self, node: FunctionDef | AsyncFunctionDef) -> bool:
         if self.pydantic_enabled and node.decorator_list:
             for decorator_node in node.decorator_list:
-                if getattr(decorator_node, 'id', '') == self.pydantic_validate_arguments_import_name:
+                if self.lookup_full_name(decorator_node) == 'pydantic.validate_arguments':
                     return True
         return False
 
@@ -1043,7 +1045,6 @@ class ImportVisitor(
         )
         self.injector_enabled = injector_enabled
         self.pydantic_enabled_baseclass_passlist = pydantic_enabled_baseclass_passlist
-        self.pydantic_validate_arguments_import_name = None
         self.cwd = cwd  # we need to know the current directory to guess at which imports are remote and which are not
 
         #: A list of modules that re-export symbols from the typing module
@@ -1364,14 +1365,6 @@ class ImportVisitor(
         for name_node in node.names:
             # Skip checking the import if the module is passlisted
             exempt = all_exempt or (isinstance(node, ast.Import) and self.is_exempt_module(name_node.name))
-
-            # Look for pydantic.validate_arguments import
-            # TODO: Switch to using lookup_full_name instead
-            if name_node.name == 'validate_arguments':
-                if name_node.asname is not None:
-                    self.pydantic_validate_arguments_import_name = name_node.asname
-                else:
-                    self.pydantic_validate_arguments_import_name = name_node.name
 
             if name_node.name == '*':
                 # don't record * imports
