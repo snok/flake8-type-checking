@@ -1020,6 +1020,7 @@ class ImportVisitor(
         pydantic_enabled_baseclass_passlist: list[str],
         typing_modules: list[str] | None = None,
         exempt_modules: list[str] | None = None,
+        force_future_annotation: bool = False,
     ) -> None:
         super().__init__()
 
@@ -1042,6 +1043,9 @@ class ImportVisitor(
 
         #: Import patterns we want to avoid mapping
         self.exempt_modules: list[str] = exempt_modules or []
+
+        #: Whether or not TC100 should always be emitted if there are annotations
+        self.force_future_annotation = force_future_annotation
 
         #: All imports, in each category
         self.application_imports: dict[str, Import] = {}
@@ -1935,6 +1939,7 @@ class TypingOnlyImportsChecker:
 
         typing_modules = getattr(options, 'type_checking_typing_modules', [])
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
+        force_future_annotation = getattr(options, 'type_checking_force_future_annotation', False)
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
         pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
         sqlalchemy_enabled = getattr(options, 'type_checking_sqlalchemy_enabled', False)
@@ -1960,6 +1965,7 @@ class TypingOnlyImportsChecker:
             cattrs_enabled=cattrs_enabled,
             typing_modules=typing_modules,
             exempt_modules=exempt_modules,
+            force_future_annotation=force_future_annotation,
             sqlalchemy_enabled=sqlalchemy_enabled,
             sqlalchemy_mapped_dotted_names=sqlalchemy_mapped_dotted_names,
             fastapi_dependency_support_enabled=fastapi_dependency_support_enabled,
@@ -2123,7 +2129,13 @@ class TypingOnlyImportsChecker:
 
         # if any of the symbols imported/declared in type checking blocks are used
         # in an annotation outside a type checking block, then we need to emit TC100
-        if encountered_missing_quotes and not self.visitor.futures_annotation:
+        if (
+            encountered_missing_quotes
+            or (
+                self.visitor.force_future_annotation
+                and (self.visitor.unwrapped_annotations or self.visitor.wrapped_annotations)
+            )
+        ) and not self.visitor.futures_annotation:
             yield 1, 0, TC100, None
 
     def futures_excess_quotes(self) -> Flake8Generator:

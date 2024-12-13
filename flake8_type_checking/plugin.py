@@ -55,6 +55,13 @@ class Plugin:
             default=False,
             help='Flag individual imports rather than looking at the module.',
         )
+        option_manager.add_option(
+            '--type-checking-force-future-annotation',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Always emit TC100 as long as there are any annotations and no future import.',
+        )
 
         # Third-party library options
         option_manager.add_option(

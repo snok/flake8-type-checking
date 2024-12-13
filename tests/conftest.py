@@ -46,6 +46,7 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         mock_options.type_checking_sqlalchemy_mapped_dotted_names = []
         mock_options.type_checking_injector_enabled = False
         mock_options.type_checking_strict = False
+        mock_options.type_checking_force_future_annotation = False
         # kwarg overrides
         for k, v in kwargs.items():
             setattr(mock_options, k, v)
