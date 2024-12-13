@@ -179,6 +179,24 @@ imports that *can* be moved.
 type-checking-strict = true  # default false
 ```
 
+### Force `from __future__ import annotations` import
+
+The plugin, by default, will only report a TC100 error, if annotations
+contain references to typing only symbols. If you want to enforce a more
+consistent style and use a future import in every file that makes use
+of annotations, you can enable this setting.
+
+When `force-future-annotation` is enabled, the plugin will flag all
+files that contain annotations but not future import.
+
+- **setting name**: `type-checking-force-future-annotation`
+- **type**: `bool`
+
+```ini
+[flake8]
+type-checking-force-future-annotation = true  # default false
+```
+
 ### Pydantic support
 
 If you use Pydantic models in your code, you should enable Pydantic support.
