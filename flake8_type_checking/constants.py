@@ -1,4 +1,5 @@
 import builtins
+import enum
 
 import flake8
 
@@ -28,6 +29,14 @@ sqlalchemy_default_mapped_dotted_names = {
     'sqlalchemy.orm.DynamicMapped',
     'sqlalchemy.orm.WriteOnlyMapped',
 }
+
+
+# Sentinels
+class _Sentinels(enum.Enum):
+    MISSING = enum.auto()
+
+
+MISSING = _Sentinels.MISSING
 
 # Error codes
 TC001 = "TC001 Move application import '{module}' into a type-checking block"

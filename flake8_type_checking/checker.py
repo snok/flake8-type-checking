@@ -21,6 +21,7 @@ from flake8_type_checking.constants import (
     ATTRS_DECORATORS,
     ATTRS_IMPORTS,
     BINOP_OPERAND_PROPERTY,
+    MISSING,
     TC001,
     TC002,
     TC003,
@@ -1105,6 +1106,8 @@ class ImportVisitor(
         # E.g. the type expression of `typing.Annotated[type, value]`
         self.in_soft_use_context: bool = False
 
+        self._lookup_cache: dict[ast.AST, str | None] = {}
+
     @contextmanager
     def create_scope(self, node: ast.ClassDef | Function, is_head: bool = True) -> Iterator[Scope]:
         """Create a new scope."""
@@ -1158,36 +1161,46 @@ class ImportVisitor(
 
     def lookup_full_name(self, node: ast.AST) -> str | None:
         """Lookup the fully qualified name of the given node."""
+        if (name := self._lookup_cache.get(node, MISSING)) is not MISSING:
+            return name
+
         if isinstance(node, ast.Name):
             imp = self.imports.get(node.id)
-            return imp.full_name if imp is not None else node.id
+            name = imp.full_name if imp is not None else node.id
 
-        if not isinstance(node, ast.Attribute):
-            return None
+        elif not isinstance(node, ast.Attribute):
+            name = None
 
-        parts: list[str] = []
-        while isinstance(node, ast.Attribute):
-            # left append to the list so the names are in the
-            # natural reading order i.e. `a.b.c` becomes `['a', 'b', 'c']`
-            parts.insert(0, node.attr)
-            node = node.value
+        else:
+            current_node: ast.AST = node
+            parts: list[str] = []
+            while isinstance(current_node, ast.Attribute):
+                # left append to the list so the names are in the
+                # natural reading order i.e. `a.b.c` becomes `['a', 'b', 'c']`
+                parts.insert(0, current_node.attr)
+                current_node = current_node.value
 
-        if not isinstance(node, ast.Name):
-            return None
+            if not isinstance(current_node, ast.Name):
+                self._lookup_cache[node] = None
+                return None
 
-        parts.insert(0, node.id)
+            parts.insert(0, current_node.id)
 
-        # lookup all variations of `a` `a.b` `a.b.c` in that order
-        for num_parts in range(1, len(parts) + 1):
-            name = '.'.join(parts[:num_parts])
-            imp = self.imports.get(name)
-            if imp is not None:
-                prefix = imp.full_name
-                remainder = '.'.join(parts[num_parts:])
-                return f'{prefix}.{remainder}' if remainder else prefix
+            # lookup all variations of `a` `a.b` `a.b.c` in that order
+            for num_parts in range(1, len(parts) + 1):
+                name = '.'.join(parts[:num_parts])
+                imp = self.imports.get(name)
+                if imp is not None:
+                    prefix = imp.full_name
+                    remainder = '.'.join(parts[num_parts:])
+                    name = f'{prefix}.{remainder}' if remainder else prefix
+                    break
+            else:
+                # fallback to returning the name as-is
+                name = '.'.join(parts)
 
-        # fallback to returning the name as-is
-        return '.'.join(parts)
+        self._lookup_cache[node] = name
+        return name
 
     def is_typing(self, node: ast.AST, symbol: str) -> bool:
         """Check if the given node matches the given typing symbol."""
