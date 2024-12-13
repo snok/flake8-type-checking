@@ -54,7 +54,7 @@ def test_injector_option(enabled, expected):
 @pytest.mark.parametrize(
     ('enabled', 'expected'),
     [
-        (True, {'4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
+        (True, set()),
         (
             False,
             {
@@ -65,8 +65,8 @@ def test_injector_option(enabled, expected):
         ),
     ],
 )
-def test_injector_option_only_allows_injected_dependencies(enabled, expected):
-    """Whenever an injector option is enabled, only injected dependencies should be ignored."""
+def test_injector_option_all_annotations_in_function_are_runtime_dependencies(enabled, expected):
+    """Whenever an argument is injected, all the other annotations are runtime required too."""
     example = textwrap.dedent(
         '''
         from injector import Inject
@@ -82,38 +82,20 @@ def test_injector_option_only_allows_injected_dependencies(enabled, expected):
     assert _get_error(example, error_code_filter='TC002', type_checking_injector_enabled=enabled) == expected
 
 
-@pytest.mark.parametrize(
-    ('enabled', 'expected'),
-    [
-        (True, {'4:0 ' + TC002.format(module='other_dependency.OtherDependency')}),
-        (
-            False,
-            {
-                '2:0 ' + TC002.format(module='injector.Inject'),
-                '3:0 ' + TC002.format(module='services.Service'),
-                '4:0 ' + TC002.format(module='other_dependency.OtherDependency'),
-            },
-        ),
-    ],
-)
-def test_injector_option_only_allows_injector_slices(enabled, expected):
-    """
-    Whenever an injector option is enabled, only injected dependencies should be ignored,
-    not any dependencies with slices.
-    """
+def test_injector_option_require_injections_under_unpack():
+    """Whenever an injector option is enabled, injected dependencies should be ignored, even if unpacked."""
     example = textwrap.dedent(
         """
+        from typing import Unpack
         from injector import Inject
-        from services import Service
-        from other_dependency import OtherDependency
-
+        from services import ServiceKwargs
         class X:
-            def __init__(self, service: Inject[Service], other_deps: list[OtherDependency]) -> None:
+            def __init__(self, service: Inject[Service], **kwargs: Unpack[ServiceKwargs]) -> None:
                 self.service = service
-                self.other_deps = other_deps
+                self.args = args
         """
     )
-    assert _get_error(example, error_code_filter='TC002', type_checking_injector_enabled=enabled) == expected
+    assert _get_error(example, error_code_filter='TC002', type_checking_injector_enabled=True) == set()
 
 
 @pytest.mark.parametrize(

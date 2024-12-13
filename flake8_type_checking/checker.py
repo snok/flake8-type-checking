@@ -475,6 +475,9 @@ class InjectorMixin:
         def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
             ...
 
+        def lookup_full_name(self, node: ast.AST) -> str | None:  # noqa: D102
+            ...
+
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function arguments and returns."""
         super().visit_FunctionDef(node)  # type: ignore[misc]
@@ -487,6 +490,12 @@ class InjectorMixin:
         if self.injector_enabled:
             self.handle_injector_declaration(node)
 
+    def _has_injected_annotation(self, node: AsyncFunctionDef | FunctionDef) -> bool:
+        return any(
+            isinstance(expr, ast.Subscript) and self.lookup_full_name(expr.value) == 'injector.Inject'
+            for expr in iter_function_annotation_nodes(node)
+        )
+
     def handle_injector_declaration(self, node: AsyncFunctionDef | FunctionDef) -> None:
         """
         Adjust for injector declaration setting.
@@ -496,17 +505,11 @@ class InjectorMixin:
 
         To achieve this, we just visit the annotations to register them as "uses".
         """
-        for path in [node.args.args, node.args.kwonlyargs]:
-            for argument in path:
-                if hasattr(argument, 'annotation') and argument.annotation:
-                    annotation = argument.annotation
-                    if not hasattr(annotation, 'value'):
-                        continue
-                    value = annotation.value
-                    if hasattr(value, 'id') and value.id == 'Inject':
-                        self.visit(argument.annotation)
-                    if hasattr(value, 'attr') and value.attr == 'Inject':
-                        self.visit(argument.annotation)
+        if not self._has_injected_annotation(node):
+            return
+
+        for expr in iter_function_annotation_nodes(node):
+            self.visit(expr)
 
 
 class FastAPIMixin:
@@ -592,6 +595,8 @@ class FunctoolsSingledispatchMixin:
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
         super().visit_AsyncFunctionDef(node)  # type: ignore[misc]
+        if self.in_type_checking_block(node.lineno, node.col_offset):
+            return
         if self.has_singledispatch_decorator(node):
             for expr in iter_function_annotation_nodes(node):
                 self.visit(expr)
