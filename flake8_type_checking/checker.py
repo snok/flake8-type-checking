@@ -5,13 +5,13 @@ import fnmatch
 import os
 import sys
 from abc import ABC, abstractmethod
-from ast import Index, literal_eval
+from ast import literal_eval
 from collections import defaultdict
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from classify_imports import Classified, classify_base
 
@@ -36,27 +36,13 @@ from flake8_type_checking.constants import (
     TC200,
     TC201,
     builtin_names,
-    py38,
     sqlalchemy_default_mapped_dotted_names,
 )
-
-try:
-    ast_unparse = ast.unparse  # type: ignore[attr-defined]
-except AttributeError:  # pragma: no cover
-    # Python < 3.9
-
-    import astor
-
-    def ast_unparse(node: ast.AST) -> str:
-        """AST unparsing helper for Python < 3.9."""
-        return cast('str', astor.to_source(node)).strip()
-
 
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
     from argparse import Namespace
     from collections.abc import Iterator
-    from typing import Any, Optional, Union
 
     from flake8_type_checking.types import (
         Comprehension,
@@ -104,18 +90,18 @@ class AnnotationVisitor(ABC):
             setattr(node.right, BINOP_OPERAND_PROPERTY, True)
             self.visit(node.left)
             self.visit(node.right)
-        elif (py38 and isinstance(node, Index)) or isinstance(node, ast.Attribute):
+        elif isinstance(node, ast.Attribute):
             self.visit(node.value)
         elif isinstance(node, ast.Subscript):
             self.visit(node.value)
             if self.is_typing(node.value, 'Literal'):
                 return
             elif self.is_typing(node.value, 'Annotated') and isinstance(
-                (elts_node := node.slice.value if py38 and isinstance(node.slice, Index) else node.slice),
+                node.slice,
                 (ast.Tuple, ast.List),
             ):
-                if elts_node.elts:
-                    elts_iter = iter(elts_node.elts)
+                if node.slice.elts:
+                    elts_iter = iter(node.slice.elts)
                     # only visit the first element like a type expression
                     self.visit_annotated_type(next(elts_iter))
                     for value_node in elts_iter:
@@ -144,9 +130,9 @@ class AttrsMixin:
     if TYPE_CHECKING:
         third_party_imports: dict[str, Import]
 
-    def get_all_attrs_imports(self) -> dict[Optional[str], str]:
+    def get_all_attrs_imports(self) -> dict[str | None, str]:
         """Return a map of all attrs/attr imports."""
-        attrs_imports: dict[Optional[str], str] = {}  # map of alias to full import name
+        attrs_imports: dict[str | None, str] = {}  # map of alias to full import name
 
         for node in self.third_party_imports.values():
             module = getattr(node, 'module', '')
@@ -166,7 +152,7 @@ class AttrsMixin:
         attrs_imports = self.get_all_attrs_imports()
         return any(self.is_attrs_decorator(decorator, attrs_imports) for decorator in class_node.decorator_list)
 
-    def is_attrs_decorator(self, decorator: Any, attrs_imports: dict[Optional[str], str]) -> bool:
+    def is_attrs_decorator(self, decorator: Any, attrs_imports: dict[str | None, str]) -> bool:
         """Check whether a class decorator is an attrs decorator or not."""
         if isinstance(decorator, ast.Call):
             return self.is_attrs_decorator(decorator.func, attrs_imports)
@@ -185,7 +171,7 @@ class AttrsMixin:
         return any(e for e in actual if e in ATTRS_DECORATORS)
 
     @staticmethod
-    def is_attrs_str(attribute: Union[str, ast.expr], attrs_imports: dict[Optional[str], str]) -> bool:
+    def is_attrs_str(attribute: str | ast.expr, attrs_imports: dict[str | None, str]) -> bool:
         """Check whether an ast.expr or string is an attrs string or not."""
         actual = attrs_imports.get(str(attribute), '')
         return actual in ATTRS_DECORATORS
@@ -211,7 +197,7 @@ class DunderAllMixin:
     """
 
     if TYPE_CHECKING:
-        uses: dict[str, list[tuple[ast.AST, Scope]]]
+        uses: dict[str, list[tuple[ast.expr, Scope]]]
         current_scope: Scope
 
         def generic_visit(self, node: ast.AST) -> None:  # noqa: D102
@@ -285,12 +271,12 @@ class PydanticMixin:
 
     if TYPE_CHECKING:
         pydantic_enabled: bool
-        pydantic_validate_arguments_import_name: Optional[str]
+        pydantic_validate_arguments_import_name: str | None
 
         def visit(self, node: ast.AST) -> ast.AST:  # noqa: D102
             ...
 
-    def _function_is_wrapped_by_validate_arguments(self, node: Union[FunctionDef, AsyncFunctionDef]) -> bool:
+    def _function_is_wrapped_by_validate_arguments(self, node: FunctionDef | AsyncFunctionDef) -> bool:
         if self.pydantic_enabled and node.decorator_list:
             for decorator_node in node.decorator_list:
                 if getattr(decorator_node, 'id', '') == self.pydantic_validate_arguments_import_name:
@@ -360,7 +346,7 @@ class SQLAlchemyMixin:
         sqlalchemy_enabled: bool
         sqlalchemy_mapped_dotted_names: set[str]
         current_scope: Scope
-        uses: dict[str, list[tuple[ast.AST, Scope]]]
+        uses: dict[str, list[tuple[ast.expr, Scope]]]
         soft_uses: set[str]
         in_soft_use_context: bool
 
@@ -504,7 +490,7 @@ class InjectorMixin:
         if self.injector_enabled:
             self.handle_injector_declaration(node)
 
-    def handle_injector_declaration(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+    def handle_injector_declaration(self, node: AsyncFunctionDef | FunctionDef) -> None:
         """
         Adjust for injector declaration setting.
 
@@ -553,7 +539,7 @@ class FastAPIMixin:
         if (self.fastapi_enabled and node.decorator_list) or self.fastapi_dependency_support_enabled:
             self.handle_fastapi_decorator(node)
 
-    def handle_fastapi_decorator(self, node: Union[AsyncFunctionDef, FunctionDef]) -> None:
+    def handle_fastapi_decorator(self, node: AsyncFunctionDef | FunctionDef) -> None:
         """
         Adjust for FastAPI decorator setting.
 
@@ -648,7 +634,7 @@ class ImportName:
 
     _module: str
     _name: str
-    _alias: Optional[str]
+    _alias: str | None
 
     #: Whether or not this import is exempt from TC001-004 checks.
     exempt: bool
@@ -1034,8 +1020,8 @@ class ImportVisitor(
         injector_enabled: bool,
         cattrs_enabled: bool,
         pydantic_enabled_baseclass_passlist: list[str],
-        typing_modules: Optional[list[str]] = None,
-        exempt_modules: Optional[list[str]] = None,
+        typing_modules: list[str] | None = None,
+        exempt_modules: list[str] | None = None,
     ) -> None:
         super().__init__()
 
@@ -1074,7 +1060,7 @@ class ImportVisitor(
         self.scopes: list[Scope] = []
 
         #: List of all names and ids, except type declarations
-        self.uses: dict[str, list[tuple[ast.AST, Scope]]] = defaultdict(list)
+        self.uses: dict[str, list[tuple[ast.expr, Scope]]] = defaultdict(list)
 
         #: Contains a set of all names to be treated like soft-uses.
         # i.e. we don't know if it will be used at runtime or not, so
@@ -1085,7 +1071,7 @@ class ImportVisitor(
         self.annotation_visitor = ImportAnnotationVisitor(self)
 
         #: Whether there is a `from __futures__ import annotations` present in the file
-        self.futures_annotation: Optional[bool] = None
+        self.futures_annotation: bool | None = None
 
         #: Where the type checking block exists (line_start, line_end, col_offset)
         # Empty type checking blocks are used for TC005 errors, while the type
@@ -1098,7 +1084,7 @@ class ImportVisitor(
         self.unquoted_types_in_casts: list[tuple[int, int, str]] = []
 
         #: For tracking which comprehension/IfExp we're currently inside of
-        self.active_context: Optional[Comprehension | ast.IfExp] = None
+        self.active_context: Comprehension | ast.IfExp | None = None
 
         #: Whether or not we're in a context where uses count as soft-uses.
         # E.g. the type expression of `typing.Annotated[type, value]`
@@ -1914,7 +1900,7 @@ class ImportVisitor(
         if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
             return  # Type argument is already a string literal.
 
-        self.unquoted_types_in_casts.append((arg.lineno, arg.col_offset, ast_unparse(arg)))
+        self.unquoted_types_in_casts.append((arg.lineno, arg.col_offset, ast.unparse(arg)))
 
     def visit_Call(self, node: ast.Call) -> None:
         """Check arguments of calls, e.g. typing.cast()."""
@@ -1937,7 +1923,7 @@ class TypingOnlyImportsChecker:
         'future_option_enabled',
     ]
 
-    def __init__(self, node: ast.Module, options: Optional[Namespace]) -> None:
+    def __init__(self, node: ast.Module, options: Namespace | None) -> None:
         self.cwd = Path(os.getcwd())
         self.strict_mode = getattr(options, 'type_checking_strict', False)
 

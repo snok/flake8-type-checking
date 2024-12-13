@@ -54,7 +54,8 @@ examples = [
     # case at some point and then it might become an error, so it's better
     # to have cleaned up those annotations by then
     (
-        textwrap.dedent("""
+        textwrap.dedent(
+            """
         if TYPE_CHECKING:
             x: "int" | None
             y: int | "None"
@@ -65,7 +66,8 @@ examples = [
 
             def foo(x: int | "str" | None) -> int | "None":
                 pass
-        """),
+        """
+        ),
         {
             '3:7 ' + TC010,
             '4:13 ' + TC010,
