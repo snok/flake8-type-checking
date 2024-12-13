@@ -38,6 +38,7 @@ from flake8_type_checking.constants import (
     builtin_names,
     sqlalchemy_default_mapped_dotted_names,
 )
+from flake8_type_checking.util import iter_function_annotation_nodes
 
 if TYPE_CHECKING:
     from _ast import AsyncFunctionDef, FunctionDef
@@ -286,24 +287,14 @@ class PydanticMixin:
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function arguments and returns."""
         if self._function_is_wrapped_by_validate_arguments(node):
-            for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
-                for argument in path:
-                    if hasattr(argument, 'annotation') and argument.annotation:
-                        self.visit(argument.annotation)
-
-            if node.returns:
-                self.visit(node.returns)
+            for expr in iter_function_annotation_nodes(node):
+                self.visit(expr)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
         if self._function_is_wrapped_by_validate_arguments(node):
-            for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
-                for argument in path:
-                    if hasattr(argument, 'annotation') and argument.annotation:
-                        self.visit(argument.annotation)
-
-            if node.returns:
-                self.visit(node.returns)
+            for expr in iter_function_annotation_nodes(node):
+                self.visit(expr)
 
 
 class SQLAlchemyAnnotationVisitor(AnnotationVisitor):
@@ -554,13 +545,8 @@ class FastAPIMixin:
 
         To achieve this, we just visit the annotations to register them as "uses".
         """
-        for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
-            for argument in path:
-                if hasattr(argument, 'annotation') and argument.annotation:
-                    self.visit(argument.annotation)
-
-        if node.returns:
-            self.visit(node.returns)
+        for expr in iter_function_annotation_nodes(node):
+            self.visit(expr)
 
 
 class FunctoolsSingledispatchMixin:
@@ -600,13 +586,15 @@ class FunctoolsSingledispatchMixin:
         """Remove and map function arguments and returns."""
         super().visit_FunctionDef(node)  # type: ignore[misc]
         if self.has_singledispatch_decorator(node):
-            self.handle_singledispatch_decorator(node)
+            for expr in iter_function_annotation_nodes(node):
+                self.visit(expr)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
         super().visit_AsyncFunctionDef(node)  # type: ignore[misc]
         if self.has_singledispatch_decorator(node):
-            self.handle_singledispatch_decorator(node)
+            for expr in iter_function_annotation_nodes(node):
+                self.visit(expr)
 
     def has_singledispatch_decorator(self, node: FunctionDef | AsyncFunctionDef) -> bool:
         """Determine whether this function is decorated with `functools.singledispatch`."""
@@ -614,16 +602,6 @@ class FunctoolsSingledispatchMixin:
             self.lookup_full_name(decorator_node) in ('functools.singledispatch', 'functools.singledispatchmethod')
             for decorator_node in node.decorator_list
         )
-
-    def handle_singledispatch_decorator(self, node: FunctionDef | AsyncFunctionDef) -> None:
-        """Walk all the annotations to register them as runtime uses."""
-        for path in [node.args.args, node.args.kwonlyargs, node.args.posonlyargs]:
-            for argument in path:
-                if hasattr(argument, 'annotation') and argument.annotation:
-                    self.visit(argument.annotation)
-
-        if node.returns:
-            self.visit(node.returns)
 
 
 @dataclass
