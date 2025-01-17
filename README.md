@@ -1,7 +1,7 @@
 [![Package version](https://img.shields.io/pypi/v/flake8-type-checking.svg)](https://pypi.org/project/flake8-type-checking/)
-[![Code coverage](https://codecov.io/gh/sondrelg/flake8-type-checking/branch/main/graph/badge.svg)](https://codecov.io/gh/sondrelg/flake8-type-checking)
-[![Test status](https://github.com/sondrelg/flake8-type-checking/actions/workflows/testing.yml/badge.svg)](https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml)
-[![Supported Python versions](https://img.shields.io/badge/python-3.8%2B-blue)](https://pypi.org/project/flake8-type-checking/)
+<!---[![Code coverage](https://codecov.io/gh/snok/flake8-type-checking/branch/main/graph/badge.svg)](https://codecov.io/gh/snok/flake8-type-checking)--->
+[![Test status](https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml/badge.svg)](https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml)
+[![Supported Python versions](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/flake8-type-checking/)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
 # flake8-type-checking
