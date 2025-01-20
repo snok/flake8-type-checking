@@ -19,7 +19,6 @@ from flake8_type_checking.constants import (
     ANNOTATION_PROPERTY,
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
-    ATTRS_IMPORTS,
     BINOP_OPERAND_PROPERTY,
     MISSING,
     TC001,
@@ -53,7 +52,6 @@ if TYPE_CHECKING:
         HasPosition,
         Import,
         ImportTypeValue,
-        Name,
         SupportsIsTyping,
     )
 
@@ -130,53 +128,19 @@ class AttrsMixin:
     """
 
     if TYPE_CHECKING:
-        third_party_imports: dict[str, Import]
 
-    def get_all_attrs_imports(self) -> dict[str | None, str]:
-        """Return a map of all attrs/attr imports."""
-        attrs_imports: dict[str | None, str] = {}  # map of alias to full import name
-
-        for node in self.third_party_imports.values():
-            module = getattr(node, 'module', '')
-            names: list[Name] = getattr(node, 'names', [])
-
-            for name in names:
-                if module in ATTRS_IMPORTS:
-                    alias = name.name if name.asname is None else name.asname
-                    attrs_imports[alias] = f'{module}.{name.name}'
-                elif name.name.split('.')[0] in ATTRS_IMPORTS:
-                    attrs_imports[name.asname] = name.name
-
-        return attrs_imports
+        def lookup_full_name(self, node: ast.AST) -> str | None:  # noqa: D102
+            ...
 
     def is_attrs_class(self, class_node: ast.ClassDef) -> bool:
         """Check whether an ast.ClassDef is an attrs class or not."""
-        attrs_imports = self.get_all_attrs_imports()
-        return any(self.is_attrs_decorator(decorator, attrs_imports) for decorator in class_node.decorator_list)
+        return any(self.is_attrs_decorator(decorator) for decorator in class_node.decorator_list)
 
-    def is_attrs_decorator(self, decorator: Any, attrs_imports: dict[str | None, str]) -> bool:
+    def is_attrs_decorator(self, decorator: ast.AST) -> bool:
         """Check whether a class decorator is an attrs decorator or not."""
         if isinstance(decorator, ast.Call):
-            return self.is_attrs_decorator(decorator.func, attrs_imports)
-        elif isinstance(decorator, ast.Attribute):
-            return self.is_attrs_attribute(decorator)
-        elif isinstance(decorator, ast.Name):
-            return self.is_attrs_str(decorator.id, attrs_imports)
-        return False
-
-    @staticmethod
-    def is_attrs_attribute(attribute: ast.Attribute) -> bool:
-        """Check whether an ast.Attribute is an attrs attribute or not."""
-        s1 = f"attr.{getattr(attribute, 'attr', '')}"
-        s2 = f"attrs.{getattr(attribute, 'attrs', '')}"
-        actual = [s1, s2]
-        return any(e for e in actual if e in ATTRS_DECORATORS)
-
-    @staticmethod
-    def is_attrs_str(attribute: str | ast.expr, attrs_imports: dict[str | None, str]) -> bool:
-        """Check whether an ast.expr or string is an attrs string or not."""
-        actual = attrs_imports.get(str(attribute), '')
-        return actual in ATTRS_DECORATORS
+            decorator = decorator.func
+        return self.lookup_full_name(decorator) in ATTRS_DECORATORS
 
 
 class DunderAllMixin:

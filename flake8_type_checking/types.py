@@ -5,16 +5,12 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     import ast
     from collections.abc import Generator
-    from typing import Any, Optional, Protocol, Union
+    from typing import Any, Protocol, Union
 
     Function = Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda]
     Comprehension = Union[ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp]
     Import = Union[ast.Import, ast.ImportFrom]
     Flake8Generator = Generator[tuple[int, int, str, Any], None, None]
-
-    class Name(Protocol):
-        asname: Optional[str]
-        name: str
 
     class HasPosition(Protocol):
         @property
