@@ -77,5 +77,6 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
         if: matrix.python-version == '3.13'
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
