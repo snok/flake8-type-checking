@@ -73,10 +73,9 @@ jobs:
           coverage run -m pytest tests
           coverage xml
           coverage report
-# TODO: Re-enable once fixed
-#      - uses: codecov/codecov-action@v5
-#        with:
-#          files: ./coverage.xml
-#          fail_ci_if_error: true
-#          token: ${{ secrets.CODECOV_TOKEN }}
-#        if: matrix.python-version == '3.12'
+      - uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.python-version == '3.13'

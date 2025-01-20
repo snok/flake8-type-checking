@@ -2,6 +2,7 @@
 [![Test status](https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml/badge.svg)](https://github.com/snok/flake8-type-checking/actions/workflows/testing.yml)
 [![Supported Python versions](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/flake8-type-checking/)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
+[![codecov](https://codecov.io/gh/snok/flake8-type-checking/graph/badge.svg?token=c0hqbAteWi)](https://codecov.io/gh/snok/flake8-type-checking)
 
 # flake8-type-checking
 
