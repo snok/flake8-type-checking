@@ -16,7 +16,6 @@ ATTRS_DECORATORS = [
     'attr.mutable',
     'attr.s',
 ]
-ATTRS_IMPORTS = {'attrs', 'attr'}
 
 flake_version_gt_v4 = tuple(int(i) for i in flake8.__version__.split('.')) >= (4, 0, 0)
 
