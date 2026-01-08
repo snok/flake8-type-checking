@@ -25,15 +25,13 @@ def test_simple_mapped_use(enabled, expected):
     Mapped itself must be available at runtime and the inner type may or
     may not need to be available at runtime.
     """
-    example = textwrap.dedent(
-        '''
+    example = textwrap.dedent('''
         from foo import Bar
         from sqlalchemy.orm import Mapped
 
         class User:
             x: Mapped[Bar]
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC002', type_checking_sqlalchemy_enabled=enabled) == expected
 
 
@@ -51,15 +49,13 @@ def test_simple_mapped_use(enabled, expected):
 )
 def test_default_mapped_names(name, expected):
     """Check the three default names and a bogus name."""
-    example = textwrap.dedent(
-        f'''
+    example = textwrap.dedent(f'''
         from foo import Bar
         from sqlalchemy.orm import {name}
 
         class User:
             x: {name}[Bar]
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC002', type_checking_sqlalchemy_enabled=True) == expected
 
 
@@ -68,16 +64,14 @@ def test_mapped_with_circular_forward_reference():
     Mapped must still be available at runtime even with forward references
     to a different model.
     """
-    example = textwrap.dedent(
-        '''
+    example = textwrap.dedent('''
         from sqlalchemy.orm import Mapped
         if TYPE_CHECKING:
             from .address import Address
 
         class User:
             address: Mapped['Address']
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC002', type_checking_sqlalchemy_enabled=True) == set()
 
 
@@ -87,8 +81,7 @@ def test_mapped_soft_uses():
     as such we can't trigger a TC002 here, despite the only uses being inside
     type annotations.
     """
-    example = textwrap.dedent(
-        '''
+    example = textwrap.dedent('''
         from foo import Bar, Gt
         from sqlalchemy.orm import Mapped
         from typing import Annotated
@@ -97,8 +90,7 @@ def test_mapped_soft_uses():
             number: Mapped[Annotated[Bar, Gt(2)]]
             bar: Bar
             validator: Gt
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC002', type_checking_sqlalchemy_enabled=True) == set()
 
 
@@ -107,16 +99,14 @@ def test_mapped_use_without_runtime_import():
     Mapped must be available at runtime, so even if it is inside a wrapped annotation
     we should raise a TC004 for Mapped but not for Bar
     """
-    example = textwrap.dedent(
-        '''
+    example = textwrap.dedent('''
         if TYPE_CHECKING:
             from foo import Bar
             from sqlalchemy.orm import Mapped
 
         class User:
             created: 'Mapped[Bar]'
-        '''
-    )
+        ''')
     assert _get_error(example, error_code_filter='TC004', type_checking_sqlalchemy_enabled=True) == {
         '4:0 ' + TC004.format(module='Mapped')
     }
@@ -127,8 +117,7 @@ def test_custom_mapped_dotted_names_unwrapped():
     Check a couple of custom dotted names and a bogus one. This also tests the
     various styles of imports
     """
-    example = textwrap.dedent(
-        '''
+    example = textwrap.dedent('''
         import a
         import a.b as ab
         from a import b
@@ -145,8 +134,7 @@ def test_custom_mapped_dotted_names_unwrapped():
             x: b.MyMapped[Bar]
             y: a.b.MyMapped[Bar]
             z: ab.MyMapped[Bar]
-        '''
-    )
+        ''')
     assert _get_error(
         example,
         error_code_filter='TC002',
@@ -161,8 +149,7 @@ def test_custom_mapped_dotted_names_wrapped():
     Same as the unwrapped test but with wrapped annotations. This should generate
     a bunch of TC004 errors for the uses of mapped that should be available at runtime.
     """
-    example = textwrap.dedent(
-        '''
+    example = textwrap.dedent('''
         if TYPE_CHECKING:
             import a
             import a.b as ab
@@ -180,8 +167,7 @@ def test_custom_mapped_dotted_names_wrapped():
             x: 'b.MyMapped[Bar]'
             y: 'a.b.MyMapped[Bar]'
             z: 'ab.MyMapped[Bar]'
-        '''
-    )
+        ''')
     assert _get_error(
         example,
         error_code_filter='TC004',

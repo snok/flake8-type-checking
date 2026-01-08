@@ -223,7 +223,7 @@ class DunderAllMixin:
             # just needs to be available in global scope anywhere, we handle
             # this by special casing `ast.Constant` when we look for used type
             # checking symbols
-            self.uses[node.value].append((node, self.current_scope))
+            self.uses[node.value].append((node, self.current_scope))  # type: ignore[index]
         return node
 
 
@@ -287,6 +287,7 @@ class SQLAlchemyAnnotationVisitor(AnnotationVisitor):
 
     def visit_annotation_string(self, node: ast.Constant) -> None:
         """Add all the names in the string to mapped names."""
+        assert isinstance(node.value, str)
         visitor = StringAnnotationVisitor(self.plugin)
         visitor.parse_and_visit_string_annotation(node.value)
         self.plugin.soft_uses.update(visitor.names)
@@ -838,6 +839,7 @@ class StringAnnotationVisitor(AnnotationVisitor):
 
     def visit_annotation_string(self, node: ast.Constant) -> None:
         """Parse and visit nested string annotations."""
+        assert isinstance(node.value, str)
         self.parse_and_visit_string_annotation(node.value)
 
 
@@ -902,6 +904,7 @@ class ImportAnnotationVisitor(AnnotationVisitor):
 
     def visit_annotation_string(self, node: ast.Constant) -> None:
         """Register wrapped annotation and invalid binop literals."""
+        assert isinstance(node.value, str)
         setattr(node, ANNOTATION_PROPERTY, True)
         # we don't want to register them as both so we don't emit redundant errors
         if getattr(node, BINOP_OPERAND_PROPERTY, False):
@@ -962,6 +965,7 @@ class CastTypeExpressionVisitor(AnnotationVisitor):
 
     def visit_annotation_string(self, node: ast.Constant) -> None:
         """Collect all the names referenced inside the forward reference."""
+        assert isinstance(node.value, str)
         visitor = StringAnnotationVisitor(self._typing_lookup)
         visitor.parse_and_visit_string_annotation(node.value)
         self.quoted_names.update(visitor.names)
@@ -1178,7 +1182,7 @@ class ImportVisitor(
         This is the case when either there is a `from __future__ import annotations`
         import present or we're targetting Python 3.14+.
         """
-        return self.py314plus or self.futures_annotation
+        return self.py314plus or self.futures_annotation is True
 
     def is_typing(self, node: ast.AST, symbol: str) -> bool:
         """Check if the given node matches the given typing symbol."""

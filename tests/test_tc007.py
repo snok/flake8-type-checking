@@ -22,8 +22,7 @@ examples = [
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: TypeAlias = Dict[int]', {'3:15 ' + TC007.format(alias='Dict')}),
     # Regression test for issue #163
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from typing import TYPE_CHECKING
 
         if TYPE_CHECKING:
@@ -31,14 +30,12 @@ examples = [
             from typing_extensions import TypeAlias
 
             Foo: TypeAlias = Sequence[int]
-        '''
-        ),
+        '''),
         set(),
     ),
     # Inverse regression test for issue #163
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from typing import TYPE_CHECKING
         from typing_extensions import TypeAlias
 
@@ -46,8 +43,7 @@ examples = [
             from collections.abc import Sequence
 
         Foo: TypeAlias = Sequence[int]
-        '''
-        ),
+        '''),
         {
             '8:17 ' + TC007.format(alias='Sequence'),
         },
@@ -58,14 +54,12 @@ if sys.version_info >= (3, 12):
     # RHS on an explicit TypeAlias with 3.12 syntax should not emit a TC007
     examples.append(
         (
-            textwrap.dedent(
-                '''
+            textwrap.dedent('''
             if TYPE_CHECKING:
                 from collections.abc import Sequence
 
             type Foo = Sequence[int]
-            '''
-            ),
+            '''),
             set(),
         )
     )
