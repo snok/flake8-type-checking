@@ -19,66 +19,56 @@ examples = [
     ('', set()),
     # Found in file
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
         pass
-    """
-        ),
+    """),
         {'4:0 ' + TC005},
     ),
     # Found in function
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
 
     def example():
         if TYPE_CHECKING:
             pass
         return
-    """
-        ),
+    """),
         {'5:0 ' + TC005},
     ),
     # Found in class
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
 
     class Test:
         if TYPE_CHECKING:
             pass
         x = 2
-    """
-        ),
+    """),
         {'5:0 ' + TC005},
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
         if 2:
             pass
-    """
-        ),
+    """),
         set(),
     ),
     (
-        textwrap.dedent(
-            """
+        textwrap.dedent("""
     from typing import TYPE_CHECKING
     from typing import List
 
     if TYPE_CHECKING:
         x: List
-    """
-        ),
+    """),
         set(),
     ),
 ]

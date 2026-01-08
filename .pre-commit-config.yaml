@@ -1,10 +1,10 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 24.10.0
+    rev: 25.12.0
     hooks:
       - id: black
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-ast
       - id: check-added-large-files
@@ -19,7 +19,7 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
   - repo: https://github.com/pycqa/flake8
-    rev: 7.1.1
+    rev: 7.3.0
     hooks:
       - id: flake8
         additional_dependencies: [
@@ -34,18 +34,24 @@ repos:
             'flake8-type-checking==2.9.1',
         ]
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.19.0
+    rev: v3.21.2
     hooks:
       - id: pyupgrade
         args: [ "--py39-plus", '--keep-runtime-typing' ]
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 7.0.0
     hooks:
       - id: isort
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+    rev: v1.19.1
     hooks:
       - id: mypy
         additional_dependencies:
           - pytest
           - flake8
+        # NOTE: We want this hook to always run, but exactly once
+        #       instead of for every file. So we exclude all files
+        exclude: '.*'
+        always_run: true
+        pass_filenames: false
+        args: ['-p', 'flake8_type_checking']

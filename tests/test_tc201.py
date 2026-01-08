@@ -32,21 +32,18 @@ examples = [
         {'4:8 ' + TC201.format(annotation='int')},
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
 
         if TYPE_CHECKING:
             import something
 
         x: "something"
-        '''
-        ),
+        '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
 
         if TYPE_CHECKING:
@@ -54,59 +51,49 @@ examples = [
 
         def example(x: "something") -> something:
             pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         class X:
             def foo(self) -> 'X':
                 pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from __future__ import annotations
         class X:
             def foo(self) -> 'X':
                 pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
         # Regression test for Issue #164
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         from wtforms import Field
         from wtforms.fields.core import UnboundField
 
         foo: 'UnboundField[Field]'
-        '''
-        ),
+        '''),
         set(),
     ),
     (
         # this used to yield false negatives but works now, yay
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         class Foo(Protocol):
             pass
 
         x: 'Foo | None'
-        '''
-        ),
+        '''),
         {'5:3 ' + TC201.format(annotation='Foo | None')},
     ),
     (
         # Regression test for Issue #168
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         if TYPE_CHECKING:
             Foo = str | int
             Bar: TypeAlias = Foo | None
@@ -123,8 +110,7 @@ examples = [
 
         def bar(*args: 'P.args', **kwargs: 'P.kwargs') -> None:
             pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
@@ -135,8 +121,7 @@ examples = [
         # ideally it still would, but it would require more complex
         # logic in order to avoid false positives, so for now we
         # put up with the false negatives here
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         if TYPE_CHECKING:
             Foo = str | int
             Bar: TypeAlias = Foo | None
@@ -160,39 +145,32 @@ examples = [
 
         def bar(*args: 'P.args', **kwargs: 'P.kwargs') -> None:
             pass
-        '''
-        ),
+        '''),
         set(),
     ),
     (
         # Regression test for type checking only module attributes
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         import lxml.etree
 
         foo: 'lxml.etree._Element'
-        '''
-        ),
+        '''),
         set(),
     ),
     (
         # Regression test for #186
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         def foo(self) -> None:
             x: Bar
-        '''
-        ),
+        '''),
         set(),
     ),
     (
         # Reverse regression test for #186
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         def foo(self) -> None:
             x: 'Bar'
-        '''
-        ),
+        '''),
         {'3:7 ' + TC201.format(annotation='Bar')},
     ),
 ]
@@ -201,15 +179,13 @@ if sys.version_info >= (3, 12):
     # PEP695 tests
     examples += [
         (
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
             def foo[T](a: 'T') -> 'T':
                 pass
 
             class Bar[T]:
                 x: 'T'
-            """
-            ),
+            """),
             {
                 '2:14 ' + TC201.format(annotation='T'),
                 '2:22 ' + TC201.format(annotation='T'),

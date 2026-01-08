@@ -46,15 +46,13 @@ examples = [
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\ndef example() -> Dict[str, int]:\n\tpass', {'1:0 ' + TC100}),
     (
         # Regression test for #186
-        textwrap.dedent(
-            '''
+        textwrap.dedent('''
         if TYPE_CHECKING:
             from baz import Bar
 
         def foo(self) -> None:
             x: Bar
-        '''
-        ),
+        '''),
         set(),
     ),
 ]
@@ -63,8 +61,7 @@ if sys.version_info >= (3, 12):
     # PEP695 tests
     examples += [
         (
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
             if TYPE_CHECKING:
                 from .types import T
 
@@ -74,8 +71,7 @@ if sys.version_info >= (3, 12):
 
             class Bar[T](Sequence[T]):
                 x: T
-            """
-            ),
+            """),
             set(),
         )
     ]
