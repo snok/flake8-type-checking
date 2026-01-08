@@ -35,6 +35,13 @@ class Plugin:
     def add_options(cls, option_manager: OptionManager) -> None:  # pragma: no cover
         """Parse plugin options."""
         option_manager.add_option(
+            '--type-checking-py314plus',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Enables Python 3.14+ specific annotation semantics.',
+        )
+        option_manager.add_option(
             '--type-checking-typing-modules',
             comma_separated_list=True,
             parse_from_config=True,

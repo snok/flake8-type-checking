@@ -930,7 +930,7 @@ class ImportAnnotationVisitor(AnnotationVisitor):
         if self.never_evaluates:
             return
 
-        if self.type == 'alias' or (self.type == 'annotation' and not self.import_visitor.futures_annotation):
+        if self.type == 'alias' or (self.type == 'annotation' and not self.import_visitor.are_annotations_deferred):
             # visit nodes in regular runtime context
             self.import_visitor.visit(node)
             return
@@ -985,6 +985,7 @@ class ImportVisitor(
     def __init__(
         self,
         cwd: Path,
+        py314plus: bool,
         pydantic_enabled: bool,
         fastapi_enabled: bool,
         fastapi_dependency_support_enabled: bool,
@@ -998,6 +999,9 @@ class ImportVisitor(
         force_future_annotation: bool = False,
     ) -> None:
         super().__init__()
+
+        #: Whether or not we should be using Python 3.14 semantics for annotations
+        self.py314plus = py314plus
 
         #: Plugin settings
         self.pydantic_enabled = pydantic_enabled
@@ -1165,6 +1169,16 @@ class ImportVisitor(
 
         self._lookup_cache[node] = name
         return name
+
+    @property
+    def are_annotations_deferred(self) -> bool:
+        """
+        Return whether or not annotations are deferred.
+
+        This is the case when either there is a `from __future__ import annotations`
+        import present or we're targetting Python 3.14+.
+        """
+        return self.py314plus or self.futures_annotation
 
     def is_typing(self, node: ast.AST, symbol: str) -> bool:
         """Check if the given node matches the given typing symbol."""
@@ -1904,6 +1918,7 @@ class TypingOnlyImportsChecker:
     __slots__ = [
         'cwd',
         'strict_mode',
+        'py314plus',
         'builtin_names',
         'used_type_checking_names',
         'visitor',
@@ -1914,6 +1929,7 @@ class TypingOnlyImportsChecker:
     def __init__(self, node: ast.Module, options: Namespace | None) -> None:
         self.cwd = Path(os.getcwd())
         self.strict_mode = getattr(options, 'type_checking_strict', False)
+        py314plus = getattr(options, 'type_checking_py314plus', False)
 
         # we use the same option as pyflakes to extend the list of builtins
         self.builtin_names = builtin_names
@@ -1946,6 +1962,7 @@ class TypingOnlyImportsChecker:
 
         self.visitor = ImportVisitor(
             self.cwd,
+            py314plus=py314plus,
             pydantic_enabled=pydantic_enabled,
             fastapi_enabled=fastapi_enabled,
             cattrs_enabled=cattrs_enabled,
@@ -2124,13 +2141,13 @@ class TypingOnlyImportsChecker:
                 self.visitor.force_future_annotation
                 and (self.visitor.unwrapped_annotations or self.visitor.wrapped_annotations)
             )
-        ) and not self.visitor.futures_annotation:
+        ) and not self.visitor.are_annotations_deferred:
             yield 1, 0, TC100, None
 
     def futures_excess_quotes(self) -> Flake8Generator:
         """TC101."""
         # If futures imports are present, any ast.Constant captured in add_annotation should yield an error
-        if self.visitor.futures_annotation:
+        if self.visitor.are_annotations_deferred:
             for item in self.visitor.wrapped_annotations:
                 if item.type != 'annotation':  # TypeAlias value will not be affected by a futures import
                     continue
@@ -2204,7 +2221,7 @@ class TypingOnlyImportsChecker:
             else:
                 error = TC201.format(annotation=item.annotation)
 
-                if not self.visitor.futures_annotation:
+                if not self.visitor.are_annotations_deferred:
                     yield item.lineno, item.col_offset, TC101.format(annotation=item.annotation), None
 
             yield item.lineno, item.col_offset, error, None

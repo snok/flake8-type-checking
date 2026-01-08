@@ -303,6 +303,11 @@ examples = [
 ]
 
 
+@pytest.mark.parametrize('py314plus', [False, True])
 @pytest.mark.parametrize(('example', 'expected'), examples)
-def test_TC004_errors(example, expected):
-    assert _get_error(example, error_code_filter='TC004') == expected
+def test_TC004_errors(example, expected, py314plus):
+    assert _get_error(example, error_code_filter='TC004', type_checking_py314plus=py314plus) == expected
+    if py314plus and 'from __future__ import annotations' in example:
+        # removing the future annotation should not change the outcome
+        example = example.replace('from __future__ import annotations', '')
+        assert _get_error(example, error_code_filter='TC004', type_checking_py314plus=py314plus) == expected
