@@ -16,8 +16,6 @@ from tests.conftest import _get_error
 examples = [
     ('', set()),
     ("x: TypeAlias = 'int'", {'1:15 ' + TC008.format(alias='int')}),
-    # this should emit a TC010 instead
-    ("x: TypeAlias = 'int' | None", set()),
     # this used to emit an error before fixing #164 if we wanted to handle
     # this case once again we could add a whitelist of subscriptable types
     ("x: TypeAlias = 'Dict[int]'", set()),

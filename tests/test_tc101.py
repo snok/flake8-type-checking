@@ -16,11 +16,15 @@ examples = [
     ('', set()),
     ("x: 'int'", {'1:3 ' + TC101.format(annotation='int')}),
     ("from __future__ import annotations\nx: 'int'", {'2:3 ' + TC101.format(annotation='int')}),
-    ("if TYPE_CHECKING:\n\timport y\nx: 'y'", set()),
+    ("if TYPE_CHECKING:\n\timport y\nx: 'y'", (set(), {'3:3 ' + TC101.format(annotation='y')})),
     # this used to return an error, but it's prone to false positives
-    ("x: 'dict[int]'", set()),
-    ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'", set()),
-    ("if TYPE_CHECKING:\n\tFoo: TypeAlias = Any\nx: 'Foo'", set()),
+    # it is however an error with 3.14+ semantics
+    ("x: 'dict[int]'", (set(), {'1:3 ' + TC101.format(annotation='dict[int]')})),
+    (
+        "if TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict[int]'",
+        (set(), {'3:3 ' + TC101.format(annotation='Dict[int]')}),
+    ),
+    ("if TYPE_CHECKING:\n\tFoo: TypeAlias = Any\nx: 'Foo'", (set(), {'3:3 ' + TC101.format(annotation='Foo')})),
     # Basic AnnAssign with type-checking block and exact match
     (
         "from __future__ import annotations\nif TYPE_CHECKING:\n\tfrom typing import Dict\nx: 'Dict'",
@@ -100,7 +104,7 @@ examples = [
             pass
         '''
         ),
-        set(),
+        (set(), {'5:15 ' + TC101.format(annotation='something'), '5:31 ' + TC101.format(annotation='something')}),
     ),
     (
         textwrap.dedent(
@@ -110,7 +114,7 @@ examples = [
                 pass
         '''
         ),
-        set(),
+        (set(), {'3:21 ' + TC101.format(annotation='X')}),
     ),
     (
         textwrap.dedent(
@@ -192,6 +196,14 @@ if sys.version_info >= (3, 12):
     ]
 
 
+@pytest.mark.parametrize('py314plus', [False, True])
 @pytest.mark.parametrize(('example', 'expected'), examples)
-def test_TC101_errors(example, expected):
-    assert _get_error(example, error_code_filter='TC101') == expected
+def test_TC101_errors(example, expected, py314plus):
+    if isinstance(expected, tuple):
+        expected = expected[py314plus]
+
+    assert _get_error(example, error_code_filter='TC101', type_checking_py314plus=py314plus) == expected
+    if py314plus and 'from __future__ import annotations' in example:
+        # removing the future annotation should not change the outcome
+        example = example.replace('from __future__ import annotations', '')
+        assert _get_error(example, error_code_filter='TC101', type_checking_py314plus=py314plus) == expected

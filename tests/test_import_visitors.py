@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 def _visit(example: str) -> ImportVisitor:
     visitor = ImportVisitor(
         cwd=REPO_ROOT,
+        py314plus=False,
         pydantic_enabled=False,
         fastapi_enabled=False,
         fastapi_dependency_support_enabled=False,

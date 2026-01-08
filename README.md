@@ -128,6 +128,21 @@ pip install flake8-type-checking
 
 These options are configurable, and can be set in your flake8 config.
 
+## Python 3.14+
+
+If your code is targeting Python 3.14+ you no longer need to wrap
+annotations in quotes or add a future import. So in this case it's
+recommended to add `type-checking-p314plus = true` to your flake8
+configuration and select the `TC1` rules.
+
+- **setting name**: `type-checking-p314plus`
+- **type**: `bool`
+
+```ini
+[flake8]
+type-checking-py314plus = true  # default false
+```
+
 ### Typing modules
 
 If you re-export `typing` or `typing_extensions` members from a compatibility

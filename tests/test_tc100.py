@@ -87,5 +87,10 @@ def test_TC100_errors(example, expected):
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
+def test_TC100_errors_skipped_with_py314plus(example, expected):
+    assert _get_error(example, error_code_filter='TC100', type_checking_py314plus=True) == set()
+
+
+@pytest.mark.parametrize(('example', 'expected'), examples)
 def test_TC100_errors_skipped_on_stubs(example, expected):
     assert _get_error(example, error_code_filter='TC100', filename='test.pyi') == set()

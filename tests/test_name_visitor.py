@@ -12,6 +12,7 @@ from flake8_type_checking.checker import ImportVisitor
 def _get_names_and_soft_uses(example: str) -> tuple[set[str], set[str]]:
     visitor = ImportVisitor(
         cwd='fake cwd',  # type: ignore[arg-type]
+        py314plus=False,
         pydantic_enabled=False,
         fastapi_enabled=False,
         fastapi_dependency_support_enabled=False,

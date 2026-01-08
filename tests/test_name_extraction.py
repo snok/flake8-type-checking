@@ -39,6 +39,7 @@ if sys.version_info >= (3, 11):
 def test_name_extraction(example, expected):
     import_visitor = ImportVisitor(
         cwd='fake cwd',  # type: ignore[arg-type]
+        py314plus=False,
         pydantic_enabled=False,
         fastapi_enabled=False,
         fastapi_dependency_support_enabled=False,
