@@ -20,6 +20,8 @@ examples = [
     ("if TYPE_CHECKING:\n\tfrom typing import Dict\nx: TypeAlias = 'Dict'", set()),
     ("if TYPE_CHECKING:\n\tfrom typing import Dict as d\nx: TypeAlias = 'd[int]'", set()),
     ('if TYPE_CHECKING:\n\tfrom typing import Dict\nx: TypeAlias = Dict[int]', {'3:15 ' + TC007.format(alias='Dict')}),
+    # recursive type aliases should trigger TC007
+    ('X: TypeAlias = Union[str, dict[str, X]]', {'1:36 ' + TC007.format(alias='X')}),
     # Regression test for issue #163
     (
         textwrap.dedent('''
