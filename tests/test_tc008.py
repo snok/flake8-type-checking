@@ -32,6 +32,8 @@ examples = [
         "from __future__ import annotations\nif TYPE_CHECKING:\n\tfrom typing import Dict\nx: TypeAlias = Dict['int']",
         {'4:20 ' + TC008.format(alias='int')},
     ),
+    # recursive type aliases should not trigger TC008
+    ("X: TypeAlias = Union[str, dict[str, 'X']]", set()),
     (
         textwrap.dedent('''
         from __future__ import annotations
@@ -85,6 +87,24 @@ examples = [
                 Foo: str | int
 
         Bar: TypeAlias = 'Foo'
+        '''),
+        set(),
+    ),
+    (
+        # Regression test for issue #209
+        textwrap.dedent('''
+        from __future__ import annotations
+
+        from collections.abc import Mapping
+        from typing import TYPE_CHECKING, Union, TypeAlias
+
+        MyTypeAlias: TypeAlias = Union[
+            bool,
+            str,
+            int,
+            float,
+            Mapping[str, "MyTypeAlias"],
+        ]
         '''),
         set(),
     ),

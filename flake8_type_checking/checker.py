@@ -1542,8 +1542,11 @@ class ImportVisitor(
             self.current_scope.symbols[node.target.id].append(
                 Symbol(
                     node.target.id,
-                    node.target.lineno,
-                    node.target.col_offset,
+                    # We use the end of the statement for the position of the symbol so
+                    # lexicographical lookups correctly only see the symbol after the end
+                    # of the statement.
+                    node.lineno if node.end_lineno is None else node.end_lineno,
+                    node.col_offset if node.end_col_offset is None else node.end_col_offset,
                     (
                         # AnnAssign can omit the RHS, in which case it's just a declaration
                         # and doesn't result in a variable that's available at runtime
