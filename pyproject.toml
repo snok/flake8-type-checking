@@ -17,11 +17,11 @@ classifiers = [
     'License :: OSI Approved :: BSD License',
     'Topic :: Software Development :: Quality Assurance',
     'Programming Language :: Python',
-    'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: 3.12',
     'Programming Language :: Python :: 3.13',
     'Programming Language :: Python :: 3.14',
+    'Programming Language :: Python :: 3.15',
     'Typing :: Typed',
 ]
 
@@ -29,7 +29,7 @@ classifiers = [
 "Releases" = "https://github.com/snok/flake8-type-checking/releases"
 
 [tool.poetry.dependencies]
-python = '>=3.10'
+python = '>=3.11'
 flake8 = '*'
 classify-imports = '*'
 
@@ -72,7 +72,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = 3.9
+python_version = 3.11
 strict = true
 warn_redundant_casts = true
 warn_unused_configs = true

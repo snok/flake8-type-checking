@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from importlib.metadata import version as v
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from flake8_type_checking.checker import TypingOnlyImportsChecker
 from flake8_type_checking.constants import flake_version_gt_v4
@@ -11,7 +11,7 @@ from flake8_type_checking.constants import flake_version_gt_v4
 if TYPE_CHECKING:
     from argparse import Namespace
     from ast import Module
-    from typing import Optional
+    from typing import ClassVar
 
     from flake8.options.manager import OptionManager
 
@@ -26,7 +26,7 @@ class Plugin:
 
     tree: Module
     filename: str
-    options: Optional[Namespace] = None
+    options: Namespace | None = None
 
     name: ClassVar[str] = 'flake8-type-checking'
     version: ClassVar[str] = v('flake8-type-checking')
@@ -40,6 +40,13 @@ class Plugin:
             parse_from_config=True,
             default=False,
             help='Enables Python 3.14+ specific annotation semantics.',
+        )
+        option_manager.add_option(
+            '--type-checking-py315plus',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Enables suggesting Python 3.15+ lazy imports as remediation for TC001, TC002 and TC003.',
         )
         option_manager.add_option(
             '--type-checking-typing-modules',
@@ -68,6 +75,13 @@ class Plugin:
             parse_from_config=True,
             default=False,
             help='Always emit TC100 as long as there are any annotations and no future import.',
+        )
+        option_manager.add_option(
+            '--type-checking-ignore-dunder-lazy-modules',
+            action='store_true',
+            parse_from_config=True,
+            default=False,
+            help='Allow TC001, TC002, and TC003 checks to flag modules covered by `__lazy_modules__`.',
         )
 
         # Third-party library options
