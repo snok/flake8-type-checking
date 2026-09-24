@@ -41,6 +41,7 @@ MISSING = _Sentinels.MISSING
 TC001 = "TC001 Move application import '{module}' into a type-checking block"
 TC002 = "TC002 Move third-party import '{module}' into a type-checking block"
 TC003 = "TC003 Move built-in import '{module}' into a type-checking block"
+LAZY_SUFFIX = ' or turn it into a lazy import'
 TC004 = "TC004 Move import '{module}' out of type-checking block. Import is used for more than type hinting."
 TC005 = 'TC005 Found empty type-checking block'
 TC006 = "TC006 Annotation '{annotation}' in typing.cast() should be a string literal"

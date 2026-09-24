@@ -10,7 +10,8 @@ Lets you know which imports to move in or out of
 [type-checking](https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING) blocks.
 
 The plugin assumes that the imports you only use for type hinting
-*are not* required at runtime. When imports aren't strictly required at runtime, it means we can guard them.
+*are not* required at runtime. When imports aren't strictly required at runtime, it means we can guard them (or with Python
+3.15+ we can make them lazy).
 
 Guarding imports provides 3 major benefits:
 
@@ -37,6 +38,14 @@ if TYPE_CHECKING:
     import pandas  # <-- no longer imported at runtime
 
 x: "pandas.DataFrame"
+```
+
+Or with Python 3.15+ it can also become this:
+
+```python
+lazy import pandas
+
+x: pandas.DataFrame
 ```
 
 More examples can be found in the [examples](#examples) section.
@@ -118,6 +127,42 @@ enable-extensions = TC, TC2  # or TC1
 
 If you are unsure which `TC` range to pick, see the [rationale](#rationale) for more info.
 
+## Lazy imports
+
+While the plugin recognizes and supports lazy imports, it currently
+offers no rule like TC004 that tell you to turn a lazy import back
+into a regular import. This is mostly because the only time a lazy
+import for sure shouldn't be lazy is when it is directly accessed
+in the global scope.
+
+[`flake8-lazy`](https://flake8-lazy.readthedocs.io/en/latest/)
+already exists and helps flag exactly those cases and others
+so `flake8-type-checking` will not be able to provide anything that
+plugin does not already give you, beyond TC001, TC002 and TC003
+telling you which imports could benefit from being lazy in addition
+to the ones `flake8-lazy` tells you about.
+
+Runtime introspection of `__annotations__` is a corner case where
+a lazy import might resolve during module import time, but since it
+is not obvious at which point during the module's execution that
+introspection happens, a lazy import could still help break import
+cycles, so there is no obvious rule for when a lazy import is
+redundant.
+
+For the same reason `flake8-type-checking` will never recommend
+replacing an existing type checking block with a lazy import,
+since there is no way to guarantee that the two are equivalent,
+since lazy imports will always get triggered when `__annotations__`
+are introspected, regardless of whether a format like
+`Format.FORWARDREF` is used. So lazy imports can still result in
+additional overhead compared to type checking blocks in some
+scenarios. It is not a trade-off the plugin can make for you.
+
+By default `flake8-type-checking` will never recommend turning
+imports into lazy imports, see the [configuration](#configuration)
+for how to enable Python 3.15+ mode, where some of the error
+messages will reference lazy imports as an alternative solution.
+
 ## Installation
 
 ```shell
@@ -132,15 +177,37 @@ These options are configurable, and can be set in your flake8 config.
 
 If your code is targeting Python 3.14+ you no longer need to wrap
 annotations in quotes or add a future import. So in this case it's
-recommended to add `type-checking-p314plus = true` to your flake8
+recommended to add `type-checking-py314plus = true` to your flake8
 configuration and select the `TC1` rules.
 
-- **setting name**: `type-checking-p314plus`
+- **setting name**: `type-checking-py314plus`
 - **type**: `bool`
 
 ```ini
 [flake8]
 type-checking-py314plus = true  # default false
+```
+
+## Python 3.15+
+
+If your code is targeting Python 3.15+ you may want to use lazy
+imports instead of moving them into a type checking block. So
+TC001, TC002 and TC003 contain additional text to help guide
+users to this alternate solution. This setting also implies
+`type-checking-py314-plus`.
+
+Lazy imports are detected and special-cased, even without enabling
+this setting and are treated as a valid alternative to a type
+checking block, regardless of whether the target version will
+actually treat them as such, so this setting currently only
+changes the error messages users will see.
+
+- **setting name**: `type-checking-p315plus`
+- **type**: `bool`
+
+```ini
+[flake8]
+type-checking-py315plus = true  # default false
 ```
 
 ### Typing modules
@@ -192,6 +259,27 @@ imports that *can* be moved.
 ```ini
 [flake8]
 type-checking-strict = true  # default false
+```
+
+### Report typing-only uses of `__lazy_modules__`
+
+The plugin, by default, will never report TC00[1-3] errors
+for imports covered by `__lazy_modules__`, since starting with
+Python 3.15 these will work the same as `lazy import ..` and
+`lazy from .. import ..` statements.
+
+If you want to preserve the import time reduction for older Python
+versions, you may not want this and instead want to move the import
+into a type checking block, you can tell the plugin to ignore
+`__lazy_modules__` declarations, which will allow these imports
+to report TC00[1-3] errors.
+
+- **setting name**: `type-checking-ignore-dunder-lazy-modules`
+- **type**: `bool`
+
+```ini
+[flake8]
+type-checking-ignore-dunder-lazy-modules = true  # default false
 ```
 
 ### Force `from __future__ import annotations` import
