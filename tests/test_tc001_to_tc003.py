@@ -121,6 +121,72 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
             (f'import {import_}\ntype x = {import_}', {f"1:0 {ERROR.format(module=f'{import_}')}"})
         )
 
+    # Lazy imports should never generate errors
+    lazy_imports: L = [
+        # ast.Import
+        (f'__lazy_modules__=["{import_}"]\nimport {import_}\nx:{import_}', set()),
+        (f'\n__lazy_modules__=["{import_}"]\nimport {import_}\nx:{import_}', set()),
+        # ast.ImportFrom
+        (f'__lazy_modules__=["{import_}"]\nfrom {import_} import Plugin\nx:Plugin', set()),
+        (f'__lazy_modules__=["{import_}"]\n\nfrom {import_} import constants\nx:constants', set()),
+        # Aliased imports
+        (f'__lazy_modules__=["{import_}"]\nimport {import_} as x\ny:x', set()),
+        (f'__lazy_modules__=["{import_}"]\nfrom {import_} import constants as x\ny:x', set()),
+    ]
+
+    if ERROR == TC001:
+        # flake8-lazy style relative imports
+        lazy_imports.extend(
+            (
+                (
+                    textwrap.dedent(f'''
+                        __lazy_modules__ = [f"{{__spec__.parent}}.{import_}"]
+                        from .{import_} import constants as x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                (
+                    textwrap.dedent(f'''
+                        __lazy_modules__ = [
+                            f"{{__spec__.parent.rsplit('.', 1)[0]}}.{import_}"
+                        ]
+                        from ..{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                (
+                    textwrap.dedent(f'''
+                        __lazy_modules__ = [
+                            f"{{(__spec__.parent or '').rsplit('.', 2)[0]}}.{import_}"
+                        ]
+                        from ...{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+            )
+        )
+
+    if sys.version_info >= (3, 15):
+        lazy_imports.extend(
+            (
+                # ast.Import
+                (f'lazy import {import_}\nx:{import_}', set()),
+                (f'\nlazy import {import_}\nx:{import_}', set()),
+                # ast.ImportFrom
+                (f'lazy from {import_} import Plugin\nx:Plugin', set()),
+                (f'\n\nlazy from {import_} import constants\nx:constants', set()),
+                # Aliased imports
+                (f'lazy import {import_} as x\ny:x', set()),
+                (f'lazy from {import_} import constants as x\ny:x', set()),
+            )
+        )
+
     # Imports used for `functools.singledispatch`. None of these should generate errors.
     used_for_singledispatch: L = [
         (
@@ -325,6 +391,7 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
         *used_for_arg_annotations_only,
         *used_for_return_annotations_only,
         *used_for_type_alias_only,
+        *lazy_imports,
         *used_for_singledispatch,
         *other_useful_test_cases,
     ]

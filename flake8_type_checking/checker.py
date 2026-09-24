@@ -20,6 +20,7 @@ from flake8_type_checking.constants import (
     ATTRIBUTE_PROPERTY,
     ATTRS_DECORATORS,
     BINOP_OPERAND_PROPERTY,
+    LAZY_SUFFIX,
     MISSING,
     TC001,
     TC002,
@@ -81,42 +82,39 @@ class AnnotationVisitor(ABC):
 
     def visit(self, node: ast.AST) -> None:
         """Visit relevant child nodes on an annotation."""
-        if node is None:
-            return
-        if isinstance(node, ast.BinOp):
-            if not isinstance(node.op, ast.BitOr):
-                return
-            setattr(node.left, BINOP_OPERAND_PROPERTY, True)
-            setattr(node.right, BINOP_OPERAND_PROPERTY, True)
-            self.visit(node.left)
-            self.visit(node.right)
-        elif isinstance(node, ast.Attribute):
-            self.visit(node.value)
-        elif isinstance(node, ast.Subscript):
-            self.visit(node.value)
-            if self.is_typing(node.value, 'Literal'):
-                return
-            elif self.is_typing(node.value, 'Annotated') and isinstance(
-                node.slice,
-                (ast.Tuple, ast.List),
-            ):
-                if node.slice.elts:
-                    elts_iter = iter(node.slice.elts)
-                    # only visit the first element like a type expression
-                    self.visit_annotated_type(next(elts_iter))
-                    for value_node in elts_iter:
-                        self.visit_annotated_value(value_node)
-            else:
-                self.visit(node.slice)
-        elif isinstance(node, (ast.Tuple, ast.List)):
-            for n in node.elts:
-                self.visit(n)
-        elif isinstance(node, ast.Starred) and isinstance(node.ctx, ast.Load):
-            self.visit(node.value)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            self.visit_annotation_string(node)
-        elif isinstance(node, ast.Name):
-            self.visit_annotation_name(node)
+        match node:
+            case ast.BinOp(op=ast.BitOr()):
+                setattr(node.left, BINOP_OPERAND_PROPERTY, True)
+                setattr(node.right, BINOP_OPERAND_PROPERTY, True)
+                self.visit(node.left)
+                self.visit(node.right)
+            case ast.Attribute():
+                self.visit(node.value)
+            case ast.Subscript():
+                self.visit(node.value)
+                if self.is_typing(node.value, 'Literal'):
+                    return
+                elif self.is_typing(node.value, 'Annotated') and isinstance(
+                    node.slice,
+                    (ast.Tuple, ast.List),
+                ):
+                    if node.slice.elts:
+                        elts_iter = iter(node.slice.elts)
+                        # only visit the first element like a type expression
+                        self.visit_annotated_type(next(elts_iter))
+                        for value_node in elts_iter:
+                            self.visit_annotated_value(value_node)
+                else:
+                    self.visit(node.slice)
+            case ast.Tuple(elts=elements) | ast.List(elts=elements):
+                for element in elements:
+                    self.visit(element)
+            case ast.Starred(ctx=ast.Load()):
+                self.visit(node.value)
+            case ast.Constant(value=str()):
+                self.visit_annotation_string(node)
+            case ast.Name():
+                self.visit_annotation_name(node)
 
 
 class AttrsMixin:
@@ -171,30 +169,19 @@ class DunderAllMixin:
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.__all___assignments: list[tuple[int, int]] = []
+        self._in__all__declaration = False
 
-    def in___all___declaration(self, node: ast.Constant) -> bool:
-        """
-        Indicate whether a node is a sub-node of an __all__ assignment node.
+    @contextmanager
+    def in__all__declaration(self) -> Iterator[None]:
+        """Mark all subsequently visited nodes as being part of `__all__`."""
+        original = self._in__all__declaration
+        self._in__all__declaration = True
+        try:
+            yield
+        finally:
+            self._in__all__declaration = original
 
-        We want to avoid raising TC001 errors when imports are defined
-        as strings, like this:
-
-        This is a little tricky though. We can't just add string definitions
-        to our 'uses' map, since that will generate false positives elsewhere.
-        Instead we need this helper to tell us when *not* to ignore constants.
-        """
-        if not self.__all___assignments:
-            return False
-        if not isinstance(getattr(node, 'value', ''), str):
-            return False
-        return any(
-            (assignment[0] is not None and node.lineno is not None and assignment[1] is not None)
-            and (assignment[0] <= node.lineno <= assignment[1])
-            for assignment in self.__all___assignments
-        )
-
-    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+    def visit_Assign(self, node: ast.Assign) -> None:
         """
         Make sure we keep track of all __all__ assignments.
 
@@ -210,21 +197,199 @@ class DunderAllMixin:
 
         So we need to look at the assign element, and inspect both the target(s) and value.
         """
-        if len(node.targets) == 1 and getattr(node.targets[0], 'id', '') == '__all__':
-            self.__all___assignments.append((node.targets[0].lineno, node.value.end_lineno or node.targets[0].lineno))
+        if (
+            self.current_scope.parent is None
+            and len(node.targets) == 1
+            and getattr(node.targets[0], 'id', '') == '__all__'
+        ):
+            with self.in__all__declaration():
+                super().visit_Assign(node)  # type: ignore[misc]
+        else:
+            super().visit_Assign(node)  # type: ignore[misc]
 
-        self.generic_visit(node)
-        return node
-
-    def visit_Constant(self, node: ast.Constant) -> ast.Constant:
+    def visit_Constant(self, node: ast.Constant) -> None:
         """Map constant as use, if we're inside an __all__ declaration."""
-        if self.in___all___declaration(node):
+        if self._in__all__declaration:
             # for these it doesn't matter where they are declared, the symbol
             # just needs to be available in global scope anywhere, we handle
             # this by special casing `ast.Constant` when we look for used type
             # checking symbols
             self.uses[node.value].append((node, self.current_scope))  # type: ignore[index]
-        return node
+
+        super().visit_Constant(node)  # type: ignore[misc]
+
+
+class DunderLazyModulesMixin:
+    """
+    Contains the necessary logic for handling `__lazy_modules__`.
+
+    In Python 3.15+ all modules listed in `__lazy_modules__` will turn
+    any matching import statement following the declaration into a lazy
+    import. This is the backwards-compatible version of the new syntax,
+    that allows newer Python versions to have lazy imports without breaking
+    older versions.
+    """
+
+    if TYPE_CHECKING:
+        lazy_modules: set[str]
+        ignore_dunder_lazy_modules: bool
+        current_scope: Scope
+
+        def generic_visit(self, node: ast.AST) -> None:  # noqa: D102
+            ...
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._in__lazy_modules__declaration = False
+
+    @contextmanager
+    def in__lazy_modules__declaration(self) -> Iterator[None]:
+        """
+        Mark all subsequently visited nodes as being part of `__lazy_modules__`.
+
+        It also clears `lazy_modules`, so past assignments don't bleed
+        into new assignments.
+        """
+        self.lazy_modules.clear()
+        original = self._in__lazy_modules__declaration
+        self._in__lazy_modules__declaration = True
+        try:
+            yield
+        finally:
+            self._in__lazy_modules__declaration = original
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """
+        Make sure we keep track of all __lazy_modules__ assignments.
+
+        We would do this in visit_Name, except the name attribute for the assignment's
+        target's end_lineno only spans the assignment line, not the whole assignment:
+
+            ^^^^^^^^ this is all the ast.target for __lazy_modules__ spans
+            __lazy_modules__ = [  <
+                'one',            <
+                'two',            <
+                'three'           < \
+            ]                     <-- This is the node.value
+
+        So we need to look at the assign element, and inspect both the target(s) and value.
+        """
+        if (
+            # For simplicity we implement this setting by ignoring __lazy_modules__
+            # altogether, since we currently don't flag these any differently than
+            # regular imports, when they're only used for type checking.
+            not self.ignore_dunder_lazy_modules
+            and self.current_scope.parent is None
+            and len(node.targets) == 1
+            and getattr(node.targets[0], 'id', '') == '__lazy_modules__'
+        ):
+            with self.in__lazy_modules__declaration():
+                self.generic_visit(node)
+        else:
+            self.generic_visit(node)
+
+    def visit_Constant(self, node: ast.Constant) -> None:
+        """Record all module names in __lazy_import__ declarations."""
+        if self._in__lazy_modules__declaration and isinstance(node.value, str):
+            self.lazy_modules.add(node.value)
+
+    def relative_import_level_minus_one(self, expr: ast.AST) -> int | None:
+        """
+        Determine the relative import level of a flake8-lazy style relative import.
+
+        This expects being handed an expression of the form:
+
+            __spec__.parent
+
+        Or:
+
+            spec__.parent.rsplit(".", 1)[0]
+
+        Or the type-safe version:
+
+            (spec__.parent or "").rsplit(".", 1)[0]
+
+        Based on any of these expression we need to determine the
+        level of the relative import this is supposed to target.
+
+        In order to avoid adding one to the integer we retrieve from
+        the AST only to subtract it again in the code that uses it,
+        we directly return the level minus one.
+
+        For any other expression this will return `None`.
+        """
+        match expr:
+            # Simple case for a single level
+            # Matches `__spec__.parent`
+            case ast.Attribute(
+                value=ast.Name(id='__spec__'),
+                attr='parent',
+            ):
+                return 0
+
+            # Complex case for any higher level
+            case ast.Subscript(
+                value=ast.Call(
+                    func=ast.Attribute(
+                        value=(
+                            # Matches `spec__.parent.rsplit(".", 1)[0]`
+                            ast.Attribute(value=ast.Name(id='__spec__'), attr='parent')
+                            # Matches `(spec__.parent or "").rsplit(".", 1)[0]`
+                            | ast.BoolOp(
+                                op=ast.Or(),
+                                values=[
+                                    ast.Attribute(value=ast.Name(id='__spec__'), attr='parent'),
+                                    ast.Constant(value=''),
+                                ],
+                            )
+                        ),
+                        attr='rsplit',
+                    ),
+                    args=[
+                        ast.Constant(value='.'),
+                        ast.Constant(value=int() as level_minus_one),
+                    ],
+                    keywords=[],
+                ),
+                slice=ast.Constant(value=0),
+            ):
+                return level_minus_one
+
+            case _:
+                return None
+
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
+        """
+        Record all flake8-lazy style relative import names.
+
+        The motivation behind this style is that flake8 does not provide
+        us with any sort of information about the project's structure and
+        since `__lazy_modules__` needs to contain the absolute name in order
+        to match the relative name, there is no way for us statically link
+        the two together, unless we use this f-string based approach.
+        """
+        if not self._in__lazy_modules__declaration:
+            return
+
+        match node:
+            case ast.JoinedStr(
+                values=[
+                    ast.FormattedValue(
+                        value=expr,
+                        conversion=-1,
+                        format_spec=None,
+                    ),
+                    ast.Constant(value=str() as module),
+                ],
+            ) if module.startswith('.'):
+                level_minus_one = self.relative_import_level_minus_one(expr)
+                if level_minus_one is None:
+                    return
+
+                if level_minus_one:
+                    module = '.' * level_minus_one + module
+
+                self.lazy_modules.add(module)
 
 
 class PydanticMixin:
@@ -334,7 +499,7 @@ class SQLAlchemyMixin:
         self.sqlalchemy_annotation_visitor = SQLAlchemyAnnotationVisitor(self)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        """Remove all annotations assigments."""
+        """Handle all `Mapped[...]` style annotations."""
         if (
             self.sqlalchemy_enabled
             # We only need to special case runtime use of `Mapped`
@@ -363,71 +528,72 @@ class SQLAlchemyMixin:
         `Mapped` names, then we will record a runtime use of that symbol,
         since we know `Mapped` always needs to resolve.
         """
-        if isinstance(node, ast.Constant):
-            # we only need to handle annotations like `"Mapped[...]"`
-            if not isinstance(node.value, str) or '[' not in node.value:
+        match node:
+            # Handle annotations like `"Mapped[...]"`
+            case ast.Constant(value=str() as annotation):
+                if '[' not in annotation:
+                    return
+
+                annotation = annotation.strip()
+                if not annotation.endswith(']'):
+                    return
+
+                mapped_name, inner = annotation.split('[', 1)
+                # strip trailing `]` from inner
+                inner = inner[:-1]
+                if not self.is_mapped(mapped_name):
+                    return
+
+                # record a use for the first part of the name
+                used_name, *_ = mapped_name.split('.', 1)
+                self.uses[used_name].append((node, self.current_scope))
+
+                # add all names contained in the inner part of the annotation
+                # since this is not as strict as an actual runtime use, we don't
+                # care if we record too much here
+                visitor = StringAnnotationVisitor(self)
+                visitor.parse_and_visit_string_annotation(inner)
+                self.soft_uses.update(visitor.names)
+
+            # Handle annotations like `Mapped[...]`
+            case ast.Subscript(
+                value=ast.Name() as name,
+                slice=wrapped,
+            ) if self.is_mapped(name):
+
+                # record a use for the name
+                self.uses[name.id].append((name, self.current_scope))
+
+                # visit the wrapped annotations to update the mapped names
+                self.sqlalchemy_annotation_visitor.visit(wrapped)
+
+            # Handle annotations like `sqlalchemy.orm.Mapped[...]`
+            case ast.Subscript(
+                value=ast.Attribute(attr=dotted_name, value=before_dot),
+                slice=wrapped,
+            ):
+                while isinstance(before_dot, ast.Attribute):
+                    dotted_name = f'{before_dot.attr}.{dotted_name}'
+                    before_dot = before_dot.value
+                # there should be no subscripts between the attributes
+                if not isinstance(before_dot, ast.Name):
+                    return
+
+                # map the module if it's mapped otherwise use it as is
+                module = self.lookup_full_name(before_dot) or before_dot.id
+                dotted_name = f'{module}.{dotted_name}'
+                if dotted_name not in self.sqlalchemy_mapped_dotted_names:
+                    return
+
+                # record a use for the left-most node in the attribute access chain
+                self.uses[before_dot.id].append((before_dot, self.current_scope))
+
+                # visit the wrapped annotations to update the mapped names
+                self.sqlalchemy_annotation_visitor.visit(wrapped)
+
+            # any other case is invalid, such as `Foo[...][...]`
+            case _:
                 return
-
-            annotation = node.value.strip()
-            if not annotation.endswith(']'):
-                return
-
-            mapped_name, inner = annotation.split('[', 1)
-            # strip trailing `]` from inner
-            inner = inner[:-1]
-            if not self.is_mapped(mapped_name):
-                return
-
-            # record a use for the first part of the name
-            used_name, *_ = mapped_name.split('.', 1)
-            self.uses[used_name].append((node, self.current_scope))
-
-            # add all names contained in the inner part of the annotation
-            # since this is not as strict as an actual runtime use, we don't
-            # care if we record too much here
-            visitor = StringAnnotationVisitor(self)
-            visitor.parse_and_visit_string_annotation(inner)
-            self.soft_uses.update(visitor.names)
-            return
-
-        # we only need to handle annotations like `Mapped[...]`
-        if not isinstance(node, ast.Subscript):
-            return
-
-        # simple case only needs to check mapped_aliases
-        if isinstance(node.value, ast.Name):
-            if not self.is_mapped(node.value):
-                return
-
-            # record a use for the name
-            self.uses[node.value.id].append((node.value, self.current_scope))
-
-        # complex case for dotted names
-        elif isinstance(node.value, ast.Attribute):
-            dotted_name = node.value.attr
-            before_dot = node.value.value
-            while isinstance(before_dot, ast.Attribute):
-                dotted_name = f'{before_dot.attr}.{dotted_name}'
-                before_dot = before_dot.value
-            # there should be no subscripts between the attributes
-            if not isinstance(before_dot, ast.Name):
-                return
-
-            # map the module if it's mapped otherwise use it as is
-            module = self.lookup_full_name(before_dot) or before_dot.id
-            dotted_name = f'{module}.{dotted_name}'
-            if dotted_name not in self.sqlalchemy_mapped_dotted_names:
-                return
-
-            # record a use for the left-most node in the attribute access chain
-            self.uses[before_dot.id].append((before_dot, self.current_scope))
-
-        # any other case is invalid, such as `Foo[...][...]`
-        else:
-            return
-
-        # visit the wrapped annotations to update the mapped names
-        self.sqlalchemy_annotation_visitor.visit(node.slice)
 
 
 class InjectorMixin:
@@ -588,6 +754,9 @@ class ImportName:
     #: Whether or not this import is exempt from TC001-004 checks.
     exempt: bool
 
+    #: Whether or not this import is lazy
+    is_lazy: bool | None
+
     @property
     def module(self) -> str:
         """
@@ -676,6 +845,9 @@ class Symbol(NamedTuple):
     col_offset: int
     type: Literal['import', 'definition', 'declaration', 'argument']
     in_type_checking_block: bool
+
+    # for imports whether or not they are lazy
+    is_lazy: bool | None = None
 
     def available_at_runtime(self, use: HasPosition | None = None) -> bool:
         """Return whether or not this symbol is available at runtime."""
@@ -973,6 +1145,7 @@ class CastTypeExpressionVisitor(AnnotationVisitor):
 
 class ImportVisitor(
     DunderAllMixin,
+    DunderLazyModulesMixin,
     FunctoolsSingledispatchMixin,
     AttrsMixin,
     InjectorMixin,
@@ -990,6 +1163,7 @@ class ImportVisitor(
         self,
         cwd: Path,
         py314plus: bool,
+        ignore_dunder_lazy_modules: bool,
         pydantic_enabled: bool,
         fastapi_enabled: bool,
         fastapi_dependency_support_enabled: bool,
@@ -1025,6 +1199,13 @@ class ImportVisitor(
 
         #: Import patterns we want to avoid mapping
         self.exempt_modules: list[str] = exempt_modules or []
+
+        #: A set of modules marked as Python 3.15+ lazy imports
+        self.lazy_modules: set[str] = set()
+
+        #: Whether or not __lazy_modules__ declarations should excempt imports
+        #: from being flagged by TC001, TC002 or TC003.
+        self.ignore_dunder_lazy_modules = ignore_dunder_lazy_modules
 
         #: Whether or not TC100 should always be emitted if there are annotations
         self.force_future_annotation = force_future_annotation
@@ -1217,39 +1398,6 @@ class ImportVisitor(
             return True
         return self.is_typing(node, 'TYPE_CHECKING')
 
-    def is_type_checking_true(self, node: ast.Compare) -> bool:
-        """
-        Check whether the node matches `if TYPE_CHECKING is True`.
-
-        An ast.Compare node has a `left`, `ops`, and `comparators` attribute.
-
-        Here we want to check whether our node corresponds to
-
-            `if TYPE_CHECKING is True`
-                    ^         ^    ^
-        left _______|        ops   |____ comparators
-        """
-        # Left side should be a TYPE_CHECKING block
-        is_type_checking_block = hasattr(node, 'left') and self.is_type_checking(node.left)
-        if not is_type_checking_block:
-            return False
-
-        # Operator should be `is`
-        operator_is_is = len(node.ops) == 1 and isinstance(node.ops[0], ast.Is)
-        if not operator_is_is:
-            return False
-
-        # Right side should be `True`
-        right_side_is_true = (
-            len(node.comparators) == 1
-            and isinstance(node.comparators[0], ast.Constant)
-            and node.comparators[0].value is True
-        )
-        if not right_side_is_true:
-            return False
-
-        return True
-
     def is_true_when_type_checking(self, node: ast.AST) -> bool | Literal['TYPE_CHECKING']:
         """Determine if the node evaluates to True when TYPE_CHECKING is True.
 
@@ -1265,23 +1413,35 @@ class ImportVisitor(
         """
         if self.is_type_checking(node):
             return 'TYPE_CHECKING'
-        if isinstance(node, ast.BoolOp):
-            non_type_checking = [v for v in node.values if not self.is_type_checking(v)]
-            has_type_checking = len(non_type_checking) < len(node.values)
-            num_true = sum(1 if self.is_true_when_type_checking(v) else 0 for v in non_type_checking)
-            all_others_true = num_true == len(non_type_checking)
-            any_others_true = num_true > 0
-            if isinstance(node.op, ast.Or):
-                # At least one of the conditions must be TYPE_CHECKING
-                return 'TYPE_CHECKING' if has_type_checking else any_others_true
-            elif isinstance(node.op, ast.And) and all_others_true:
-                # At least one of the conditions must be TYPE_CHECKING, and all others must be True
-                return 'TYPE_CHECKING' if has_type_checking else False
-        elif isinstance(node, ast.Constant):
-            with suppress(Exception):
-                return bool(literal_eval(node))
-        elif isinstance(node, ast.Compare) and self.is_type_checking_true(node):
-            return 'TYPE_CHECKING'
+        match node:
+            case ast.BoolOp(
+                values=values,
+                op=ast.Or() | ast.And() as operator,
+            ):
+                non_type_checking = [v for v in values if not self.is_type_checking(v)]
+                has_type_checking = len(non_type_checking) < len(values)
+                num_true = sum(1 if self.is_true_when_type_checking(v) else 0 for v in non_type_checking)
+                any_others_true = num_true > 0
+                all_others_true = num_true == len(non_type_checking)
+                if isinstance(operator, ast.Or):
+                    # At least one of the conditions must be TYPE_CHECKING
+                    return 'TYPE_CHECKING' if has_type_checking else any_others_true
+                elif has_type_checking and all_others_true:
+                    # At least one of the conditions must be TYPE_CHECKING, and all others must be True
+                    return 'TYPE_CHECKING'
+            case ast.Constant():
+                with suppress(Exception):
+                    return bool(literal_eval(node))
+            # Matches `TYPE_CHECKING is True`
+            case ast.Compare(
+                # Operator should be `is`
+                ops=[ast.Is()],
+                # Right side should be `True`
+                comparators=[ast.Constant(value=True)],
+                # Left side should be a TYPE_CHECKING block
+                left=left,
+            ) if self.is_type_checking(left):
+                return 'TYPE_CHECKING'
         return False
 
     def visit_Module(self, node: ast.Module) -> ast.Module:
@@ -1335,48 +1495,52 @@ class ImportVisitor(
     def add_import(self, node: Import) -> None:  # noqa: C901
         """Add relevant ast objects to import lists."""
         in_type_checking_block = self.in_type_checking_block(node.lineno, node.col_offset)
+        all_exempt = in_type_checking_block or (
+            isinstance(node, ast.ImportFrom) and node.module and self.is_exempt_module(node.module)
+        )
+        all_lazy: bool | None = getattr(node, 'is_lazy', None)
 
-        # Record the imported names as symbols
+        # All ImportName objects share the same module regardles of node type
+        if isinstance(node, ast.ImportFrom):
+            module = f'{node.module}.' if node.module else ''
+            if node.level != 0:
+                module = '.' * node.level + module
+
+            # Mark all imported symbols as lazy if the module is lazy
+            if not all_lazy and self.lazy_modules and module.rstrip('.') in self.lazy_modules:
+                all_lazy = True
+        else:
+            module = ''
+
         for name_node in node.names:
-            if hasattr(name_node, 'asname') and name_node.asname:
-                name = name_node.asname
-            else:
-                name = name_node.name
+            # Mark lazy imports
+            is_lazy = all_lazy or (isinstance(node, ast.Import) and name_node.name in self.lazy_modules)
 
-            self.current_scope.symbols[name].append(
+            # Record the imported names as symbols
+            symbol_name = name_node.asname or name_node.name
+            self.current_scope.symbols[symbol_name].append(
                 Symbol(
-                    name,
+                    symbol_name,
                     node.lineno,
                     node.col_offset,
                     'import',
                     in_type_checking_block=in_type_checking_block,
+                    is_lazy=is_lazy,
                 )
             )
-
-        all_exempt = in_type_checking_block or (
-            isinstance(node, ast.ImportFrom) and node.module and self.is_exempt_module(node.module)
-        )
-
-        for name_node in node.names:
-            # Skip checking the import if the module is passlisted
-            exempt = all_exempt or (isinstance(node, ast.Import) and self.is_exempt_module(name_node.name))
 
             if name_node.name == '*':
                 # don't record * imports
                 continue
 
-            # Classify and map imports
-            if isinstance(node, ast.ImportFrom):
-                module = f'{node.module}.' if node.module else ''
-                if node.level != 0:
-                    module = '.' * node.level + module
-            else:
-                module = ''
+            # Skip checking the import if the module is passlisted
+            exempt = all_exempt or (isinstance(node, ast.Import) and self.is_exempt_module(name_node.name))
             imp = ImportName(
                 _module=module,
                 _alias=name_node.asname,
                 _name=name_node.name,
                 exempt=exempt,
+                is_lazy=is_lazy,
             )
 
             # Add to import names map. This is what we use to match imports to uses
@@ -1487,10 +1651,9 @@ class ImportVisitor(
 
         return node
 
-    def visit_Constant(self, node: ast.Constant) -> ast.Constant:
+    def visit_Constant(self, node: ast.Constant) -> None:
         """Map constants."""
         super().visit_Constant(node)
-        return node
 
     def add_annotation(
         self,
@@ -1568,7 +1731,7 @@ class ImportVisitor(
         # if it wasn't a TypeAlias we need to visit the value expression
         self.visit(node.value)
 
-    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+    def visit_Assign(self, node: ast.Assign) -> None:
         """
         Keep track of variable definitions.
 
@@ -1607,9 +1770,8 @@ class ImportVisitor(
                 )
 
         super().visit_Assign(node)
-        return node
 
-    def visit_Global(self, node: ast.Global) -> ast.Global:
+    def visit_Global(self, node: ast.Global) -> None:
         """
         Treat global statements like a normal assignment.
 
@@ -1631,9 +1793,7 @@ class ImportVisitor(
                 )
             )
 
-        return node
-
-    def visit_Nonlocal(self, node: ast.Nonlocal) -> ast.Nonlocal:
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
         """
         Treat nonlocal statements like a normal assignment.
 
@@ -1654,8 +1814,6 @@ class ImportVisitor(
                     in_type_checking_block=in_type_checking_block,
                 )
             )
-
-        return node
 
     if sys.version_info >= (3, 12):
 
@@ -1925,7 +2083,7 @@ class TypingOnlyImportsChecker:
     __slots__ = [
         'cwd',
         'strict_mode',
-        'py314plus',
+        'py315plus',
         'builtin_names',
         'used_type_checking_names',
         'visitor',
@@ -1936,19 +2094,22 @@ class TypingOnlyImportsChecker:
     def __init__(self, node: ast.Module, options: Namespace | None) -> None:
         self.cwd = Path(os.getcwd())
         self.strict_mode = getattr(options, 'type_checking_strict', False)
-        py314plus = getattr(options, 'type_checking_py314plus', False)
+        self.py315plus = getattr(options, 'type_checking_py315plus', False)
+        # py315plus implies py314plus
+        py314plus = self.py315plus or getattr(options, 'type_checking_py314plus', False)
 
         # we use the same option as pyflakes to extend the list of builtins
         self.builtin_names = builtin_names
         additional_builtins = getattr(options, 'builtins', [])
         if additional_builtins:
-            self.builtin_names.union(additional_builtins)
+            self.builtin_names = self.builtin_names.union(additional_builtins)
 
         self.used_type_checking_names: set[str] = set()
 
         typing_modules = getattr(options, 'type_checking_typing_modules', [])
         exempt_modules = getattr(options, 'type_checking_exempt_modules', [])
         force_future_annotation = getattr(options, 'type_checking_force_future_annotation', False)
+        ignore_dunder_lazy_modules = getattr(options, 'type_checking_ignore_dunder_lazy_modules', False)
         pydantic_enabled = getattr(options, 'type_checking_pydantic_enabled', False)
         pydantic_enabled_baseclass_passlist = getattr(options, 'type_checking_pydantic_enabled_baseclass_passlist', [])
         sqlalchemy_enabled = getattr(options, 'type_checking_sqlalchemy_enabled', False)
@@ -1970,6 +2131,7 @@ class TypingOnlyImportsChecker:
         self.visitor = ImportVisitor(
             self.cwd,
             py314plus=py314plus,
+            ignore_dunder_lazy_modules=ignore_dunder_lazy_modules,
             pydantic_enabled=pydantic_enabled,
             fastapi_enabled=fastapi_enabled,
             cattrs_enabled=cattrs_enabled,
@@ -2032,6 +2194,10 @@ class TypingOnlyImportsChecker:
 
             # Get the ImportName object for this import name
             import_name: ImportName = self.visitor.imports[name]
+            # We don't emit an error for lazy imports, since they will be deferred
+            if import_name.is_lazy:
+                continue
+
             # If strict mode is enabled, we want to flag each individual import
             # that can be moved into a type-checking block. If not enabled,
             # we only want to flag imports if there aren't other imports already
@@ -2039,7 +2205,10 @@ class TypingOnlyImportsChecker:
             if self.strict_mode or import_name.module not in already_imported_modules:
                 error_specific_imports, error = import_types[import_name.import_type]
                 node = error_specific_imports.pop(import_name.import_name)
-                yield node.lineno, node.col_offset, error.format(module=import_name.import_name), None
+                msg = error.format(module=import_name.import_name)
+                if self.py315plus:
+                    msg += LAZY_SUFFIX
+                yield node.lineno, node.col_offset, msg, None
 
     def used_type_checking_symbols(self) -> Flake8Generator:
         """TC004 and TC009."""
