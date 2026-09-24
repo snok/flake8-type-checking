@@ -82,42 +82,39 @@ class AnnotationVisitor(ABC):
 
     def visit(self, node: ast.AST) -> None:
         """Visit relevant child nodes on an annotation."""
-        if node is None:
-            return
-        if isinstance(node, ast.BinOp):
-            if not isinstance(node.op, ast.BitOr):
-                return
-            setattr(node.left, BINOP_OPERAND_PROPERTY, True)
-            setattr(node.right, BINOP_OPERAND_PROPERTY, True)
-            self.visit(node.left)
-            self.visit(node.right)
-        elif isinstance(node, ast.Attribute):
-            self.visit(node.value)
-        elif isinstance(node, ast.Subscript):
-            self.visit(node.value)
-            if self.is_typing(node.value, 'Literal'):
-                return
-            elif self.is_typing(node.value, 'Annotated') and isinstance(
-                node.slice,
-                (ast.Tuple, ast.List),
-            ):
-                if node.slice.elts:
-                    elts_iter = iter(node.slice.elts)
-                    # only visit the first element like a type expression
-                    self.visit_annotated_type(next(elts_iter))
-                    for value_node in elts_iter:
-                        self.visit_annotated_value(value_node)
-            else:
-                self.visit(node.slice)
-        elif isinstance(node, (ast.Tuple, ast.List)):
-            for n in node.elts:
-                self.visit(n)
-        elif isinstance(node, ast.Starred) and isinstance(node.ctx, ast.Load):
-            self.visit(node.value)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            self.visit_annotation_string(node)
-        elif isinstance(node, ast.Name):
-            self.visit_annotation_name(node)
+        match node:
+            case ast.BinOp(op=ast.BitOr()):
+                setattr(node.left, BINOP_OPERAND_PROPERTY, True)
+                setattr(node.right, BINOP_OPERAND_PROPERTY, True)
+                self.visit(node.left)
+                self.visit(node.right)
+            case ast.Attribute():
+                self.visit(node.value)
+            case ast.Subscript():
+                self.visit(node.value)
+                if self.is_typing(node.value, 'Literal'):
+                    return
+                elif self.is_typing(node.value, 'Annotated') and isinstance(
+                    node.slice,
+                    (ast.Tuple, ast.List),
+                ):
+                    if node.slice.elts:
+                        elts_iter = iter(node.slice.elts)
+                        # only visit the first element like a type expression
+                        self.visit_annotated_type(next(elts_iter))
+                        for value_node in elts_iter:
+                            self.visit_annotated_value(value_node)
+                else:
+                    self.visit(node.slice)
+            case ast.Tuple(elts=elements) | ast.List(elts=elements):
+                for element in elements:
+                    self.visit(element)
+            case ast.Starred(ctx=ast.Load()):
+                self.visit(node.value)
+            case ast.Constant(value=str()):
+                self.visit_annotation_string(node)
+            case ast.Name():
+                self.visit_annotation_name(node)
 
 
 class AttrsMixin:
@@ -404,7 +401,7 @@ class SQLAlchemyMixin:
         self.sqlalchemy_annotation_visitor = SQLAlchemyAnnotationVisitor(self)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        """Remove all annotations assigments."""
+        """Handle all `Mapped[...]` style annotations."""
         if (
             self.sqlalchemy_enabled
             # We only need to special case runtime use of `Mapped`
@@ -433,71 +430,72 @@ class SQLAlchemyMixin:
         `Mapped` names, then we will record a runtime use of that symbol,
         since we know `Mapped` always needs to resolve.
         """
-        if isinstance(node, ast.Constant):
-            # we only need to handle annotations like `"Mapped[...]"`
-            if not isinstance(node.value, str) or '[' not in node.value:
+        match node:
+            # Handle annotations like `"Mapped[...]"`
+            case ast.Constant(value=str() as annotation):
+                if '[' not in annotation:
+                    return
+
+                annotation = annotation.strip()
+                if not annotation.endswith(']'):
+                    return
+
+                mapped_name, inner = annotation.split('[', 1)
+                # strip trailing `]` from inner
+                inner = inner[:-1]
+                if not self.is_mapped(mapped_name):
+                    return
+
+                # record a use for the first part of the name
+                used_name, *_ = mapped_name.split('.', 1)
+                self.uses[used_name].append((node, self.current_scope))
+
+                # add all names contained in the inner part of the annotation
+                # since this is not as strict as an actual runtime use, we don't
+                # care if we record too much here
+                visitor = StringAnnotationVisitor(self)
+                visitor.parse_and_visit_string_annotation(inner)
+                self.soft_uses.update(visitor.names)
+
+            # Handle annotations like `Mapped[...]`
+            case ast.Subscript(
+                value=ast.Name() as name,
+                slice=wrapped,
+            ) if self.is_mapped(name):
+
+                # record a use for the name
+                self.uses[name.id].append((name, self.current_scope))
+
+                # visit the wrapped annotations to update the mapped names
+                self.sqlalchemy_annotation_visitor.visit(wrapped)
+
+            # Handle annotations like `sqlalchemy.orm.Mapped[...]`
+            case ast.Subscript(
+                value=ast.Attribute(attr=dotted_name, value=before_dot),
+                slice=wrapped,
+            ):
+                while isinstance(before_dot, ast.Attribute):
+                    dotted_name = f'{before_dot.attr}.{dotted_name}'
+                    before_dot = before_dot.value
+                # there should be no subscripts between the attributes
+                if not isinstance(before_dot, ast.Name):
+                    return
+
+                # map the module if it's mapped otherwise use it as is
+                module = self.lookup_full_name(before_dot) or before_dot.id
+                dotted_name = f'{module}.{dotted_name}'
+                if dotted_name not in self.sqlalchemy_mapped_dotted_names:
+                    return
+
+                # record a use for the left-most node in the attribute access chain
+                self.uses[before_dot.id].append((before_dot, self.current_scope))
+
+                # visit the wrapped annotations to update the mapped names
+                self.sqlalchemy_annotation_visitor.visit(wrapped)
+
+            # any other case is invalid, such as `Foo[...][...]`
+            case _:
                 return
-
-            annotation = node.value.strip()
-            if not annotation.endswith(']'):
-                return
-
-            mapped_name, inner = annotation.split('[', 1)
-            # strip trailing `]` from inner
-            inner = inner[:-1]
-            if not self.is_mapped(mapped_name):
-                return
-
-            # record a use for the first part of the name
-            used_name, *_ = mapped_name.split('.', 1)
-            self.uses[used_name].append((node, self.current_scope))
-
-            # add all names contained in the inner part of the annotation
-            # since this is not as strict as an actual runtime use, we don't
-            # care if we record too much here
-            visitor = StringAnnotationVisitor(self)
-            visitor.parse_and_visit_string_annotation(inner)
-            self.soft_uses.update(visitor.names)
-            return
-
-        # we only need to handle annotations like `Mapped[...]`
-        if not isinstance(node, ast.Subscript):
-            return
-
-        # simple case only needs to check mapped_aliases
-        if isinstance(node.value, ast.Name):
-            if not self.is_mapped(node.value):
-                return
-
-            # record a use for the name
-            self.uses[node.value.id].append((node.value, self.current_scope))
-
-        # complex case for dotted names
-        elif isinstance(node.value, ast.Attribute):
-            dotted_name = node.value.attr
-            before_dot = node.value.value
-            while isinstance(before_dot, ast.Attribute):
-                dotted_name = f'{before_dot.attr}.{dotted_name}'
-                before_dot = before_dot.value
-            # there should be no subscripts between the attributes
-            if not isinstance(before_dot, ast.Name):
-                return
-
-            # map the module if it's mapped otherwise use it as is
-            module = self.lookup_full_name(before_dot) or before_dot.id
-            dotted_name = f'{module}.{dotted_name}'
-            if dotted_name not in self.sqlalchemy_mapped_dotted_names:
-                return
-
-            # record a use for the left-most node in the attribute access chain
-            self.uses[before_dot.id].append((before_dot, self.current_scope))
-
-        # any other case is invalid, such as `Foo[...][...]`
-        else:
-            return
-
-        # visit the wrapped annotations to update the mapped names
-        self.sqlalchemy_annotation_visitor.visit(node.slice)
 
 
 class InjectorMixin:
@@ -1302,39 +1300,6 @@ class ImportVisitor(
             return True
         return self.is_typing(node, 'TYPE_CHECKING')
 
-    def is_type_checking_true(self, node: ast.Compare) -> bool:
-        """
-        Check whether the node matches `if TYPE_CHECKING is True`.
-
-        An ast.Compare node has a `left`, `ops`, and `comparators` attribute.
-
-        Here we want to check whether our node corresponds to
-
-            `if TYPE_CHECKING is True`
-                    ^         ^    ^
-        left _______|        ops   |____ comparators
-        """
-        # Left side should be a TYPE_CHECKING block
-        is_type_checking_block = hasattr(node, 'left') and self.is_type_checking(node.left)
-        if not is_type_checking_block:
-            return False
-
-        # Operator should be `is`
-        operator_is_is = len(node.ops) == 1 and isinstance(node.ops[0], ast.Is)
-        if not operator_is_is:
-            return False
-
-        # Right side should be `True`
-        right_side_is_true = (
-            len(node.comparators) == 1
-            and isinstance(node.comparators[0], ast.Constant)
-            and node.comparators[0].value is True
-        )
-        if not right_side_is_true:
-            return False
-
-        return True
-
     def is_true_when_type_checking(self, node: ast.AST) -> bool | Literal['TYPE_CHECKING']:
         """Determine if the node evaluates to True when TYPE_CHECKING is True.
 
@@ -1350,23 +1315,35 @@ class ImportVisitor(
         """
         if self.is_type_checking(node):
             return 'TYPE_CHECKING'
-        if isinstance(node, ast.BoolOp):
-            non_type_checking = [v for v in node.values if not self.is_type_checking(v)]
-            has_type_checking = len(non_type_checking) < len(node.values)
-            num_true = sum(1 if self.is_true_when_type_checking(v) else 0 for v in non_type_checking)
-            all_others_true = num_true == len(non_type_checking)
-            any_others_true = num_true > 0
-            if isinstance(node.op, ast.Or):
-                # At least one of the conditions must be TYPE_CHECKING
-                return 'TYPE_CHECKING' if has_type_checking else any_others_true
-            elif isinstance(node.op, ast.And) and all_others_true:
-                # At least one of the conditions must be TYPE_CHECKING, and all others must be True
-                return 'TYPE_CHECKING' if has_type_checking else False
-        elif isinstance(node, ast.Constant):
-            with suppress(Exception):
-                return bool(literal_eval(node))
-        elif isinstance(node, ast.Compare) and self.is_type_checking_true(node):
-            return 'TYPE_CHECKING'
+        match node:
+            case ast.BoolOp(
+                values=values,
+                op=ast.Or() | ast.And() as operator,
+            ):
+                non_type_checking = [v for v in values if not self.is_type_checking(v)]
+                has_type_checking = len(non_type_checking) < len(values)
+                num_true = sum(1 if self.is_true_when_type_checking(v) else 0 for v in non_type_checking)
+                any_others_true = num_true > 0
+                all_others_true = num_true == len(non_type_checking)
+                if isinstance(operator, ast.Or):
+                    # At least one of the conditions must be TYPE_CHECKING
+                    return 'TYPE_CHECKING' if has_type_checking else any_others_true
+                elif has_type_checking and all_others_true:
+                    # At least one of the conditions must be TYPE_CHECKING, and all others must be True
+                    return 'TYPE_CHECKING'
+            case ast.Constant():
+                with suppress(Exception):
+                    return bool(literal_eval(node))
+            # Matches `TYPE_CHECKING is True`
+            case ast.Compare(
+                # Operator should be `is`
+                ops=[ast.Is()],
+                # Right side should be `True`
+                comparators=[ast.Constant(value=True)],
+                # Left side should be a TYPE_CHECKING block
+                left=left,
+            ) if self.is_type_checking(left):
+                return 'TYPE_CHECKING'
         return False
 
     def visit_Module(self, node: ast.Module) -> ast.Module:
