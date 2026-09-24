@@ -293,6 +293,104 @@ class DunderLazyModulesMixin:
         if self._in__lazy_modules__declaration and isinstance(node.value, str):
             self.lazy_modules.add(node.value)
 
+    def relative_import_level_minus_one(self, expr: ast.AST) -> int | None:
+        """
+        Determine the relative import level of a flake8-lazy style relative import.
+
+        This expects being handed an expression of the form:
+
+            __spec__.parent
+
+        Or:
+
+            spec__.parent.rsplit(".", 1)[0]
+
+        Or the type-safe version:
+
+            (spec__.parent or "").rsplit(".", 1)[0]
+
+        Based on any of these expression we need to determine the
+        level of the relative import this is supposed to target.
+
+        In order to avoid adding one to the integer we retrieve from
+        the AST only to subtract it again in the code that uses it,
+        we directly return the level minus one.
+
+        For any other expression this will return `None`.
+        """
+        match expr:
+            # Simple case for a single level
+            # Matches `__spec__.parent`
+            case ast.Attribute(
+                value=ast.Name(id='__spec__'),
+                attr='parent',
+            ):
+                return 0
+
+            # Complex case for any higher level
+            case ast.Subscript(
+                value=ast.Call(
+                    func=ast.Attribute(
+                        value=(
+                            # Matches `spec__.parent.rsplit(".", 1)[0]`
+                            ast.Attribute(value=ast.Name(id='__spec__'), attr='parent')
+                            # Matches `(spec__.parent or "").rsplit(".", 1)[0]`
+                            | ast.BoolOp(
+                                op=ast.Or(),
+                                values=[
+                                    ast.Attribute(value=ast.Name(id='__spec__'), attr='parent'),
+                                    ast.Constant(value=''),
+                                ],
+                            )
+                        ),
+                        attr='rsplit',
+                    ),
+                    args=[
+                        ast.Constant(value='.'),
+                        ast.Constant(value=int() as level_minus_one),
+                    ],
+                    keywords=[],
+                ),
+                slice=ast.Constant(value=0),
+            ):
+                return level_minus_one
+
+            case _:
+                return None
+
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
+        """
+        Record all flake8-lazy style relative import names.
+
+        The motivation behind this style is that flake8 does not provide
+        us with any sort of information about the project's structure and
+        since `__lazy_modules__` needs to contain the absolute name in order
+        to match the relative name, there is no way for us statically link
+        the two together, unless we use this f-string based approach.
+        """
+        if not self._in__lazy_modules__declaration:
+            return
+
+        match node:
+            case ast.JoinedStr(
+                values=[
+                    ast.FormattedValue(
+                        value=expr,
+                        conversion=-1,
+                        format_spec=None,
+                    ),
+                    ast.Constant(value=str() as module),
+                ],
+            ) if module.startswith('.'):
+                level_minus_one = self.relative_import_level_minus_one(expr)
+                if level_minus_one is None:
+                    return
+
+                if level_minus_one:
+                    module = '.' * level_minus_one + module
+
+                self.lazy_modules.add(module)
+
 
 class PydanticMixin:
     """
