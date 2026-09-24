@@ -134,6 +134,44 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
         (f'__lazy_modules__=["{import_}"]\nfrom {import_} import constants as x\ny:x', set()),
     ]
 
+    if ERROR == TC001:
+        # flake8-lazy style relative imports
+        lazy_imports.extend(
+            (
+                (
+                    textwrap.dedent(f'''
+                        __lazy_modules__ = [f"{{__spec__.parent}}.{import_}"]
+                        from .{import_} import constants as x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                (
+                    textwrap.dedent(f'''
+                        __lazy_modules__ = [
+                            f"{{__spec__.parent.rsplit('.', 1)[0]}}.{import_}"
+                        ]
+                        from ..{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                (
+                    textwrap.dedent(f'''
+                        __lazy_modules__ = [
+                            f"{{(__spec__.parent or '').rsplit('.', 2)[0]}}.{import_}"
+                        ]
+                        from ...{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+            )
+        )
+
     if sys.version_info >= (3, 15):
         lazy_imports.extend(
             (

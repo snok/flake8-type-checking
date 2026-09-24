@@ -134,6 +134,41 @@ dunder_lazy_ignore_imports = [
     ),
 ]
 
+relative_dunder_lazy_ignore_imports = [
+    (
+        textwrap.dedent('''
+        __lazy_modules__ = [f"{__spec__.parent}.a"]
+        from .a import lazy, also_lazy
+        from ..a import eager
+        '''),
+        ['.a.lazy', '.a.also_lazy'],
+        f,
+    ),
+    (
+        textwrap.dedent('''
+        __lazy_modules__ = [
+            f"{__spec__.parent.rsplit('.', 1)[0]}.a"
+        ]
+        from .a import eager
+        from ..a import lazy
+        '''),
+        ['..a.lazy'],
+        f,
+    ),
+    (
+        textwrap.dedent('''
+        __lazy_modules__ = [
+            f"{(__spec__.parent or '').rsplit('.', 2)[0]}.a"
+        ]
+        from .a import eager
+        from ..a import also_eager
+        from ...a import lazy
+        '''),
+        ['...a.lazy'],
+        f,
+    ),
+]
+
 if sys.version_info >= (3, 15):
     lazy_imports = [
         # ast.Import
@@ -154,6 +189,7 @@ test_data = [
     *venv_imports,
     *typing_block_imports,
     *dunder_lazy_ignore_imports,
+    *relative_dunder_lazy_ignore_imports,
     *lazy_imports,
 ]
 
