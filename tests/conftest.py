@@ -3,15 +3,12 @@ from __future__ import annotations
 import ast
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
 
 from flake8_type_checking.plugin import Plugin
-
-if TYPE_CHECKING:
-    from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -25,7 +22,7 @@ def _change_test_dir():
     os.chdir(REPO_ROOT)
 
 
-def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwargs: Any) -> set[str]:
+def _get_error(example: str, *, error_code_filter: str | None = None, **kwargs: Any) -> set[str]:
     os.chdir(REPO_ROOT)
     filename = kwargs.get('filename', 'test.py')
     if error_code_filter:
@@ -37,6 +34,7 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         mock_options.extended_default_select = []
         mock_options.enable_extensions = []
         mock_options.type_checking_py314plus = False
+        mock_options.type_checking_py315plus = False
         mock_options.type_checking_pydantic_enabled = False
         mock_options.type_checking_exempt_modules = []
         mock_options.type_checking_typing_modules = []
@@ -48,6 +46,7 @@ def _get_error(example: str, *, error_code_filter: Optional[str] = None, **kwarg
         mock_options.type_checking_injector_enabled = False
         mock_options.type_checking_strict = False
         mock_options.type_checking_force_future_annotation = False
+        mock_options.type_checking_ignore_dunder_lazy_modules = False
         # kwarg overrides
         for k, v in kwargs.items():
             setattr(mock_options, k, v)

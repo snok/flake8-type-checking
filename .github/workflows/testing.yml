@@ -6,54 +6,66 @@ on:
     branches:
       - main
 
+permissions: {}
+
 jobs:
   linting:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          python-version: "3.10"
-      - uses: actions/cache@v4
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: cache-venv
         with:
           path: .venv
-          key: venv-6  # increment to reset
+          key: venv-7  # increment to reset
       - run: |
           python -m venv .venv --upgrade-deps
           source .venv/bin/activate
           pip install pre-commit
         if: steps.cache-venv.outputs.cache-hit != 'true'
-      - uses: actions/cache@v4
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: pre-commit-cache
         with:
           path: ~/.cache/pre-commit
-          key: ${{ hashFiles('**/pre-commit-config.yaml') }}-5
+          key: ${{ hashFiles('**/pre-commit-config.yaml') }}-6
       - run: |
           source .venv/bin/activate
           pre-commit run --all-files
 
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         id: setup-python
         with:
           python-version: "${{ matrix.python-version }}"
-      - uses: actions/cache@v5
+          # FIXME: Remove once 3.15 is released
+          allow-prereleases: true
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: poetry-cache
         with:
           path: |
             ~/.local
             .venv
-          key: ${{ hashFiles('**/poetry.lock') }}-${{ steps.setup-python.outputs.python-version }}-9
+          key: ${{ hashFiles('**/poetry.lock') }}-${{ steps.setup-python.outputs.python-version }}-10
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
           virtualenvs-create: false
           version: latest
@@ -73,7 +85,7 @@ jobs:
           coverage run -m pytest tests
           coverage xml
           coverage report
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./coverage.xml
           fail_ci_if_error: true

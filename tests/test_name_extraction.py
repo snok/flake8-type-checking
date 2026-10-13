@@ -1,5 +1,4 @@
 import ast
-import sys
 
 import pytest
 
@@ -25,14 +24,8 @@ examples = [
     ('Nested["str"]', {'Nested', 'str'}),
     ('Annotated[str, validator(int, 5)]', {'Annotated', 'str'}),
     ('Annotated[str, "bool"]', {'Annotated', 'str'}),
+    ('*Ts', {'Ts'}),
 ]
-
-if sys.version_info >= (3, 11):
-    examples.extend(
-        [
-            ('*Ts', {'Ts'}),
-        ]
-    )
 
 
 @pytest.mark.parametrize(('example', 'expected'), examples)
@@ -40,6 +33,7 @@ def test_name_extraction(example, expected):
     import_visitor = ImportVisitor(
         cwd='fake cwd',  # type: ignore[arg-type]
         py314plus=False,
+        ignore_dunder_lazy_modules=False,
         pydantic_enabled=False,
         fastapi_enabled=False,
         fastapi_dependency_support_enabled=False,
