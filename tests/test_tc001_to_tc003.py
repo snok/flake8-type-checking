@@ -135,9 +135,9 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
     ]
 
     if ERROR == TC001:
-        # flake8-lazy style relative imports
         lazy_imports.extend(
             (
+                # flake8-lazy style relative imports
                 (
                     textwrap.dedent(f'''
                         __lazy_modules__ = [f"{{__spec__.parent}}.{import_}"]
@@ -164,6 +164,47 @@ def get_tc_001_to_003_tests(import_: str, ERROR: str) -> L:
                             f"{{(__spec__.parent or '').rsplit('.', 2)[0]}}.{import_}"
                         ]
                         from ...{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                # absolute imports mapping to relative imports
+                (
+                    textwrap.dedent(f'''
+                        __lazy_modules__ = ["my_module.{import_}"]
+                        from .{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                # esoteric relative import formats
+                (
+                    textwrap.dedent(f'''
+                        parent_module = __spec__.parent
+                        __lazy_modules__ = [f"{{parent_module}}.{import_}"]
+                        from .{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                (
+                    textwrap.dedent(f'''
+                        parent_module = __spec__.parent
+                        __lazy_modules__ = [parent_module + ".{import_}"]
+                        from .{import_} import x
+
+                        y: x
+                        '''),
+                    set(),
+                ),
+                (
+                    textwrap.dedent(f'''
+                        from .utils import relative_import
+                        __lazy_modules__ = [relative_import(".{import_}")]
+                        from .{import_} import x
 
                         y: x
                         '''),

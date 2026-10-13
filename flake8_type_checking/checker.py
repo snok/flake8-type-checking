@@ -232,6 +232,7 @@ class DunderLazyModulesMixin:
 
     if TYPE_CHECKING:
         lazy_modules: set[str]
+        relative_lazy_modules: set[str]
         ignore_dunder_lazy_modules: bool
         current_scope: Scope
 
@@ -384,12 +385,15 @@ class DunderLazyModulesMixin:
             ) if module.startswith('.'):
                 level_minus_one = self.relative_import_level_minus_one(expr)
                 if level_minus_one is None:
+                    # we don't know the exact level, so record as a regular
+                    # name so we perform a suffix match
+                    self.lazy_modules.add(module)
                     return
 
                 if level_minus_one:
                     module = '.' * level_minus_one + module
 
-                self.lazy_modules.add(module)
+                self.relative_lazy_modules.add(module)
 
 
 class PydanticMixin:
@@ -754,7 +758,7 @@ class ImportName:
     #: Whether or not this import is exempt from TC001-004 checks.
     exempt: bool
 
-    #: Whether or not this import is lazy
+    #: Whether or not this import could be lazy
     is_lazy: bool | None
 
     @property
@@ -1203,6 +1207,9 @@ class ImportVisitor(
         #: A set of modules marked as Python 3.15+ lazy imports
         self.lazy_modules: set[str] = set()
 
+        #: A set of relative module names detected using flake8-lazy's conventions
+        self.relative_lazy_modules: set[str] = set()
+
         #: Whether or not __lazy_modules__ declarations should excempt imports
         #: from being flagged by TC001, TC002 or TC003.
         self.ignore_dunder_lazy_modules = ignore_dunder_lazy_modules
@@ -1507,8 +1514,26 @@ class ImportVisitor(
                 module = '.' * node.level + module
 
             # Mark all imported symbols as lazy if the module is lazy
-            if not all_lazy and self.lazy_modules and module.rstrip('.') in self.lazy_modules:
-                all_lazy = True
+            if not all_lazy and (self.lazy_modules or self.relative_lazy_modules):
+                module_name = module.rstrip('.')
+                if (
+                    module_name in self.lazy_modules
+                    or module_name in self.relative_lazy_modules
+                    or (
+                        # For relative imports it might match one of the absolute
+                        # imports as long as it contains at least one dot, we can't
+                        # prove whether or not the import is lazy, so we err on the
+                        # side of caution and treat it as if it were lazy, so we
+                        # don't generate any false positives
+                        node.level != 0
+                        and any(
+                            lazy_module.endswith('.' + module_name.lstrip('.'))
+                            for lazy_module in self.lazy_modules
+                            if '.' in lazy_module
+                        )
+                    )
+                ):
+                    all_lazy = True
         else:
             module = ''
 

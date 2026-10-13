@@ -169,6 +169,54 @@ relative_dunder_lazy_ignore_imports = [
     ),
 ]
 
+relative_dunder_lazy_ignore_imports_absolute_or_unknown_format = [
+    # we don't know how absolute import names map to relative ones
+    # so we have to assume the relative imports are lazy if they could
+    # match a lazy import.
+    (
+        textwrap.dedent('''
+        __lazy_modules__ = ["my_module.a"]
+        from .a import lazy, also_lazy
+        from ..a import still_lazy
+        '''),
+        ['.a.lazy', '.a.also_lazy', '..a.still_lazy'],
+        f,
+    ),
+    # test some other esoteric ways relative imports could show up
+    (
+        textwrap.dedent('''
+        __lazy_modules__ = [f"{parent_module}.a"]
+        from .a import lazy, also_lazy
+        from ..a import still_lazy
+        '''),
+        ['.a.lazy', '.a.also_lazy', '..a.still_lazy'],
+        f,
+    ),
+    (
+        textwrap.dedent('''
+        __lazy_modules__ = [
+            parent_module + ".a"
+        ]
+        from .a import still_lazy
+        from ..a import lazy
+        '''),
+        ['.a.still_lazy', '..a.lazy'],
+        f,
+    ),
+    (
+        textwrap.dedent('''
+        __lazy_modules__ = [
+            relative_import_name(".a")
+        ]
+        from .a import still_lazy
+        from ..a import also_still_lazy
+        from ...a import lazy
+        '''),
+        ['.a.still_lazy', '..a.also_still_lazy', '...a.lazy'],
+        f,
+    ),
+]
+
 if sys.version_info >= (3, 15):
     lazy_imports = [
         # ast.Import
@@ -190,6 +238,7 @@ test_data = [
     *typing_block_imports,
     *dunder_lazy_ignore_imports,
     *relative_dunder_lazy_ignore_imports,
+    *relative_dunder_lazy_ignore_imports_absolute_or_unknown_format,
     *lazy_imports,
 ]
 
