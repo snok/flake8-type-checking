@@ -5,10 +5,12 @@ See https://github.com/snok/flake8-type-checking/issues/52
 for discussion on the implementation.
 """
 
+import ast
 import textwrap
 
 import pytest
 
+from flake8_type_checking.checker import PydanticMixin
 from flake8_type_checking.constants import TC002
 from tests.conftest import _get_error
 
@@ -165,8 +167,6 @@ def test_type_checking_pydantic_enabled_validate_arguments_decorator_method(f):
 @pytest.mark.parametrize('wrapped', [True, False])
 def test_pydantic_mixin_calls_super_function_def(wrapped):
     """Test that PydanticMixin passes through visit_FunctionDef calls to super()."""
-    import ast
-    from flake8_type_checking.checker import PydanticMixin
 
     class DownstreamVisitor:
         def __init__(self):
@@ -196,8 +196,6 @@ def test_pydantic_mixin_calls_super_function_def(wrapped):
 @pytest.mark.parametrize('wrapped', [True, False])
 def test_pydantic_mixin_calls_super_async_function_def(wrapped):
     """Test that PydanticMixin passes through visit_AsyncFunctionDef calls to super()."""
-    import ast
-    from flake8_type_checking.checker import PydanticMixin
 
     class DownstreamVisitor:
         def __init__(self):
