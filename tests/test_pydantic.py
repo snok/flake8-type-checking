@@ -160,3 +160,67 @@ def test_type_checking_pydantic_enabled_validate_arguments_decorator_method(f):
                 pass
         ''')
     assert _get_error(example, error_code_filter='TC002', type_checking_pydantic_enabled=True) == set()
+
+
+@pytest.mark.parametrize('wrapped', [True, False])
+def test_pydantic_mixin_calls_super_function_def(wrapped):
+    """Test that PydanticMixin passes through visit_FunctionDef calls to super()."""
+    import ast
+    from flake8_type_checking.checker import PydanticMixin
+
+    class DownstreamVisitor:
+        def __init__(self):
+            self.visited = False
+
+        def visit_FunctionDef(self, node):
+            self.visited = True
+
+    class ComposedVisitor(PydanticMixin, DownstreamVisitor):
+        def __init__(self):
+            super().__init__()
+            self.pydantic_enabled = True
+
+        def lookup_full_name(self, node):
+            return 'pydantic.validate_arguments'
+
+        def visit(self, node):
+            pass
+
+    visitor = ComposedVisitor()
+    code = '@validate_arguments\ndef foo(x: int) -> int: pass' if wrapped else 'def foo(x: int) -> int: pass'
+    node = ast.parse(code).body[0]
+    visitor.visit_FunctionDef(node)
+    assert visitor.visited
+
+
+@pytest.mark.parametrize('wrapped', [True, False])
+def test_pydantic_mixin_calls_super_async_function_def(wrapped):
+    """Test that PydanticMixin passes through visit_AsyncFunctionDef calls to super()."""
+    import ast
+    from flake8_type_checking.checker import PydanticMixin
+
+    class DownstreamVisitor:
+        def __init__(self):
+            self.visited = False
+
+        def visit_AsyncFunctionDef(self, node):
+            self.visited = True
+
+    class ComposedVisitor(PydanticMixin, DownstreamVisitor):
+        def __init__(self):
+            super().__init__()
+            self.pydantic_enabled = True
+
+        def lookup_full_name(self, node):
+            return 'pydantic.validate_arguments'
+
+        def visit(self, node):
+            pass
+
+    visitor = ComposedVisitor()
+    code = (
+        '@validate_arguments\nasync def foo(x: int) -> int: pass' if wrapped else 'async def foo(x: int) -> int: pass'
+    )
+    node = ast.parse(code).body[0]
+    visitor.visit_AsyncFunctionDef(node)
+    assert visitor.visited

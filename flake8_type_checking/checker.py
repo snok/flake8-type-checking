@@ -253,12 +253,16 @@ class PydanticMixin:
 
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Remove and map function arguments and returns."""
+        with suppress(AttributeError):
+            super().visit_FunctionDef(node)  # type: ignore[misc]
         if self._function_is_wrapped_by_validate_arguments(node):
             for expr in iter_function_annotation_nodes(node):
                 self.visit(expr)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> None:
         """Remove and map function arguments and returns."""
+        with suppress(AttributeError):
+            super().visit_AsyncFunctionDef(node)  # type: ignore[misc]
         if self._function_is_wrapped_by_validate_arguments(node):
             for expr in iter_function_annotation_nodes(node):
                 self.visit(expr)
