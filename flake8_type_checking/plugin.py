@@ -11,7 +11,6 @@ from flake8_type_checking.constants import flake_version_gt_v4
 if TYPE_CHECKING:
     from argparse import Namespace
     from ast import Module
-    from typing import ClassVar
 
     from flake8.options.manager import OptionManager
 
@@ -28,8 +27,8 @@ class Plugin:
     filename: str
     options: Namespace | None = None
 
-    name: ClassVar[str] = 'flake8-type-checking'
-    version: ClassVar[str] = v('flake8-type-checking')
+    name = 'flake8-type-checking'
+    version = v('flake8-type-checking')
 
     @classmethod
     def add_options(cls, option_manager: OptionManager) -> None:  # pragma: no cover
